@@ -1,0 +1,4 @@
+[submodule "TypeScript"]
+	path = TypeScript
+	url = https://github.com/Microsoft/TypeScript.git
+	branch = release-1.7
