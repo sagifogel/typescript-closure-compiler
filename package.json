@@ -1,0 +1,17 @@
+{
+  "name": "typescript-closure-compiler",
+  "version": "0.0.0",
+  "description": "typescript-closure-compiler",
+  "author": {
+    "name": "sagi",
+    "email": "sagifogel@hotmail.com"
+  },
+  "dependencies": {
+    "gulp": "*"
+  },
+  "devDependencies": {
+    "fs-extra": "^0.26.4",
+    "typescript": "^1.7.5",
+    "gulp-rename": "^1.2.2"
+  }
+}
