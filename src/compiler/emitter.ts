@@ -1,6 +1,6 @@
-﻿/// <reference path="../../TypeScript/src/compiler/declarationEmitter.ts" />
-/// <reference path="../../TypeScript/src/compiler/checker.ts" />
-
+﻿/// <reference path="checker.ts" />
+/// <reference path="declarationEmitter.ts" />
+ 
 /* @internal */
 namespace ts {
     export function isExternalModuleOrDeclarationFile(sourceFile: SourceFile) {

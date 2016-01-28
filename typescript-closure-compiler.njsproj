@@ -36,15 +36,28 @@
     <Content Include="package.json" />
     <Content Include="README.md" />
     <TypeScriptCompile Include="compiler.ts" />
+    <TypeScriptCompile Include="src\compiler\checker.ts" />
+    <TypeScriptCompile Include="src\compiler\core.ts" />
+    <TypeScriptCompile Include="src\compiler\declarationEmitter.ts" />
     <TypeScriptCompile Include="src\compiler\emitter.ts" />
     <TypeScriptCompile Include="Scripts\typings\node\node.d.ts" />
+    <TypeScriptCompile Include="src\compiler\parser.ts" />
+    <TypeScriptCompile Include="src\compiler\scanner.ts" />
+    <TypeScriptCompile Include="src\compiler\types.ts" />
+    <TypeScriptCompile Include="src\compiler\utilities.ts" />
+    <TypeScriptCompile Include="tests\Greeter.ts" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="build\" />
+    <Folder Include="tests\" />
     <Folder Include="src\" />
     <Folder Include="Scripts\" />
     <Folder Include="Scripts\typings\" />
     <Folder Include="Scripts\typings\node\" />
     <Folder Include="src\compiler\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="jakefile.js" />
   </ItemGroup>
   <!-- Do not delete the following Import Project.  While this appears to do nothing it is a marker for setting TypeScript properties before our import that depends on them. -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">

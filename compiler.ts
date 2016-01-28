@@ -1,4 +1,5 @@
-﻿import {readFileSync} from "fs";
+﻿import * as path from "path";
+import {readFileSync, readdirSync, statSync} from "fs";
 import * as ts from "typescript";
 
 class LanguageServiceHost implements ts.LanguageServiceHost {
@@ -51,8 +52,19 @@ class CompilerHost extends LanguageServiceHost implements ts.CompilerHost {
     readFile = (fileName: string) => ts.sys.readFile(fileName);
 }
 
-const fileNames = ["C:\\Users\\sagi\\Documents\\Visual Studio 2015\\Projects\\NodejsConsoleApp1\\NodejsConsoleApp1\\Scripts\\Greeter.ts",
-    "C:\\Users\\sagi\\Documents\\Visual Studio 2015\\Projects\\NodejsConsoleApp1\\NodejsConsoleApp1\\Scripts\\IPoint.ts"];
+const fileNames = [];
+var currentDirPath = path.resolve(__dirname, "tests");
+
+readdirSync(currentDirPath)
+    .filter(function (file) { return path.extname(file) === '.ts'; })
+    .forEach(function (file) {
+        var filePath = path.join(currentDirPath, file);
+        var stat = statSync(filePath);
+
+        if (stat.isFile()) {
+            fileNames.push(filePath);
+        }
+    });
 
 declare var process: any;
 declare var console: any;
@@ -80,6 +92,5 @@ compile(fileNames, {
     noImplicitAny: true,
     target: ts.ScriptTarget.ES5,
     module: ts.ModuleKind.None,
-    outFile: "test.js",
     removeComments: true
 });
