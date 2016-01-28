@@ -1,7 +1,5 @@
-﻿/// <reference path="checker.ts"/>
-/// <reference path="declarationEmitter.ts"/>
+﻿/// <reference path="../../TypeScript/src/compiler/declarationEmitter.ts" />
 /// <reference path="../../TypeScript/src/compiler/checker.ts" />
-/// <reference path="../../TypeScript/src/compiler/declarationEmitter.ts" />
 
 /* @internal */
 namespace ts {
@@ -4575,6 +4573,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitEnd(member);
                         write(";");
                         emitTrailingComments(member);
+                        forceWriteLine();
                     }
                     else if (member.kind === SyntaxKind.GetAccessor || member.kind === SyntaxKind.SetAccessor) {
                         let accessors = getAllAccessorDeclarations(node.members, <AccessorDeclaration>member);
@@ -4674,7 +4673,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 tempVariables = saveTempVariables;
                 tempParameters = saveTempParameters;
                 forceWriteLine();
-                forceWriteLine();
             }
 
             function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
@@ -4763,7 +4761,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         writeLine();
                         emitStart(baseTypeElement);
                         if (languageVersion < ScriptTarget.ES6) {
-                            write("_super.apply(this, arguments);");
+                            emit(baseTypeElement.expression);
+                            write(".apply(this, arguments);");
                         }
                         else {
                             write("super(...args);");
@@ -5012,7 +5011,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 tempVariables = saveTempVariables;
                 tempParameters = saveTempParameters;
                 computedPropertyNamesToGeneratedNames = saveComputedPropertyNamesToGeneratedNames;
-                forceWriteLine();
                 if (baseTypeNode) {
                     writeLine();
                     emitStart(baseTypeNode);
@@ -5021,6 +5019,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(", ");
                     emit(baseTypeNode.expression);
                     write(");");
+                    forceWriteLine();
                     emitEnd(baseTypeNode);
                 }
             }
