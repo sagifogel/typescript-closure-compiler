@@ -7,6 +7,11 @@ namespace ts {
         return isExternalModule(sourceFile) || isDeclarationFile(sourceFile);
     }
 
+    interface IGeneratedModule {
+        path: string;
+        gen: boolean;
+    }
+
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
     let entities: Map<number> = {
@@ -374,7 +379,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         function emitJavaScript(jsFilePath: string, root?: SourceFile) {
             let writer = createTextWriter(newLine);
             let { rawWrite, write, writeTextOfNode, writeLine, increaseIndent, decreaseIndent } = writer;
-            let forceWriteLine = () : void => {
+            let forceWriteLine = (): void => {
                 rawWrite(newLine);
             }
             let currentSourceFile: SourceFile;
@@ -388,6 +393,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             let generatedNameSet: Map<string> = {};
             let nodeToGeneratedName: string[] = [];
+            let modulesToGeneratedName: Array<IGeneratedModule>
             let computedPropertyNamesToGeneratedNames: string[];
 
             let extendsEmitted = false;
@@ -560,6 +566,56 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return generateNameForExportDefault();
                     case SyntaxKind.ClassExpression:
                         return generateNameForClassExpression();
+                }
+            }
+
+            function isNodeAlreadyGenerated(node) {
+                return !!nodeToGeneratedName[ts.getNodeId(node)];
+            }
+
+            function isModuleAlreadyGenerated(node: ModuleDeclaration): boolean {
+                var module: IGeneratedModule;
+                var name = getGeneratedNameForNode(node);
+
+                if (module = modulesToGeneratedName[name]) {
+                    return module.gen;
+                }
+
+                return false;
+            }
+
+            function getGeneatredPathForModule(module: ModuleDeclaration, name?: string): string {
+                var gen: IGeneratedModule;
+                name = name || getGeneratedNameForNode(module);
+
+                if (gen = modulesToGeneratedName[name]) {
+                    return gen.path
+                }
+
+                return null;
+            }
+
+            function getOrAddGeneratedNameForModule(module: ModuleDeclaration, parentModule?: ModuleDeclaration): IGeneratedModule {
+                var name = getGeneratedNameForNode(module);
+                var generatedName = modulesToGeneratedName[name];
+
+                if (generatedName) {
+                    return generatedName;
+                }
+                generatedName = name;
+
+                if (parentModule) {
+                    generatedName = getGeneatredPathForModule(parentModule) + "." + name;
+                }
+
+                return modulesToGeneratedName[name] = { path: generatedName, gen: false };
+            }
+
+            function setModuleGenerated(module: ModuleDeclaration): void {
+                var generated: IGeneratedModule = getOrAddGeneratedNameForModule(module);
+
+                if (generated) {
+                    generated.gen = true;
                 }
             }
 
@@ -2942,21 +2998,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return;
                 }
 
-                emitToken(SyntaxKind.OpenBraceToken, node.pos);
-                increaseIndent();
-                scopeEmitStart(node.parent);
                 if (node.kind === SyntaxKind.ModuleBlock) {
                     Debug.assert(node.parent.kind === SyntaxKind.ModuleDeclaration);
                     emitCaptureThisForNodeIfNecessary(node.parent);
+                    emitLines(node.statements);
+                    emitTempDeclarations(true);
+                    scopeEmitEnd();
                 }
-                emitLines(node.statements);
-                if (node.kind === SyntaxKind.ModuleBlock) {
-                    emitTempDeclarations(/*newLine*/ true);
-                }
-                decreaseIndent();
-                writeLine();
-                emitToken(SyntaxKind.CloseBraceToken, node.statements.end);
-                scopeEmitEnd();
             }
 
             function emitEmbeddedStatement(node: Node) {
@@ -3405,16 +3453,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitModuleMemberName(node: Declaration) {
                 emitStart(node.name);
-                if (getCombinedNodeFlags(node) & NodeFlags.Export) {
-                    let container = getContainingModule(node);
-                    if (container) {
-                        write(getGeneratedNameForNode(container));
-                        write(".");
-                    }
-                    else if (modulekind !== ModuleKind.ES6 && modulekind !== ModuleKind.System) {
-                        write("exports.");
-                    }
-                }
                 emitNodeWithCommentsAndWithoutSourcemap(node.name);
                 emitEnd(node.name);
             }
@@ -3842,6 +3880,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(`", `);
                     }
 
+                    let containingModule = getContainingModule(node);
+
+                    if (containingModule) {
+                        let modulePath = getGeneatredPathForModule(containingModule);
+
+                        write(modulePath);
+                        write(".");
+                    }
+
                     emitModuleMemberName(node);
                     emitOptional(" = ", initializer);
 
@@ -3880,6 +3927,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitVariableStatement(node: VariableStatement) {
                 let startIsEmitted = false;
+                let parentModule = getEnclosingModuleBlock(node);
 
                 if (node.flags & NodeFlags.Export) {
                     if (isES6ExportedDeclaration(node)) {
@@ -3889,7 +3937,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
+                    if (!parentModule) {
+                        startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
+                    }
                 }
 
                 if (startIsEmitted) {
@@ -3905,6 +3955,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (modulekind !== ModuleKind.ES6 && node.parent === currentSourceFile) {
                     forEach(node.declarationList.declarations, emitExportVariableAssignments);
                 }
+            }
+
+            function getEnclosingModuleBlock(node: Node) {
+                while (node && node.kind !== SyntaxKind.ModuleBlock) {
+                    node = node.parent;
+                }
+
+                return node;
             }
 
             function shouldEmitLeadingAndTrailingCommentsForVariableStatement(node: VariableStatement) {
@@ -5654,40 +5712,38 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitModuleDeclaration(node: ModuleDeclaration) {
                 // Emit only if this module is non-ambient.
-                let shouldEmit = shouldEmitModuleDeclaration(node);
-
+                var shouldEmit = shouldEmitModuleDeclaration(node);
                 if (!shouldEmit) {
                     return emitCommentsOnNotEmittedNode(node);
                 }
-                let hoistedInDeclarationScope = shouldHoistDeclarationInSystemJsModule(node);
-                let emitVarForModule = !hoistedInDeclarationScope && !isModuleMergedWithES6Class(node);
+                var containingModule = getContainingModule(node);
+                var moduleAlreadyGenerated = isModuleAlreadyGenerated(node);
+                var hoistedInDeclarationScope = !containingModule && !moduleAlreadyGenerated;
+                var name = getGeneratedNameForNode(node)
 
-                if (emitVarForModule) {
-                    emitStart(node);
-                    if (isES6ExportedDeclaration(node)) {
-                        write("export ");
-                    }
+                getOrAddGeneratedNameForModule(node, containingModule);
+
+                if (hoistedInDeclarationScope) {
                     write("var ");
-                    emit(node.name);
-                    write(";");
-                    emitEnd(node);
+                    write(name);
+                    write(" = {};");
+                    writeLine();
+                }
+                else if (!moduleAlreadyGenerated) {
+                    let containingModuleName = getGeneatredPathForModule(containingModule);
+
+                    write(containingModuleName + ".");
+                    write(name);
+                    write(" = {};");
                     writeLine();
                 }
 
-                emitStart(node);
-                write("(function (");
-                emitStart(node.name);
-                write(getGeneratedNameForNode(node));
-                emitEnd(node.name);
-                write(") ");
                 if (node.body.kind === SyntaxKind.ModuleBlock) {
                     let saveTempFlags = tempFlags;
                     let saveTempVariables = tempVariables;
                     tempFlags = 0;
                     tempVariables = undefined;
-
                     emit(node.body);
-
                     tempFlags = saveTempFlags;
                     tempVariables = saveTempVariables;
                 }
@@ -5704,17 +5760,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitToken(SyntaxKind.CloseBraceToken, moduleBlock.statements.end);
                     scopeEmitEnd();
                 }
-                write(")(");
-                // write moduleDecl = containingModule.m only if it is not exported es6 module member
-                if ((node.flags & NodeFlags.Export) && !isES6ExportedDeclaration(node)) {
-                    emit(node.name);
-                    write(" = ");
-                }
-                emitModuleMemberName(node);
-                write(" || (");
-                emitModuleMemberName(node);
-                write(" = {}));");
-                emitEnd(node);
+
                 if (!isES6ExportedDeclaration(node) && node.name.kind === SyntaxKind.Identifier && node.parent === currentSourceFile) {
                     if (modulekind === ModuleKind.System && (node.flags & NodeFlags.Export)) {
                         writeLine();
@@ -5726,6 +5772,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                     emitExportMemberAssignments(<Identifier>node.name);
                 }
+
+                setModuleGenerated(node);
             }
 
             /*
@@ -5888,6 +5936,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitImportEqualsDeclaration(node: ImportEqualsDeclaration) {
+                return;
                 if (isExternalModuleImportEqualsDeclaration(node)) {
                     emitExternalImportDeclaration(node);
                     return;
