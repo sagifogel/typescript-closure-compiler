@@ -1,6 +1,6 @@
 ﻿import * as path from "path";
-import {readFileSync, readdirSync, statSync} from "fs";
 import * as ts from "typescript";
+import {readFileSync, readdirSync, statSync} from "fs";
 
 class LanguageServiceHost implements ts.LanguageServiceHost {
     files: { [fileName: string]: { file: ts.IScriptSnapshot; ver: number } } = {}
@@ -89,7 +89,7 @@ export function compile(fileNames: string[], options: ts.CompilerOptions): void 
 
 compile(fileNames, {
     noEmitOnError: true,
-    noImplicitAny: true,
+    noImplicitAny: false,
     target: ts.ScriptTarget.ES5,
     module: ts.ModuleKind.None,
     removeComments: true

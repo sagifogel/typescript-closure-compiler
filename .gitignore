@@ -38,4 +38,5 @@ node_modules
 
 *.js
 *.dat
+*.tmp
 

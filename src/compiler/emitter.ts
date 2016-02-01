@@ -393,7 +393,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             let generatedNameSet: Map<string> = {};
             let nodeToGeneratedName: string[] = [];
-            let modulesToGeneratedName: Array<IGeneratedModule>
+            let modulesToGeneratedName: Array<IGeneratedModule> = [];
             let computedPropertyNamesToGeneratedNames: string[];
 
             let extendsEmitted = false;
