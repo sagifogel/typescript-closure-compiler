@@ -1161,14 +1161,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
-            function emitLines(nodes: Node[]) {
-                emitLinesStartingAt(nodes, /*startIndex*/ 0);
+            function emitLines(nodes: Node[], postfix?: (Node: Node, index: number) => void) {
+                emitLinesStartingAt(nodes, /*startIndex*/ 0,  postfix);
             }
 
-            function emitLinesStartingAt(nodes: Node[], startIndex: number): void {
+            function emitLinesStartingAt(nodes: Node[], startIndex: number, postfix?: (Node: Node, index: number) => void): void {
                 for (let i = startIndex; i < nodes.length; i++) {
+                    let node = nodes[i];
+
                     writeLine();
-                    emit(nodes[i]);
+                    emit(node);
+
+                    if (postfix) {
+                        postfix(node, i);
+                    }
                 }
             }
 
@@ -1708,16 +1714,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emit((<ComputedPropertyName>node).expression);
                 }
                 else {
-                    write("\"");
-
                     if (node.kind === SyntaxKind.NumericLiteral) {
                         write((<LiteralExpression>node).text);
                     }
                     else {
                         writeTextOfNode(currentSourceFile, node);
                     }
-
-                    write("\"");
                 }
             }
 
@@ -5585,44 +5587,32 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitEnumDeclaration(node: EnumDeclaration) {
+                var membersLength = node.members.length - 1; 
                 // const enums are completely erased during compilation.
                 if (!shouldEmitEnumDeclaration(node)) {
                     return;
                 }
 
-                if (!shouldHoistDeclarationInSystemJsModule(node)) {
-                    // do not emit var if variable was already hoisted
-                    if (!(node.flags & NodeFlags.Export) || isES6ExportedDeclaration(node)) {
-                        emitStart(node);
-                        if (isES6ExportedDeclaration(node)) {
-                            write("export ");
-                        }
-                        write("var ");
-                        emit(node.name);
-                        emitEnd(node);
-                        write(";");
-                    }
+                forceWriteLine();
+
+                if (!emitModuleIfNeeded(node)) {
+                    write("var ");
                 }
-                writeLine();
-                emitStart(node);
-                write("(function (");
-                emitStart(node.name);
-                write(getGeneratedNameForNode(node));
-                emitEnd(node.name);
-                write(") {");
+
+                emit(node.name);
+                write(" = {");
                 increaseIndent();
-                scopeEmitStart(node);
-                emitLines(node.members);
+
+                emitLines(node.members, function (node, i) {
+                    if (i < membersLength) {
+                        write(",");
+                    }
+                });
+
                 decreaseIndent();
                 writeLine();
-                emitToken(SyntaxKind.CloseBraceToken, node.members.end);
-                scopeEmitEnd();
-                write(")(");
-                emitModuleMemberName(node);
-                write(" || (");
-                emitModuleMemberName(node);
-                write(" = {}));");
-                emitEnd(node);
+                write("};");
+                
                 if (!isES6ExportedDeclaration(node) && node.flags & NodeFlags.Export && !shouldHoistDeclarationInSystemJsModule(node)) {
                     // do not emit var if variable was already hoisted
                     writeLine();
@@ -5649,19 +5639,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitEnumMember(node: EnumMember) {
-                let enumParent = <EnumDeclaration>node.parent;
-                emitStart(node);
-                write(getGeneratedNameForNode(enumParent));
-                write("[");
-                write(getGeneratedNameForNode(enumParent));
-                write("[");
                 emitExpressionForPropertyName(node.name);
-                write("] = ");
+                write(": ");
                 writeEnumMemberDeclarationValue(node);
-                write("] = ");
-                emitExpressionForPropertyName(node.name);
-                emitEnd(node);
-                write(";");
             }
 
             function writeEnumMemberDeclarationValue(member: EnumMember) {
