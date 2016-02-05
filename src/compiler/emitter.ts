@@ -1162,7 +1162,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitLines(nodes: Node[], postfix?: (Node: Node, index: number) => void) {
-                emitLinesStartingAt(nodes, /*startIndex*/ 0,  postfix);
+                emitLinesStartingAt(nodes, /*startIndex*/ 0, postfix);
             }
 
             function emitLinesStartingAt(nodes: Node[], startIndex: number, postfix?: (Node: Node, index: number) => void): void {
@@ -3435,6 +3435,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emit(node.statement);
             }
 
+            function isNodeConatinedWithinScope(node: Node) :boolean {
+                do {
+                    if (!node ||
+                        node.kind === SyntaxKind.ClassExpression ||
+                        node.kind === SyntaxKind.ArrowFunction ||
+                        node.kind === SyntaxKind.MethodDeclaration ||
+                        node.kind === SyntaxKind.CatchClause) {
+                        return true;
+                    }
+
+                    node = node.parent;
+                }
+                while (node && node.kind !== SyntaxKind.ModuleDeclaration);
+
+                return false;
+            }
+
             function getContainingModule(node: Node): ModuleDeclaration {
                 do {
                     node = node.parent;
@@ -4117,6 +4134,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitFunctionDeclaration(node: FunctionLikeDeclaration) {
+                let isContainedWithinModule = false
+
                 if (nodeIsMissing(node.body)) {
                     return emitCommentsOnNotEmittedNode(node);
                 }
@@ -4153,6 +4172,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                     }
 
+                    if (isContainedWithinModule = emitModuleIfNeeded(node)) {
+                        emitDeclarationName(node);
+                        write(" = ");
+                    }
+
                     write("function");
                     if (languageVersion >= ScriptTarget.ES6 && node.asteriskToken) {
                         write("*");
@@ -4160,7 +4184,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(" ");
                 }
 
-                if (shouldEmitFunctionName(node)) {
+                if (!isContainedWithinModule && shouldEmitFunctionName(node)) {
                     emitDeclarationName(node);
                 }
 
@@ -5621,7 +5645,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 decreaseIndent();
                 writeLine();
                 write("};");
-                
+
                 if (!isES6ExportedDeclaration(node) && node.flags & NodeFlags.Export && !shouldHoistDeclarationInSystemJsModule(node)) {
                     // do not emit var if variable was already hoisted
                     writeLine();
@@ -5683,11 +5707,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitModuleIfNeeded(node: Node): boolean {
-                var generatedPath: string;
+                if (!isNodeConatinedWithinScope(node)) {
+                    let generatedPath: string;
 
-                if (generatedPath = getNodeParentPath(node)) {
-                    write(generatedPath + ".");
-                    return true;
+                    if (generatedPath = getNodeParentPath(node)) {
+                        write(generatedPath + ".");
+                        return true;
+                    }
                 }
 
                 return false
