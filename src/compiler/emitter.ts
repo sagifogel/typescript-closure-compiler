@@ -7,11 +7,6 @@ namespace ts {
         return isExternalModule(sourceFile) || isDeclarationFile(sourceFile);
     }
 
-    interface IGeneratedModule {
-        path: string;
-        gen: boolean;
-    }
-
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
     let entities: Map<number> = {
@@ -393,7 +388,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             let generatedNameSet: Map<string> = {};
             let nodeToGeneratedName: string[] = [];
-            let modulesToGeneratedName: Array<IGeneratedModule> = [];
+            let modulesToGeneratedName: { [name: string]: boolean } = {};
             let computedPropertyNamesToGeneratedNames: string[];
 
             let extendsEmitted = false;
@@ -569,54 +564,44 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
-            function isNodeAlreadyGenerated(node) {
-                return !!nodeToGeneratedName[ts.getNodeId(node)];
-            }
-
             function isModuleAlreadyGenerated(node: ModuleDeclaration): boolean {
-                var module: IGeneratedModule;
-                var name = getGeneratedNameForNode(node);
+                var moduleFullPath = getGeneratedPathForModule(node);
 
-                if (module = modulesToGeneratedName[name]) {
-                    return module.gen;
-                }
-
-                return false;
+                return !!modulesToGeneratedName[moduleFullPath];
             }
 
-            function getGeneatredPathForModule(module: ModuleDeclaration, name?: string): string {
-                var gen: IGeneratedModule;
-                name = name || getGeneratedNameForNode(module);
+            function getGeneratedPathForModule(node: Declaration): string {
+                let name: string;
+                let moduleFullPath = getNodeParentPath(node);
 
-                if (gen = modulesToGeneratedName[name]) {
-                    return gen.path
+                if (node.name) {
+                    let identifier = <Identifier>node.name;
+                    name = identifier.text;
+                }
+                else {
+                    name = getGeneratedNameForNode(node);
                 }
 
-                return null;
+                if (moduleFullPath) {
+                    return moduleFullPath += "." + name;
+                }
+
+                return name;
             }
 
-            function getOrAddGeneratedNameForModule(module: ModuleDeclaration, parentModule?: ModuleDeclaration): IGeneratedModule {
-                var name = getGeneratedNameForNode(module);
-                var generatedName = modulesToGeneratedName[name];
-
-                if (generatedName) {
-                    return generatedName;
-                }
-                generatedName = name;
-
-                if (parentModule) {
-                    generatedName = getGeneatredPathForModule(parentModule) + "." + name;
-                }
-
-                return modulesToGeneratedName[name] = { path: generatedName, gen: false };
+            function setModuleGenerated(node: Declaration): void {
+                let moduleFullPath = getGeneratedPathForModule(node);
+                modulesToGeneratedName[moduleFullPath] = true;
             }
 
-            function setModuleGenerated(module: ModuleDeclaration): void {
-                var generated: IGeneratedModule = getOrAddGeneratedNameForModule(module);
+            function getNodeParentPath(node: Node): string {
+                let path: Array<string> = [];
 
-                if (generated) {
-                    generated.gen = true;
+                while (node = getContainingModule(node)) {
+                    path.push(getGeneratedNameForNode(node));
                 }
+
+                return path.reverse().join(".");
             }
 
             function getGeneratedNameForNode(node: Node) {
@@ -3879,16 +3864,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitNodeWithCommentsAndWithoutSourcemap(node.name);
                         write(`", `);
                     }
-
-                    let containingModule = getContainingModule(node);
-
-                    if (containingModule) {
-                        let modulePath = getGeneatredPathForModule(containingModule);
-
-                        write(modulePath);
-                        write(".");
-                    }
-
+                    emitModuleIfNeeded(node);
                     emitModuleMemberName(node);
                     emitOptional(" = ", initializer);
 
@@ -3927,7 +3903,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitVariableStatement(node: VariableStatement) {
                 let startIsEmitted = false;
-                let parentModule = getEnclosingModuleBlock(node);
+                let parentModule = getContainingModule(node);
 
                 if (node.flags & NodeFlags.Export) {
                     if (isES6ExportedDeclaration(node)) {
@@ -3955,14 +3931,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (modulekind !== ModuleKind.ES6 && node.parent === currentSourceFile) {
                     forEach(node.declarationList.declarations, emitExportVariableAssignments);
                 }
-            }
-
-            function getEnclosingModuleBlock(node: Node) {
-                while (node && node.kind !== SyntaxKind.ModuleBlock) {
-                    node = node.parent;
-                }
-
-                return node;
             }
 
             function shouldEmitLeadingAndTrailingCommentsForVariableStatement(node: VariableStatement) {
@@ -4590,6 +4558,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 else {
                     if (property.flags & NodeFlags.Static) {
+                        emitModuleIfNeeded(node);
                         emitDeclarationName(node);
                     }
                     else {
@@ -4724,9 +4693,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 tempFlags = 0;
                 tempVariables = undefined;
                 tempParameters = undefined;
-
                 emitConstructorWorker(node, baseTypeElement);
-
                 tempFlags = saveTempFlags;
                 tempVariables = saveTempVariables;
                 tempParameters = saveTempParameters;
@@ -4734,11 +4701,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
+                let isDeclaredInAModule = false;
+                var nodeName = ts.declarationNameToString(node.name);
                 // Check if we have property assignment inside class declaration.
                 // If there is property assignment, we need to emit constructor whether users define it or not
                 // If there is no property assignment, we can omit constructor if users do not define it
                 let hasInstancePropertyWithInitializer = false;
 
+                forceWriteLine();
                 // Emit the constructor overload pinned comments
                 forEach(node.members, member => {
                     if (member.kind === SyntaxKind.Constructor && !(<ConstructorDeclaration>member).body) {
@@ -4764,8 +4734,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitStart(ctor || node);
 
                 if (languageVersion < ScriptTarget.ES6) {
-                    write("function ");
-                    emitDeclarationName(node);
+                    if (isDeclaredInAModule = emitModuleIfNeeded(node)) {
+                        emitDeclarationName(node);
+                        write(" = function ");
+                    }
+                    else {
+                        write("function ");
+                        emitDeclarationName(node);
+                    }
+
                     emitSignatureParameters(ctor);
                 }
                 else {
@@ -4848,6 +4825,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (ctor) {
                     emitTrailingComments(ctor);
                 }
+
+                if (isDeclaredInAModule) {
+                    write(";");
+                }
+
+                setModuleGenerated(node);
             }
 
             function emitClassExpression(node: ClassExpression) {
@@ -5710,32 +5693,39 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return languageVersion === ScriptTarget.ES6 && !!(resolver.getNodeCheckFlags(node) & NodeCheckFlags.LexicalModuleMergesWithClass);
             }
 
+            function emitModuleIfNeeded(node: Node): boolean {
+                var generatedPath: string;
+
+                if (generatedPath = getNodeParentPath(node)) {
+                    write(generatedPath + ".");
+                    return true;
+                }
+
+                return false
+            }
+
             function emitModuleDeclaration(node: ModuleDeclaration) {
                 // Emit only if this module is non-ambient.
-                var shouldEmit = shouldEmitModuleDeclaration(node);
+                let shouldEmit = shouldEmitModuleDeclaration(node);
                 if (!shouldEmit) {
                     return emitCommentsOnNotEmittedNode(node);
                 }
-                var containingModule = getContainingModule(node);
-                var moduleAlreadyGenerated = isModuleAlreadyGenerated(node);
-                var hoistedInDeclarationScope = !containingModule && !moduleAlreadyGenerated;
-                var name = getGeneratedNameForNode(node)
-
-                getOrAddGeneratedNameForModule(node, containingModule);
+                let containingModule = getContainingModule(node);
+                let moduleAlreadyGenerated = isModuleAlreadyGenerated(node);
+                let hoistedInDeclarationScope = !containingModule && !moduleAlreadyGenerated;
+                let name = getGeneratedNameForNode(node)
 
                 if (hoistedInDeclarationScope) {
+                    forceWriteLine();
                     write("var ");
                     write(name);
                     write(" = {};");
                     writeLine();
                 }
                 else if (!moduleAlreadyGenerated) {
-                    let containingModuleName = getGeneatredPathForModule(containingModule);
-
-                    write(containingModuleName + ".");
+                    emitModuleIfNeeded(node);
                     write(name);
                     write(" = {};");
-                    writeLine();
                 }
 
                 if (node.body.kind === SyntaxKind.ModuleBlock) {
@@ -5748,17 +5738,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     tempVariables = saveTempVariables;
                 }
                 else {
-                    write("{");
-                    increaseIndent();
-                    scopeEmitStart(node);
-                    emitCaptureThisForNodeIfNecessary(node);
-                    writeLine();
                     emit(node.body);
-                    decreaseIndent();
-                    writeLine();
-                    let moduleBlock = <ModuleBlock>getInnerMostModuleDeclarationFromDottedModule(node).body;
-                    emitToken(SyntaxKind.CloseBraceToken, moduleBlock.statements.end);
-                    scopeEmitEnd();
                 }
 
                 if (!isES6ExportedDeclaration(node) && node.name.kind === SyntaxKind.Identifier && node.parent === currentSourceFile) {
