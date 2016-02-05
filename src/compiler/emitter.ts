@@ -2992,6 +2992,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitTempDeclarations(true);
                     scopeEmitEnd();
                 }
+                else {
+                    emitToken(SyntaxKind.OpenBraceToken, node.pos);
+                    increaseIndent();
+                    scopeEmitStart(node.parent);
+                    emitLines(node.statements);
+                    decreaseIndent();
+                    writeLine();
+                    emitToken(SyntaxKind.CloseBraceToken, node.statements.end);
+                }
             }
 
             function emitEmbeddedStatement(node: Node) {
