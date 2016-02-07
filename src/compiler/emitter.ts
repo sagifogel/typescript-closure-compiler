@@ -3461,6 +3461,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         node.kind === SyntaxKind.ClassExpression ||
                         node.kind === SyntaxKind.ArrowFunction ||
                         node.kind === SyntaxKind.MethodDeclaration ||
+                        node.kind === SyntaxKind.FunctionDeclaration ||
                         node.kind === SyntaxKind.CatchClause) {
                         return true;
                     }
@@ -4225,6 +4226,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitEnd(node);
                 if (node.kind !== SyntaxKind.MethodDeclaration && node.kind !== SyntaxKind.MethodSignature) {
                     emitTrailingComments(node);
+                } emitClassMemberPrefix
+
+                if (isContainedWithinModule) {
+                    write(";");
                 }
             }
 
@@ -5113,6 +5118,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitClassMemberPrefix(node: ClassLikeDeclaration, member: Node) {
+                emitModuleIfNeeded(node);
                 emitDeclarationName(node);
                 if (!(member.flags & NodeFlags.Static)) {
                     write(".prototype");
