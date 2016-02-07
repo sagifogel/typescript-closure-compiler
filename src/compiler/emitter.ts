@@ -3450,19 +3450,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     node = node.parent;
                 }
-                while (node && node.kind !== SyntaxKind.ModuleDeclaration && node.kind !== SyntaxKind.CatchClause && node.kind !== SyntaxKind.VariableStatement);
+                while (node && node.kind !== SyntaxKind.ModuleDeclaration && node.kind !== SyntaxKind.CatchClause);
 
                 return false;
             }
 
-            function isNodeConatinedWithinScope(node: Node): boolean {
+            function isNodeContainedWithinScope(node: Node): boolean {
                 do {
                     if (!node ||
-                        node.kind === SyntaxKind.ClassExpression ||
+                        node.kind === SyntaxKind.CatchClause ||
                         node.kind === SyntaxKind.ArrowFunction ||
+                        node.kind === SyntaxKind.ClassExpression ||
                         node.kind === SyntaxKind.MethodDeclaration ||
-                        node.kind === SyntaxKind.FunctionDeclaration ||
-                        node.kind === SyntaxKind.CatchClause) {
+                        node.kind === SyntaxKind.FunctionDeclaration) {
                         return true;
                     }
 
@@ -3914,10 +3914,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(`", `);
                     }
 
-                    if (isNodeDeclaredWithinFunction(node)) {
-                        write("var ");
-                    }
-                    else {
+                    if (!isNodeDeclaredWithinFunction(node)) {
                         emitModuleIfNeeded(node);
                     }
 
@@ -3969,7 +3966,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    if (!parentModule) {
+                    if (!parentModule || isNodeDeclaredWithinFunction(node)) {
                         startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
                     }
                 }
@@ -4200,8 +4197,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                     }
 
-                    if (node.parent.kind !== SyntaxKind.ClassDeclaration) {
-                        if (isContainedWithinModule = emitModuleIfNeeded(node)) {
+                    if (node.kind !== SyntaxKind.FunctionExpression) {
+                        if (isContainedWithinModule = emitModuleForFunctionIfNeeded(node, true)) {
                             emitDeclarationName(node);
                             write(" = ");
                         }
@@ -4226,10 +4223,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitEnd(node);
                 if (node.kind !== SyntaxKind.MethodDeclaration && node.kind !== SyntaxKind.MethodSignature) {
                     emitTrailingComments(node);
-                } emitClassMemberPrefix
-
-                if (isContainedWithinModule) {
-                    write(";");
                 }
             }
 
@@ -5724,8 +5717,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return languageVersion === ScriptTarget.ES6 && !!(resolver.getNodeCheckFlags(node) & NodeCheckFlags.LexicalModuleMergesWithClass);
             }
 
-            function emitModuleIfNeeded(node: Node): boolean {
-                if (!isNodeConatinedWithinScope(node)) {
+            function emitModuleIfNeeded(node: Node, skipcheck?: boolean): boolean {
+                if (skipcheck || !isNodeContainedWithinScope(node)) {
                     let generatedPath: string;
 
                     if (generatedPath = getNodeParentPath(node)) {
@@ -5735,6 +5728,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 return false
+            }
+
+            function emitModuleForFunctionIfNeeded(node: FunctionLikeDeclaration, skipcheck?: boolean): boolean {
+                if (shouldEmitFunctionName(node)) {
+                    return emitModuleIfNeeded(node, skipcheck);
+                }
+
+                return false;
             }
 
             function emitModuleDeclaration(node: ModuleDeclaration) {
