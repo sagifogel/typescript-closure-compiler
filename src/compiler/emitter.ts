@@ -3435,7 +3435,27 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emit(node.statement);
             }
 
-            function isNodeConatinedWithinScope(node: Node) :boolean {
+            function isNodeDeclaredWithinFunction(node: Node): boolean {
+                do {
+                    if (!node ||
+                        node.kind === SyntaxKind.Constructor ||
+                        node.kind === SyntaxKind.GetAccessor ||
+                        node.kind === SyntaxKind.SetAccessor ||
+                        node.kind === SyntaxKind.MethodSignature ||
+                        node.kind === SyntaxKind.MethodDeclaration ||
+                        node.kind === SyntaxKind.PropertySignature ||
+                        node.kind === SyntaxKind.FunctionDeclaration) {
+                        return true;
+                    }
+
+                    node = node.parent;
+                }
+                while (node && node.kind !== SyntaxKind.ModuleDeclaration && node.kind !== SyntaxKind.CatchClause && node.kind !== SyntaxKind.VariableStatement);
+
+                return false;
+            }
+
+            function isNodeConatinedWithinScope(node: Node): boolean {
                 do {
                     if (!node ||
                         node.kind === SyntaxKind.ClassExpression ||
@@ -3892,7 +3912,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitNodeWithCommentsAndWithoutSourcemap(node.name);
                         write(`", `);
                     }
-                    emitModuleIfNeeded(node);
+
+                    if (isNodeDeclaredWithinFunction(node)) {
+                        write("var ");
+                    }
+                    else {
+                        emitModuleIfNeeded(node);
+                    }
+
                     emitModuleMemberName(node);
                     emitOptional(" = ", initializer);
 
@@ -4172,9 +4199,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                     }
 
-                    if (isContainedWithinModule = emitModuleIfNeeded(node)) {
-                        emitDeclarationName(node);
-                        write(" = ");
+                    if (node.parent.kind !== SyntaxKind.ClassDeclaration) {
+                        if (isContainedWithinModule = emitModuleIfNeeded(node)) {
+                            emitDeclarationName(node);
+                            write(" = ");
+                        }
                     }
 
                     write("function");
@@ -4479,39 +4508,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitBlockFunctionBody(node: FunctionLikeDeclaration, body: Block) {
                 write(" {");
                 scopeEmitStart(node);
-
                 let initialTextPos = writer.getTextPos();
-
                 increaseIndent();
                 emitDetachedComments(body.statements);
-
                 // Emit all the directive prologues (like "use strict").  These have to come before
                 // any other preamble code we write (like parameter initializers).
                 let startIndex = emitDirectivePrologues(body.statements, /*startWithNewLine*/ true);
                 emitFunctionBodyPreamble(node);
                 decreaseIndent();
-
-                let preambleEmitted = writer.getTextPos() !== initialTextPos;
-
-                if (!preambleEmitted && nodeEndIsOnSameLineAsNodeStart(body, body)) {
-                    for (let statement of body.statements) {
-                        write(" ");
-                        emit(statement);
-                    }
-                    emitTempDeclarations(/*newLine*/ false);
-                    write(" ");
-                    emitLeadingCommentsOfPosition(body.statements.end);
-                }
-                else {
-                    increaseIndent();
-                    emitLinesStartingAt(body.statements, startIndex);
-                    emitTempDeclarations(/*newLine*/ true);
-
-                    writeLine();
-                    emitLeadingCommentsOfPosition(body.statements.end);
-                    decreaseIndent();
-                }
-
+                increaseIndent();
+                emitLinesStartingAt(body.statements, startIndex);
+                emitTempDeclarations(/*newLine*/ true);
+                writeLine();
+                emitLeadingCommentsOfPosition(body.statements.end);
+                decreaseIndent();
                 emitToken(SyntaxKind.CloseBraceToken, body.statements.end);
                 scopeEmitEnd();
             }
@@ -5091,8 +5101,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     writeLine();
                     emitStart(baseTypeNode);
                     write("__extends(");
+                    emitModuleIfNeeded(node);
                     emitDeclarationName(node);
                     write(", ");
+                    emitModuleIfNeeded(baseTypeNode.expression);
                     emit(baseTypeNode.expression);
                     write(");");
                     forceWriteLine();
