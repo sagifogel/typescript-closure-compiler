@@ -4223,7 +4223,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(" ");
                 }
 
-                if (!emitFunctionName && shouldEmitFunctionName(node)) {
+                if (emitFunctionName && shouldEmitFunctionName(node)) {
                     emitDeclarationName(node);
                 }
 
