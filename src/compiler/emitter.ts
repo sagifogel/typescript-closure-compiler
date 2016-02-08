@@ -4159,6 +4159,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitFunctionDeclaration(node: FunctionLikeDeclaration) {
+                let emitFunctionName = true;
                 let isContainedWithinModule = false
 
                 if (nodeIsMissing(node.body)) {
@@ -4197,13 +4198,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                     }
 
-                    if (node.kind !== SyntaxKind.FunctionExpression) {
-                        if (isContainedWithinModule = emitModuleForFunctionIfNeeded(node, true)) {
+                    if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration) {
+                        var tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isNodeContainedWithinScope(node.parent);
+
+                        if (tryEmitModule) {
+                            if (isContainedWithinModule = emitModuleForFunctionIfNeeded(node, true)) {
+                                emitFunctionName = false;
+                                emitDeclarationName(node);
+                                write(" = ");
+                            }
+                        }
+                        else {
+                            emitFunctionName = false;
+                            write("var ");
                             emitDeclarationName(node);
                             write(" = ");
                         }
                     }
-
+                    
                     write("function");
                     if (languageVersion >= ScriptTarget.ES6 && node.asteriskToken) {
                         write("*");
@@ -4211,7 +4223,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(" ");
                 }
 
-                if (!isContainedWithinModule && shouldEmitFunctionName(node)) {
+                if (!emitFunctionName && shouldEmitFunctionName(node)) {
                     emitDeclarationName(node);
                 }
 
@@ -4223,6 +4235,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitEnd(node);
                 if (node.kind !== SyntaxKind.MethodDeclaration && node.kind !== SyntaxKind.MethodSignature) {
                     emitTrailingComments(node);
+                }
+
+                if (isContainedWithinModule) {
+                    write(";");
                 }
             }
 
