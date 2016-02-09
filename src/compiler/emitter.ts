@@ -1907,6 +1907,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let flags = resolver.getNodeCheckFlags(node);
                     let enclosingParent = getClassLikeEnclosingParent(node);
                     let baseTypeNode = ts.getClassExtendsHeritageClauseElement(enclosingParent);
+                    emitModuleIfNeeded(node, true);
                     emit(baseTypeNode.expression);
                     if (flags & NodeCheckFlags.SuperInstance) {
                         write(".prototype");
@@ -2606,7 +2607,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitNewExpression(node: NewExpression) {
                 write("new ");
-
+                emitModuleIfNeeded(node, true);
                 // Spread operator logic is supported in new expressions in ES5 using a combination
                 // of Function.prototype.bind() and Function.prototype.apply().
                 //
