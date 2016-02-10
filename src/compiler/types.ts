@@ -1,4 +1,8 @@
 ﻿namespace ts {
+    export interface Symbol {
+        getDeclarations(): Declaration[];
+    }
+
     export interface EmitHost extends ScriptReferenceHost {
         getSourceFiles(): SourceFile[];
         getCommonSourceDirectory(): string;

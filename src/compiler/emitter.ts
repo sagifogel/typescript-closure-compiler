@@ -1864,7 +1864,42 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return false;
             }
 
+            function getSymbolScope(node: Identifier): Node {
+                let scope;
+                let containingNode: Node = node;
+                let filter = (d: VariableDeclaration) => node.text === d.symbol.name;
+
+                while (containingNode = getContainingModule(containingNode)) {
+                    var declarations = (<FunctionLikeDeclaration>containingNode).symbol.getDeclarations();
+
+                    for (var i = 0; i < declarations.length; i++) {
+                        var declaration = declarations[i];
+                        var statements = (<any>declaration).body.statements;
+
+                        for (var j = 0; j < statements.length; j++) {
+                            var statement = <VariableStatement>statements[j];
+
+                            if (statement.declarationList) {
+                                var decs = statement.declarationList.declarations;
+
+                                if (decs.some(filter)) {
+                                    return containingNode;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return null;
+            }
+
             function emitIdentifier(node: Identifier) {
+                if (node.parent.kind !== SyntaxKind.VariableDeclaration) {
+                    if (getSymbolScope(node)) {
+                        emitModuleIfNeeded(node, true);
+                    }
+                }
+
                 if (!node.parent) {
                     write(node.text);
                 }
@@ -4216,7 +4251,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             write(" = ");
                         }
                     }
-                    
+
                     write("function");
                     if (languageVersion >= ScriptTarget.ES6 && node.asteriskToken) {
                         write("*");
@@ -5736,15 +5771,21 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitModuleIfNeeded(node: Node, skipcheck?: boolean): boolean {
                 if (skipcheck || !isNodeContainedWithinScope(node)) {
-                    let generatedPath: string;
-
-                    if (generatedPath = getNodeParentPath(node)) {
-                        write(generatedPath + ".");
-                        return true;
-                    }
+                    return emitModuleName(node);
                 }
 
                 return false
+            }
+
+            function emitModuleName(node: Node): boolean {
+                var generatedPath;
+
+                if (generatedPath = getNodeParentPath(node)) {
+                    write(generatedPath + ".");
+                    return true;
+                }
+
+                return false;
             }
 
             function emitModuleForFunctionIfNeeded(node: FunctionLikeDeclaration, skipcheck?: boolean): boolean {
