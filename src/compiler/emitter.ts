@@ -1865,39 +1865,39 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getSymbolScope(node: Identifier): Node {
-                let scope;
-                let containingNode: Node = node;
+                let _node: Node = node;
+                let containingNode: ModuleDeclaration;
                 let filter = (d: VariableDeclaration) => node.text === d.symbol.name;
 
-                while (containingNode = getContainingModule(containingNode)) {
-                    var declarations = (<FunctionLikeDeclaration>containingNode).symbol.getDeclarations();
+                while (containingNode = getContainingModule(_node)) {
+                    let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
 
                     for (var i = 0; i < declarations.length; i++) {
-                        var declaration = declarations[i];
-                        var statements = (<any>declaration).body.statements;
+                        let declaration = <ModuleDeclaration>declarations[i];
 
-                        for (var j = 0; j < statements.length; j++) {
-                            var statement = <VariableStatement>statements[j];
+                        if (declaration.body.kind === SyntaxKind.ModuleBlock) {
+                            var statements = (<ModuleBlock>declaration.body).statements;
+                            let variableStatements = <Array<VariableStatement>>statements.filter(statement => statement.kind === SyntaxKind.VariableStatement);
 
-                            if (statement.declarationList) {
-                                var decs = statement.declarationList.declarations;
+                            for (let j = 0; j < variableStatements.length; j++) {
+                                let statement = variableStatements[j];
 
-                                if (decs.some(filter)) {
+                                if (statement.declarationList.declarations.some(filter)) {
                                     return containingNode;
                                 }
                             }
                         }
                     }
+
+                    _node = containingNode;
                 }
 
                 return null;
             }
 
             function emitIdentifier(node: Identifier) {
-                if (node.parent.kind !== SyntaxKind.VariableDeclaration) {
-                    if (getSymbolScope(node)) {
-                        emitModuleIfNeeded(node, true);
-                    }
+                if (node.parent.kind !== SyntaxKind.VariableDeclaration && getSymbolScope(node)) {
+                    emitModuleName(node);
                 }
 
                 if (!node.parent) {
