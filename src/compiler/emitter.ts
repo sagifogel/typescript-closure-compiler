@@ -565,7 +565,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isModuleAlreadyGenerated(node: ModuleDeclaration): boolean {
-                var moduleFullPath = getGeneratedPathForModule(node);
+                let moduleFullPath = getGeneratedPathForModule(node);
 
                 return !!modulesToGeneratedName[moduleFullPath];
             }
@@ -1872,11 +1872,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 while (containingNode = getContainingModule(_node)) {
                     let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
 
-                    for (var i = 0; i < declarations.length; i++) {
+                    for (let i = 0; i < declarations.length; i++) {
                         let declaration = <ModuleDeclaration>declarations[i];
 
                         if (declaration.body.kind === SyntaxKind.ModuleBlock) {
-                            var statements = (<ModuleBlock>declaration.body).statements;
+                            let statements = (<ModuleBlock>declaration.body).statements;
                             let variableStatements = <Array<VariableStatement>>statements.filter(statement => statement.kind === SyntaxKind.VariableStatement);
 
                             for (let j = 0; j < variableStatements.length; j++) {
@@ -1896,7 +1896,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitIdentifier(node: Identifier) {
-                if (node.parent.kind !== SyntaxKind.VariableDeclaration && getSymbolScope(node)) {
+                var parent = node.parent;
+
+                if (parent && parent.kind !== SyntaxKind.VariableDeclaration && getSymbolScope(node)) {
                     emitModuleName(node);
                 }
 
@@ -3119,6 +3121,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
+                if (decl.parent.kind === SyntaxKind.ForStatement && isNodeContainedWithinModule(decl)) {
+                    return;
+                }
+
                 if (startPos !== undefined) {
                     emitToken(tokenKind, startPos);
                     write(" ");
@@ -3161,6 +3167,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitForStatement(node: ForStatement) {
+                let moduleName = isNodeContainedWithinModule(node) ? " " + getNodeParentPath(node) + "." : " ";
                 let endPos = emitToken(SyntaxKind.ForKeyword, node.pos);
                 write(" ");
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
@@ -3178,9 +3185,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emit(node.initializer);
                 }
                 write(";");
-                emitOptional(" ", node.condition);
+                emitOptional(moduleName, node.condition);
                 write(";");
-                emitOptional(" ", node.incrementor);
+                emitOptional(moduleName, node.incrementor);
                 write(")");
                 emitEmbeddedStatement(node.statement);
             }
@@ -3216,7 +3223,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitDownLevelForOfStatement(node: ForOfStatement) {
-                // The following ES6 code:
+                var moduleName = getNodeParentPath(node.expression);
+                var isContainedWithinModule = !!moduleName;
                 //
                 //    for (let v of expr) { }
                 //
@@ -3240,7 +3248,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let endPos = emitToken(SyntaxKind.ForKeyword, node.pos);
                 write(" ");
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
-
+                moduleName = moduleName ? moduleName + "." : "";
                 // Do not emit the LHS let declaration yet, because it might contain destructuring.
 
                 // Do not call recordTempDeclaration because we are declaring the temps
@@ -3257,7 +3265,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // This is the let keyword for the counter and rhsReference. The let keyword for
                 // the LHS will be emitted inside the body.
                 emitStart(node.expression);
-                write("var ");
+                write(moduleName);
+
+                if (!isContainedWithinModule) {
+                    write("var ");
+                }
 
                 // _i = 0
                 emitNodeWithoutSourceMap(counter);
@@ -3268,6 +3280,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // , _a = expr
                     write(", ");
                     emitStart(node.expression);
+                    write(moduleName);
                     emitNodeWithoutSourceMap(rhsReference);
                     write(" = ");
                     emitNodeWithoutSourceMap(node.expression);
@@ -3278,17 +3291,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 // _i < _a.length;
                 emitStart(node.initializer);
+                write(moduleName);
                 emitNodeWithoutSourceMap(counter);
                 write(" < ");
-
+                write(moduleName);
                 emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
                 write(".length");
-
                 emitEnd(node.initializer);
                 write("; ");
 
                 // _i++)
                 emitStart(node.initializer);
+                write(moduleName);
                 emitNodeWithoutSourceMap(counter);
                 write("++");
                 emitEnd(node.initializer);
@@ -3304,7 +3318,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let rhsIterationValue = createElementAccessExpression(rhsReference, counter);
                 emitStart(node.initializer);
                 if (node.initializer.kind === SyntaxKind.VariableDeclarationList) {
-                    write("var ");
+                    if (!isContainedWithinModule) {
+                        write("var ");
+                    }
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length > 0) {
                         let declaration = variableDeclarationList.declarations[0];
@@ -3318,6 +3334,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             // to emit it separately.
                             emitNodeWithCommentsAndWithoutSourcemap(declaration);
                             write(" = ");
+                            write(moduleName);
                             emitNodeWithoutSourceMap(rhsIterationValue);
                         }
                     }
@@ -3326,6 +3343,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         //     for (let of []) {}
                         emitNodeWithoutSourceMap(createTempVariable(TempFlags.Auto));
                         write(" = ");
+                        write(moduleName);
                         emitNodeWithoutSourceMap(rhsIterationValue);
                     }
                 }
@@ -3507,6 +3525,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 while (node && node.kind !== SyntaxKind.ModuleDeclaration);
 
                 return false;
+            }
+            function isNodeContainedWithinModule(node: Node): boolean {
+                return !!getContainingModule(node);
             }
 
             function getContainingModule(node: Node): ModuleDeclaration {
@@ -4235,7 +4256,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration) {
-                        var tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isNodeContainedWithinScope(node.parent);
+                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isNodeContainedWithinScope(node.parent);
 
                         if (tryEmitModule) {
                             if (isContainedWithinModule = emitModuleForFunctionIfNeeded(node, true)) {
@@ -4797,7 +4818,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
                 let isDeclaredInAModule = false;
-                var nodeName = ts.declarationNameToString(node.name);
+                let nodeName = ts.declarationNameToString(node.name);
                 // Check if we have property assignment inside class declaration.
                 // If there is property assignment, we need to emit constructor whether users define it or not
                 // If there is no property assignment, we can omit constructor if users do not define it
@@ -5087,7 +5108,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 //                                  a lexical declaration such as a LexicalDeclaration or a ClassDeclaration.
 
                 if (isClassExpressionWithStaticProperties) {
-                    for (var property of staticProperties) {
+                    for (let property of staticProperties) {
                         write(",");
                         writeLine();
                         emitPropertyDeclaration(node, property, /*receiver:*/ tempVariable, /*isExpression:*/ true);
@@ -5683,7 +5704,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitEnumDeclaration(node: EnumDeclaration) {
-                var membersLength = node.members.length - 1; 
+                let membersLength = node.members.length - 1; 
                 // const enums are completely erased during compilation.
                 if (!shouldEmitEnumDeclaration(node)) {
                     return;
@@ -5771,21 +5792,21 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitModuleIfNeeded(node: Node, skipcheck?: boolean): boolean {
                 if (skipcheck || !isNodeContainedWithinScope(node)) {
-                    return emitModuleName(node);
+                    return !!emitModuleName(node);
                 }
 
                 return false
             }
 
-            function emitModuleName(node: Node): boolean {
-                var generatedPath;
+            function emitModuleName(node: Node): string {
+                let generatedPath: string;
 
                 if (generatedPath = getNodeParentPath(node)) {
                     write(generatedPath + ".");
-                    return true;
+                    return generatedPath;
                 }
 
-                return false;
+                return null;
             }
 
             function emitModuleForFunctionIfNeeded(node: FunctionLikeDeclaration, skipcheck?: boolean): boolean {
