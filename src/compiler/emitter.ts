@@ -1864,7 +1864,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return false;
             }
 
-            function getSymbolScope(node: Identifier): Node {
+            function getSymbolScope(node: Identifier | LiteralExpression): Node {
                 let _node: Node = node;
                 let containingNode: ModuleDeclaration;
                 let filter = (d: VariableDeclaration) => node.text === d.symbol.name;
@@ -1896,12 +1896,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitIdentifier(node: Identifier) {
-                var parent = node.parent;
-
-                if (parent && parent.kind !== SyntaxKind.VariableDeclaration && getSymbolScope(node)) {
-                    emitModuleName(node);
-                }
-
                 if (!node.parent) {
                     write(node.text);
                 }
@@ -2956,6 +2950,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitExponentiationOperator(node);
                     }
                     else {
+                        if (getSymbolScope(<LiteralExpression>node.left)) {
+                            emitModuleName(node.left);
+                        }
                         emit(node.left);
                         // Add indentation before emit the operator if the operator is on different line
                         // For example:
@@ -2967,6 +2964,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let indentedBeforeOperator = indentIfOnDifferentLines(node, node.left, node.operatorToken, node.operatorToken.kind !== SyntaxKind.CommaToken ? " " : undefined);
                         write(tokenToString(node.operatorToken.kind));
                         let indentedAfterOperator = indentIfOnDifferentLines(node, node.operatorToken, node.right, " ");
+
+                        if (getSymbolScope(<LiteralExpression>node.right)) {
+                            emitModuleName(node.right);
+                        }
                         emit(node.right);
                         decreaseIndentIf(indentedBeforeOperator, indentedAfterOperator);
                     }
@@ -3976,7 +3977,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     emitModuleMemberName(node);
-                    emitOptional(" = ", initializer);
+
+                    if (initializer) {
+                        write(" = ");
+
+                        if (initializer.kind === SyntaxKind.Identifier) {
+                            emitModuleIfNeeded(initializer);
+                        }
+                        emit(initializer);
+                    }
 
                     if (exportChanged) {
                         write(")");
