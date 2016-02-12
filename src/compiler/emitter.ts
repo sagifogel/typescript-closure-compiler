@@ -1142,6 +1142,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // "comment1" is not considered leading comment for "y" but rather
                     // considered as trailing comment of the previous node.
                     emitTrailingCommentsOfPosition(node.pos);
+                    emitModuleIfNeeded(node, true);
                     emitNode(node);
                     leadingComma = true;
                 }
@@ -2827,6 +2828,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
+                    emitModuleIfNeeded(node, true);
                     emit(node.operand);
                     write(tokenToString(node.operator));
                 }
@@ -3197,18 +3199,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (languageVersion < ScriptTarget.ES6 && node.kind === SyntaxKind.ForOfStatement) {
                     return emitDownLevelForOfStatement(node);
                 }
-
+                let moduleName = getNodeParentPath(node.expression);
+                let isContainedWithinModule = !!moduleName;
                 let endPos = emitToken(SyntaxKind.ForKeyword, node.pos);
+
+                moduleName = moduleName ? moduleName + "." : "";
                 write(" ");
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
                 if (node.initializer.kind === SyntaxKind.VariableDeclarationList) {
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length >= 1) {
-                        tryEmitStartOfVariableDeclarationList(variableDeclarationList, endPos);
+                        if (!moduleName) {
+                            tryEmitStartOfVariableDeclarationList(variableDeclarationList, endPos);
+                        }
                         emit(variableDeclarationList.declarations[0]);
                     }
                 }
                 else {
+                    write(moduleName);
                     emit(node.initializer);
                 }
 
@@ -3217,6 +3225,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 else {
                     write(" of ");
+                }
+                if (node.expression.kind === SyntaxKind.Identifier) {
+                    write(moduleName);
                 }
                 emit(node.expression);
                 emitToken(SyntaxKind.CloseParenToken, node.expression.end);
