@@ -1865,34 +1865,74 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return false;
             }
 
-            function getSymbolScope(node: Identifier | LiteralExpression): Node {
-                let _node: Node = node;
-                let containingNode: ModuleDeclaration;
-                let filter = (d: VariableDeclaration) => node.text === d.symbol.name;
+            function getSymbolScope(node: Node) {
+                var _node = node;
+                var containingNode;
+                var kind = node.kind;
+                var filter = function (d: Declaration | Statement): boolean {
+                    let name: string;
+                    let symbolName = d.symbol ? d.symbol.name : "";
 
-                while (containingNode = getContainingModule(_node)) {
-                    let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
+                    if (name = node.hasOwnProperty("text") ? (<any>node).text : node.hasOwnProperty("name") ? (<any>node).name.text : "") {
+                        return name === symbolName;
+                    }
 
-                    for (let i = 0; i < declarations.length; i++) {
-                        let declaration = <ModuleDeclaration>declarations[i];
+                    return false;
+                };
 
-                        if (declaration.body.kind === SyntaxKind.ModuleBlock) {
-                            let statements = (<ModuleBlock>declaration.body).statements;
-                            let variableStatements = <Array<VariableStatement>>statements.filter(statement => statement.kind === SyntaxKind.VariableStatement);
+                if (node.kind === SyntaxKind.VariableStatement) {
+                    node = (<VariableStatement>node).declarationList.declarations[0];
+                }
 
-                            for (let j = 0; j < variableStatements.length; j++) {
-                                let statement = variableStatements[j];
+                while (containingNode = ts.getContainerNode(_node)) {
+                    if (containingNode.kind === SyntaxKind.SourceFile) {
+                        return containingNode;
+                    }
+                    if (containingNode.kind === SyntaxKind.ModuleDeclaration || ts.isFunctionLike(containingNode)) {
+                        let body: Block | ModuleBlock;
+                        let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
+                        let statements: Array<Statement>;
 
-                                if (statement.declarationList.declarations.some(filter)) {
+                        for (var i = 0; i < declarations.length; i++) {
+                            let declaration = <FunctionLikeDeclaration | ModuleDeclaration>declarations[i];
+
+                            body = <Block | ModuleBlock>declaration.body;
+                            statements = body.statements;
+
+                            for (let j = 0; j < statements.length; j++) {
+                                let statement = statements[j];
+                                let declarationList: Array<Declaration | Statement> = statement.kind === SyntaxKind.VariableStatement ? (<VariableStatement>statement).declarationList.declarations : [statement];
+
+                                if (declarationList.some(filter)) {
                                     return containingNode;
+                                }
+                            }
+
+                            if (containingNode.kind !== SyntaxKind.ModuleDeclaration) {
+                                let moduleDeclaration = (<FunctionLikeDeclaration>declaration);
+                                let body = moduleDeclaration.body;
+                                var parameters = moduleDeclaration.parameters;
+
+                                if (parameters.some(filter)) {
+                                    return containingNode;
+                                }
+
+                                let tryStatements = <Array<TryStatement>>statements.filter(function (statement) { return statement.kind === SyntaxKind.TryStatement; });
+
+                                if (tryStatements.length) {
+                                    var declaredWithinCatchClause = tryStatements.some(function (tryStatement) {
+                                        return filter(tryStatement.catchClause.variableDeclaration);
+                                    });
+
+                                    if (declaredWithinCatchClause) {
+                                        return containingNode;
+                                    }
                                 }
                             }
                         }
                     }
-
                     _node = containingNode;
                 }
-
                 return null;
             }
 
@@ -1939,7 +1979,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let flags = resolver.getNodeCheckFlags(node);
                     let enclosingParent = getClassLikeEnclosingParent(node);
                     let baseTypeNode = ts.getClassExtendsHeritageClauseElement(enclosingParent);
-                    emitModuleIfNeeded(node, true);
+                    emitModuleIfNeeded(baseTypeNode.expression);
                     emit(baseTypeNode.expression);
                     if (flags & NodeCheckFlags.SuperInstance) {
                         write(".prototype");
@@ -2639,7 +2679,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitNewExpression(node: NewExpression) {
                 write("new ");
-                emitModuleIfNeeded(node, true);
+                emitModuleIfNeeded(node.expression);
                 // Spread operator logic is supported in new expressions in ES5 using a combination
                 // of Function.prototype.bind() and Function.prototype.apply().
                 //
@@ -2828,7 +2868,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    emitModuleIfNeeded(node);
+                    emitModuleIfNeeded(node.operand);
                     emit(node.operand);
                     write(tokenToString(node.operator));
                 }
@@ -2952,9 +2992,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitExponentiationOperator(node);
                     }
                     else {
-                        if (getSymbolScope(<LiteralExpression>node.left)) {
-                            emitModuleName(node.left, true);
-                        }
+                        emitModuleName(node.left);
                         emit(node.left);
                         // Add indentation before emit the operator if the operator is on different line
                         // For example:
@@ -2967,9 +3005,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(tokenToString(node.operatorToken.kind));
                         let indentedAfterOperator = indentIfOnDifferentLines(node, node.operatorToken, node.right, " ");
 
-                        if (getSymbolScope(<LiteralExpression>node.right)) {
-                            emitModuleName(node.right, true);
-                        }
+                        emitModuleName(node.right);
                         emit(node.right);
                         decreaseIndentIf(indentedBeforeOperator, indentedAfterOperator);
                     }
@@ -3170,10 +3206,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitForStatement(node: ForStatement) {
-                let moduleName = "";
                 let endPos = emitToken(SyntaxKind.ForKeyword, node.pos);
                 write(" ");
-                moduleName = getModuleName(node);
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
                 if (node.initializer && node.initializer.kind === SyntaxKind.VariableDeclarationList) {
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
@@ -3189,7 +3223,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emit(node.initializer);
                 }
                 write(";");
-                emitOptional(" " + moduleName, node.condition);
+                emitOptional(" " + getModuleName(node.condition), node.condition);
                 write(";");
                 emitOptional(" ", node.incrementor);
                 write(")");
@@ -3241,7 +3275,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitDownLevelForOfStatement(node: ForOfStatement) {
                 var moduleName = "";
                 var isContainedWithinModule = false;
-                var isContainedWithinScope = !isNodeContainedWithinScope(node);
+                var isContainedWithinScope = !isNodeDeclaredWithinScope(node);
 
                 if (moduleName = getModuleName(node)) {
                     isContainedWithinModule = true
@@ -3510,26 +3544,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isNodeDeclaredWithinFunction(node: Node): boolean {
-                do {
-                    if (!node || ts.isFunctionLike(node)) {
-                        return true;
-                    }
-                    node = node.parent
+                var scope: Node = getSymbolScope(node);
+
+                if (scope && ts.isFunctionLike(scope)) {
+                    return true;
                 }
-                while (node && node.kind !== SyntaxKind.ModuleDeclaration && node.kind !== SyntaxKind.CatchClause);
 
                 return false;
             }
 
-            function isNodeContainedWithinScope(node: Node): boolean {
-                do {
-                    if (!node || ts.isFunctionLike(node) ||
-                        node.kind === SyntaxKind.CatchClause) {
-                        return true;
-                    }
-                    node = node.parent;
+            function isNodeDeclaredWithinScope(node: Node): boolean {
+                var scope = getSymbolScope(node);
+
+                if (scope && (ts.isFunctionLike(scope) ||
+                    scope.kind === SyntaxKind.CatchClause ||
+                    scope.kind === SyntaxKind.SourceFile)) {
+                    return true;
                 }
-                while (node && node.kind !== SyntaxKind.ModuleDeclaration);
 
                 return false;
             }
@@ -3540,7 +3571,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function getContainingModule(node: Node): ModuleDeclaration {
                 do {
                     node = node.parent;
-                } while (node && node.kind !== SyntaxKind.ModuleDeclaration);
+                }while (node && node.kind !== SyntaxKind.ModuleDeclaration);
                 return <ModuleDeclaration>node;
             }
 
@@ -3978,18 +4009,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(`", `);
                     }
 
-                    if (!isNodeDeclaredWithinFunction(node)) {
-                        emitModuleIfNeeded(node);
-                    }
-
+                    emitModuleIfNeeded(node);
                     emitModuleMemberName(node);
 
                     if (initializer) {
                         write(" = ");
-
-                        if (initializer.kind === SyntaxKind.Identifier) {
-                            emitModuleIfNeeded(initializer);
-                        }
+                        emitModuleIfNeeded(initializer);
                         emit(initializer);
                     }
 
@@ -4271,10 +4296,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration) {
-                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isNodeContainedWithinScope(node.parent);
+                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isNodeDeclaredWithinScope(node);
 
                         if (tryEmitModule) {
-                            if (isContainedWithinModule = emitModuleForFunctionIfNeeded(node, true)) {
+                            if (isContainedWithinModule = emitModuleForFunctionIfNeeded(node)) {
                                 emitFunctionName = false;
                                 emitDeclarationName(node);
                                 write(" = ");
@@ -5805,13 +5830,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return languageVersion === ScriptTarget.ES6 && !!(resolver.getNodeCheckFlags(node) & NodeCheckFlags.LexicalModuleMergesWithClass);
             }
 
-            function emitModuleIfNeeded(node: Node, skipcheck?: boolean): boolean {
-                return !!emitModuleName(node, skipcheck);
+            function emitModuleIfNeeded(node: Node): boolean {
+                return !!emitModuleName(node);
             }
 
-            function getModuleName(node: Node, skipcheck?: boolean): string {
-                if (skipcheck || !isNodeContainedWithinScope(node)) {
-                    let generatedPath;
+            function getModuleName(node: Node): string {
+                if (!isNodeDeclaredWithinScope(node)) {
+                    let generatedPath: string;
 
                     if (generatedPath = getNodeParentPath(node)) {
                         return generatedPath + ".";
@@ -5820,19 +5845,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return "";
             }
 
-            function emitModuleName(node: Node, skipcheck?: boolean): string {
-                let generatedPath;
+            function emitModuleName(node: Node): string {
+                let generatedPath: string;
 
-                if (generatedPath = getModuleName(node, skipcheck)) {
+                if (generatedPath = getModuleName(node)) {
                     write(generatedPath);
                     return generatedPath;
                 }
                 return "";
             }
-
-            function emitModuleForFunctionIfNeeded(node: FunctionLikeDeclaration, skipcheck?: boolean): boolean {
+            
+            function emitModuleForFunctionIfNeeded(node: FunctionLikeDeclaration): boolean {
                 if (shouldEmitFunctionName(node)) {
-                    return emitModuleIfNeeded(node, skipcheck);
+                    return emitModuleIfNeeded(node);
                 }
 
                 return false;

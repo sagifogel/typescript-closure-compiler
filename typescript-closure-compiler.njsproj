@@ -45,10 +45,12 @@
     <TypeScriptCompile Include="src\compiler\scanner.ts" />
     <TypeScriptCompile Include="src\compiler\types.ts" />
     <TypeScriptCompile Include="src\compiler\utilities.ts" />
+    <TypeScriptCompile Include="src\services\services.ts" />
     <TypeScriptCompile Include="tests\Greeter.ts" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="build\" />
+    <Folder Include="src\services\" />
     <Folder Include="tests\" />
     <Folder Include="src\" />
     <Folder Include="Scripts\" />
