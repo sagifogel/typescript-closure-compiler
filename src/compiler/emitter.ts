@@ -1901,7 +1901,28 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                             for (let j = 0; j < statements.length; j++) {
                                 let statement = statements[j];
-                                let declarationList: Array<Declaration | Statement> = statement.kind === SyntaxKind.VariableStatement ? (<VariableStatement>statement).declarationList.declarations : [statement];
+                                let declarationList: Array<Declaration | Statement | Expression> = [];
+
+                                if (statement.kind === SyntaxKind.VariableStatement) {
+                                    declarationList = (<VariableStatement>statement).declarationList.declarations;
+                                }
+                                else if (isForLoop(statement)) {
+                                    let loop = <ForInStatement | ForStatement | ForOfStatement>statement;
+                                    let initializer: VariableDeclarationList | Expression = loop.initializer;
+
+                                    if (initializer && initializer.kind !== SyntaxKind.Identifier) {
+                                        if (initializer.kind === SyntaxKind.BinaryExpression) {
+                                            let binaryExpression = <BinaryExpression>initializer;
+                                            declarationList = [binaryExpression.left];
+                                        }
+                                        else {
+                                            declarationList = (<VariableDeclarationList>initializer).declarations;
+                                        }
+                                    }
+                                }
+                                else {
+                                    declarationList = [statement];
+                                }
 
                                 if (declarationList.some(filter)) {
                                     return containingNode;
@@ -2572,6 +2593,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (tryEmitConstantValue(node)) {
                     return;
                 }
+                emitModuleIfNeeded(node.expression);
                 emit(node.expression);
                 write("[");
                 emit(node.argumentExpression);
@@ -3160,6 +3182,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
+                let firstDeclaration = decl.declarations[0];
+
+                if (isForLoop(decl.parent) && !isNodeDeclaredWithinFunction(firstDeclaration) && isNodeContainedWithinModule(decl.parent)) {
+                    return;
+                }
+
                 if (decl.parent.kind === SyntaxKind.ForStatement && !isNodeDeclaredWithinFunction(decl) && isNodeContainedWithinModule(decl)) {
                     return;
                 }
@@ -3238,7 +3266,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let isContainedWithinModule = false;
                 let endPos = emitToken(SyntaxKind.ForKeyword, node.pos);
 
-                if (moduleName = getModuleName(node)) {
+                if (moduleName = getModuleName(node.initializer)) {
                     isContainedWithinModule = true;
                 }
 
@@ -3273,13 +3301,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitDownLevelForOfStatement(node: ForOfStatement) {
-                var moduleName = "";
-                var isContainedWithinModule = false;
-                var isContainedWithinScope = !isNodeDeclaredWithinScope(node);
+                var moduleName = getModuleName(node.expression);
+                var isContainedWithinModule = !!moduleName;
 
-                if (moduleName = getModuleName(node)) {
-                    isContainedWithinModule = true
-                }
                 //
                 //    for (let v of expr) { }
                 //
@@ -3319,9 +3343,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // This is the let keyword for the counter and rhsReference. The let keyword for
                 // the LHS will be emitted inside the body.
                 emitStart(node.expression);
-                write(moduleName);
-
-                if (!isContainedWithinModule) {
+                if (isContainedWithinModule) {
+                    write(moduleName);
+                }
+                else {
                     write("var ");
                 }
 
@@ -3345,10 +3370,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 // _i < _a.length;
                 emitStart(node.initializer);
-                write(moduleName);
+                if (isContainedWithinModule) {
+                    write(moduleName);
+                }
                 emitNodeWithoutSourceMap(counter);
                 write(" < ");
-                write(moduleName);
+                emitModuleIfNeeded(rhsReference)
                 emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
                 write(".length");
                 emitEnd(node.initializer);
@@ -3356,7 +3383,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 // _i++)
                 emitStart(node.initializer);
-                write(moduleName);
+                if (isContainedWithinModule) {
+                    write(moduleName);
+                }
                 emitNodeWithoutSourceMap(counter);
                 write("++");
                 emitEnd(node.initializer);
@@ -3388,7 +3417,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             // to emit it separately.
                             emitNodeWithCommentsAndWithoutSourcemap(declaration);
                             write(" = ");
-                            write(moduleName);
+                            emitModuleIfNeeded(rhsIterationValue);
                             emitNodeWithoutSourceMap(rhsIterationValue);
                         }
                     }
@@ -3397,7 +3426,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         //     for (let of []) {}
                         emitNodeWithoutSourceMap(createTempVariable(TempFlags.Auto));
                         write(" = ");
-                        write(moduleName);
+                        emitModuleIfNeeded(rhsIterationValue);
                         emitNodeWithoutSourceMap(rhsIterationValue);
                     }
                 }
@@ -3543,6 +3572,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emit(node.statement);
             }
 
+            function isLiteral(node: Node): boolean {
+                return node.kind === SyntaxKind.StringLiteral ||
+                    node.kind === SyntaxKind.NumericLiteral ||
+                    node.kind === SyntaxKind.ArrayLiteralExpression ||
+                    node.kind === SyntaxKind.ObjectLiteralExpression;
+            }
+
+            function isForLoop(node: Node): boolean {
+                return node.kind === SyntaxKind.ForStatement ||
+                    node.kind === SyntaxKind.ForOfStatement ||
+                    node.kind === SyntaxKind.ForInStatement;
+            }
+
             function isNodeDeclaredWithinFunction(node: Node): boolean {
                 var scope: Node = getSymbolScope(node);
 
@@ -3571,7 +3613,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function getContainingModule(node: Node): ModuleDeclaration {
                 do {
                     node = node.parent;
-                }while (node && node.kind !== SyntaxKind.ModuleDeclaration);
+                } while (node && node.kind !== SyntaxKind.ModuleDeclaration);
                 return <ModuleDeclaration>node;
             }
 
@@ -4014,7 +4056,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (initializer) {
                         write(" = ");
-                        emitModuleIfNeeded(initializer);
+
+                        if (!isLiteral(initializer)) {
+                            emitModuleIfNeeded(initializer);
+                        }
+
                         emit(initializer);
                     }
 
@@ -5854,7 +5900,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 return "";
             }
-            
+
             function emitModuleForFunctionIfNeeded(node: FunctionLikeDeclaration): boolean {
                 if (shouldEmitFunctionName(node)) {
                     return emitModuleIfNeeded(node);
