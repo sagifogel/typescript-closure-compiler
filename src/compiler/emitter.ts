@@ -1869,6 +1869,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let _node = node;
                 let containingNode;
                 let kind = node.kind;
+                let statements: Array<Statement>;
                 let declarationList: Array<Declaration | Statement | Expression> = [];
                 let filter = function (d: Declaration | Statement): boolean {
                     let name: string;
@@ -1892,7 +1893,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (containingNode.kind === SyntaxKind.ModuleDeclaration || ts.isFunctionLike(containingNode)) {
                         let body: Block | ModuleBlock;
                         let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
-                        let statements: Array<Statement>;
 
                         for (let i = 0; i < declarations.length; i++) {
                             let declaration = <FunctionLikeDeclaration | ModuleDeclaration>declarations[i];
@@ -1943,15 +1943,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                 if (tryStatements.length) {
                                     let declaredWithinCatchClause = tryStatements.some(tryStatement => {
                                         declarationList = [];
+                                        statements = tryStatement.tryBlock.statements;
+
+                                        if (tryStatement.finallyBlock) {
+                                            statements = statements.concat(tryStatement.finallyBlock.statements);
+                                        }
 
                                         if (tryStatement.catchClause) {
                                             declarationList.push(tryStatement.catchClause.variableDeclaration);
                                         }
 
-                                        declarationList = tryStatement.tryBlock.statements.filter(statement => statement.kind === SyntaxKind.TryStatement)
-                                                                                          .reduce((arr, variableStatement: VariableStatement)  => {
-                                                                                               return arr.concat(variableStatement.declarationList.declarations);
-                                                                                          }, declarationList);
+                                        declarationList = statements.filter(statement => statement.kind === SyntaxKind.TryStatement)
+                                                                    .reduce((arr, variableStatement: VariableStatement)  => {
+                                                                         return arr.concat(variableStatement.declarationList.declarations);
+                                                                    }, declarationList);
 
                                         return declarationList.some(filter);
                                     });
