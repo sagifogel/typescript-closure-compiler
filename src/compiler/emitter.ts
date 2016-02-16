@@ -1866,10 +1866,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getSymbolScope(node: Node) {
-                var _node = node;
-                var containingNode;
-                var kind = node.kind;
-                var filter = function (d: Declaration | Statement): boolean {
+                let _node = node;
+                let containingNode;
+                let kind = node.kind;
+                let declarationList: Array<Declaration | Statement | Expression> = [];
+                let filter = function (d: Declaration | Statement): boolean {
                     let name: string;
                     let symbolName = d.symbol ? d.symbol.name : "";
 
@@ -1893,7 +1894,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
                         let statements: Array<Statement>;
 
-                        for (var i = 0; i < declarations.length; i++) {
+                        for (let i = 0; i < declarations.length; i++) {
                             let declaration = <FunctionLikeDeclaration | ModuleDeclaration>declarations[i];
 
                             body = <Block | ModuleBlock>declaration.body;
@@ -1901,7 +1902,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                             for (let j = 0; j < statements.length; j++) {
                                 let statement = statements[j];
-                                let declarationList: Array<Declaration | Statement | Expression> = [];
 
                                 if (statement.kind === SyntaxKind.VariableStatement) {
                                     declarationList = (<VariableStatement>statement).declarationList.declarations;
@@ -1938,11 +1938,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                     return containingNode;
                                 }
 
-                                let tryStatements = <Array<TryStatement>>statements.filter(function (statement) { return statement.kind === SyntaxKind.TryStatement; });
+                                let tryStatements = <Array<TryStatement>>statements.filter(statement => statement.kind === SyntaxKind.TryStatement);
 
                                 if (tryStatements.length) {
-                                    var declaredWithinCatchClause = tryStatements.some(function (tryStatement) {
-                                        return filter(tryStatement.catchClause.variableDeclaration);
+                                    let declaredWithinCatchClause = tryStatements.some(tryStatement => {
+                                        declarationList = [];
+
+                                        if (tryStatement.catchClause) {
+                                            declarationList.push(tryStatement.catchClause.variableDeclaration);
+                                        }
+
+                                        declarationList = tryStatement.tryBlock.statements.filter(statement => statement.kind === SyntaxKind.TryStatement)
+                                                                                          .reduce((arr, variableStatement: VariableStatement)  => {
+                                                                                               return arr.concat(variableStatement.declarationList.declarations);
+                                                                                          }, declarationList);
+
+                                        return declarationList.some(filter);
                                     });
 
                                     if (declaredWithinCatchClause) {
@@ -4099,7 +4110,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitVariableStatement(node: VariableStatement) {
                 let startIsEmitted = false;
-                let parentModule = getContainingModule(node);
 
                 if (node.flags & NodeFlags.Export) {
                     if (isES6ExportedDeclaration(node)) {
@@ -4109,7 +4119,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    if (!parentModule || isNodeDeclaredWithinFunction(node)) {
+                    if (isNodeDeclaredWithinScope(node)) {
                         startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
                     }
                 }
