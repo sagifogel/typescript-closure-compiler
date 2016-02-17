@@ -1953,10 +1953,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                             declarationList.push(tryStatement.catchClause.variableDeclaration);
                                         }
 
-                                        declarationList = statements.filter(statement => statement.kind === SyntaxKind.TryStatement)
-                                                                    .reduce((arr, variableStatement: VariableStatement)  => {
-                                                                         return arr.concat(variableStatement.declarationList.declarations);
-                                                                    }, declarationList);
+                                        declarationList = statements.filter(statement => statement.kind === SyntaxKind.VariableStatement)
+                                            .reduce((arr, variableStatement: VariableStatement) => {
+                                                return arr.concat(variableStatement.declarationList.declarations);
+                                            }, declarationList);
 
                                         return declarationList.some(filter);
                                     });
@@ -3602,8 +3602,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isNodeDeclaredWithinFunction(node: Node): boolean {
-                var scope: Node = getSymbolScope(node);
-
+                var scope = getSymbolScope(node);
                 if (scope && ts.isFunctionLike(scope)) {
                     return true;
                 }
@@ -3611,16 +3610,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return false;
             }
 
-            function isNodeDeclaredWithinScope(node: Node): boolean {
-                var scope = getSymbolScope(node);
-
-                if (scope && (ts.isFunctionLike(scope) ||
-                    scope.kind === SyntaxKind.CatchClause ||
-                    scope.kind === SyntaxKind.SourceFile)) {
+            function isScopeLike(node: Node): boolean {
+                if (node && (ts.isFunctionLike(node) ||
+                    node.kind === SyntaxKind.CatchClause ||
+                    node.kind === SyntaxKind.SourceFile)) {
                     return true;
                 }
 
                 return false;
+            }
+
+            function isNodeDeclaredWithinScope(node: Node): boolean {
+                return isScopeLike(getSymbolScope(node));
             }
             function isNodeContainedWithinModule(node: Node): boolean {
                 return !!getContainingModule(node);
@@ -6136,7 +6137,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitImportEqualsDeclaration(node: ImportEqualsDeclaration) {
-                return;
                 if (isExternalModuleImportEqualsDeclaration(node)) {
                     emitExternalImportDeclaration(node);
                     return;
@@ -6164,11 +6164,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             write("export ");
                             write("var ");
                         }
-                        else if (!(node.flags & NodeFlags.Export)) {
-                            write("var ");
-                        }
                     }
-
 
                     if (isExported) {
                         write(`${exportFunctionForFile}("`);
@@ -6176,6 +6172,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(`", `);
                     }
 
+                    emitModuleIfNeeded(node);
                     emitModuleMemberName(node);
                     write(" = ");
                     emit(node.moduleReference);
