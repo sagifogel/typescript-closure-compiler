@@ -603,7 +603,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function ensureModule(node: Declaration): ModuleGeneration {
                 let scope = getSymbolScope(node);
-                let moduleFullPath = scope && scope.kind !== SyntaxKind.SourceFile ? getGeneratedPathForModule(scope) : "global";
+                let moduleFullPath = scope && scope.kind !== SyntaxKind.SourceFile ? getGeneratedPathForModule(node) : "global";
 
                 moduleFullPath += ":" + (<Identifier>node.name).text;
 
@@ -1916,6 +1916,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return containingNode;
                     }
                     if (containingNode.kind === SyntaxKind.ModuleDeclaration || ts.isFunctionLike(containingNode)) {
+                        let moduleNode = <ModuleDeclaration>node;
+
+                        if (node.kind === SyntaxKind.ModuleDeclaration && moduleNode.name.text in containingNode.locals) {
+                            return containingNode;
+                        }
+
                         let body: Block | ModuleBlock;
                         let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
 
@@ -1923,7 +1929,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             let declaration = <FunctionLikeDeclaration | ModuleDeclaration>declarations[i];
 
                             body = <Block | ModuleBlock>declaration.body;
-                            statements = body.statements;
+                            statements = body && body.statements || [];
 
                             for (let j = 0; j < statements.length; j++) {
                                 let statement = statements[j];
