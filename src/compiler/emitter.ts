@@ -7,6 +7,7 @@ namespace ts {
         return isExternalModule(sourceFile) || isDeclarationFile(sourceFile);
     }
 
+    type ModuleGeneration = { declarations: { [name: string]: boolean }, generated: boolean };
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
     let entities: Map<number> = {
@@ -388,7 +389,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             let generatedNameSet: Map<string> = {};
             let nodeToGeneratedName: string[] = [];
-            let modulesToGeneratedName: { [name: string]: boolean } = {};
+            let modulesToGeneratedName: { [name: string]: ModuleGeneration } = {};
             let computedPropertyNamesToGeneratedNames: string[];
 
             let extendsEmitted = false;
@@ -565,9 +566,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isModuleAlreadyGenerated(node: ModuleDeclaration): boolean {
-                let moduleFullPath = getGeneratedPathForModule(node);
-
-                return !!modulesToGeneratedName[moduleFullPath];
+                return ensureModule(node).generated;
             }
 
             function getGeneratedPathForModule(node: Declaration): string {
@@ -589,9 +588,35 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return name;
             }
 
+            function trySetVariableDeclarationInModule(node: Declaration): boolean {
+                let module = ensureModule(node);
+                let declarations = module.declarations;
+                let name = (<Identifier>node.name).text;
+
+                if (name in declarations) {
+                    return false;
+                }
+
+                declarations[name] = true;
+                return true;
+            }
+
+            function ensureModule(node: Declaration): ModuleGeneration {
+                let scope = getSymbolScope(node);
+                let moduleFullPath = scope && scope.kind !== SyntaxKind.SourceFile ? getGeneratedPathForModule(scope) : "global";
+
+                moduleFullPath += ":" + (<Identifier>node.name).text;
+
+                return modulesToGeneratedName[moduleFullPath] || (modulesToGeneratedName[moduleFullPath] = {
+                    generated: false,
+                    declarations: {}
+                });
+            }
+
             function setModuleGenerated(node: Declaration): void {
-                let moduleFullPath = getGeneratedPathForModule(node);
-                modulesToGeneratedName[moduleFullPath] = true;
+                let module = ensureModule(node);
+
+                module.generated = true;
             }
 
             function getNodeParentPath(node: Node): string {
@@ -3204,7 +3229,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return;
                 }
 
-                if (decl.parent.kind === SyntaxKind.ForStatement && !isNodeDeclaredWithinFunction(decl) && isNodeContainedWithinModule(decl)) {
+                if (!trySetVariableDeclarationInModule(firstDeclaration)) {
                     return;
                 }
 
