@@ -603,7 +603,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function ensureModule(node: Declaration): ModuleGeneration {
                 let scope = getSymbolScope(node);
-                let moduleFullPath = scope && scope.kind !== SyntaxKind.SourceFile ? getGeneratedPathForModule(node) : "global";
+                let moduleFullPath = scope && scope.kind !== SyntaxKind.SourceFile ? getGeneratedPathForModule(scope) : "global";
 
                 moduleFullPath += ":" + (<Identifier>node.name).text;
 
@@ -1826,11 +1826,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             write("exports.");
                         }
                     }
-                    else {
-                        // Identifier references namespace export
-                        write(getGeneratedNameForNode(container));
-                        write(".");
-                    }
                 }
                 else {
                     if (modulekind !== ModuleKind.ES6) {
@@ -1894,7 +1889,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let _node = node;
                 let containingNode;
                 let kind = node.kind;
-                let statements: Array<Statement>;
+                let statements: NodeArray<Statement | ClassElement>;
                 let declarationList: Array<Declaration | Statement | Expression> = [];
                 let filter = function (d: Declaration | Statement): boolean {
                     let name: string;
@@ -1915,21 +1910,25 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (containingNode.kind === SyntaxKind.SourceFile) {
                         return containingNode;
                     }
-                    if (containingNode.kind === SyntaxKind.ModuleDeclaration || ts.isFunctionLike(containingNode)) {
-                        let moduleNode = <ModuleDeclaration>node;
-
-                        if (node.kind === SyntaxKind.ModuleDeclaration && moduleNode.name.text in containingNode.locals) {
+                    if (containingNode.kind === SyntaxKind.ModuleDeclaration || containingNode.kind === SyntaxKind.ClassDeclaration || ts.isFunctionLike(containingNode)) {
+                        if (node.kind === SyntaxKind.ModuleDeclaration && (<ModuleDeclaration>node).name.text in containingNode.locals) {
                             return containingNode;
                         }
 
-                        let body: Block | ModuleBlock;
                         let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
 
                         for (let i = 0; i < declarations.length; i++) {
                             let declaration = <FunctionLikeDeclaration | ModuleDeclaration>declarations[i];
+                            let body = <Block | ModuleBlock>declaration.body;
 
-                            body = <Block | ModuleBlock>declaration.body;
-                            statements = body && body.statements || [];
+                            if (body) {
+                                statements = body.statements;
+                            }
+                            else if (containingNode.kind === SyntaxKind.ClassDeclaration) {
+                                statements = (<ClassDeclaration>containingNode).members;
+                            }
+
+                            statements = statements || <NodeArray<Statement | ClassElement>>[];
 
                             for (let j = 0; j < statements.length; j++) {
                                 let statement = statements[j];
@@ -1962,8 +1961,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                             if (containingNode.kind !== SyntaxKind.ModuleDeclaration) {
                                 let moduleDeclaration = (<FunctionLikeDeclaration>declaration);
-                                let body = moduleDeclaration.body;
-                                var parameters = moduleDeclaration.parameters;
+                                var parameters = moduleDeclaration.parameters || <NodeArray<ParameterDeclaration>>[];
 
                                 if (parameters.some(filter)) {
                                     return containingNode;
@@ -1977,7 +1975,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                         statements = tryStatement.tryBlock.statements;
 
                                         if (tryStatement.finallyBlock) {
-                                            statements = statements.concat(tryStatement.finallyBlock.statements);
+                                            statements = <NodeArray<Statement | ClassElement>>statements.concat(tryStatement.finallyBlock.statements);
                                         }
 
                                         if (tryStatement.catchClause) {
@@ -2558,7 +2556,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (tryEmitConstantValue(node)) {
                     return;
                 }
-
                 emit(node.expression);
                 let indentedBeforeDot = indentIfOnDifferentLines(node, node.expression, node.dotToken);
 
@@ -2578,14 +2575,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         shouldEmitSpace = isFinite(constantValue) && Math.floor(constantValue) === constantValue;
                     }
                 }
-
                 if (shouldEmitSpace) {
                     write(" .");
                 }
                 else {
                     write(".");
                 }
-
                 let indentedAfterDot = indentIfOnDifferentLines(node, node.dotToken, node.name);
                 emit(node.name);
                 decreaseIndentIf(indentedBeforeDot, indentedAfterDot);
@@ -2909,6 +2904,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(" ");
                     }
                 }
+                if (node.operand.kind !== SyntaxKind.PropertyAccessExpression) {
+                    emitModuleIfNeeded(node.operand);
+                }
                 emit(node.operand);
 
                 if (exportChanged) {
@@ -2937,7 +2935,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    emitModuleIfNeeded(node.operand);
+                    if (node.operand.kind !== SyntaxKind.PropertyAccessExpression) {
+                        emitModuleIfNeeded(node.operand);
+                    }
                     emit(node.operand);
                     write(tokenToString(node.operator));
                 }
@@ -3061,7 +3061,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitExponentiationOperator(node);
                     }
                     else {
-                        emitModuleName(node.left);
+                        if (node.left.kind !== SyntaxKind.PropertyAccessExpression) {
+                            emitModuleName(node.left);
+                        }
                         emit(node.left);
                         // Add indentation before emit the operator if the operator is on different line
                         // For example:
@@ -3074,7 +3076,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(tokenToString(node.operatorToken.kind));
                         let indentedAfterOperator = indentIfOnDifferentLines(node, node.operatorToken, node.right, " ");
 
-                        emitModuleName(node.right);
+                        if (node.right.kind !== SyntaxKind.PropertyAccessExpression) {
+                            emitModuleName(node.right);
+                        }
                         emit(node.right);
                         decreaseIndentIf(indentedBeforeOperator, indentedAfterOperator);
                     }
@@ -5928,10 +5932,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getModuleName(node: Node): string {
-                if (!isNodeDeclaredWithinScope(node)) {
-                    let generatedPath: string;
+                let scope = getSymbolScope(node)
 
-                    if (generatedPath = getNodeParentPath(node)) {
+                if (!isScopeLike(scope)) {
+                    let generatedPath;
+
+                    if (generatedPath = getGeneratedPathForModule(scope)) {
                         return generatedPath + ".";
                     }
                 }
