@@ -1839,14 +1839,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             }
                             else if (declaration.kind === SyntaxKind.ImportSpecifier) {
                                 // Identifier references named import
-                                write(getGeneratedNameForNode(<ImportDeclaration>declaration.parent.parent.parent));
                                 let name = (<ImportSpecifier>declaration).propertyName || (<ImportSpecifier>declaration).name;
                                 let identifier = getSourceTextOfNodeFromSourceFile(currentSourceFile, name);
                                 if (languageVersion === ScriptTarget.ES3 && identifier === "default") {
                                     write(`["default"]`);
                                 }
                                 else {
-                                    write(".");
                                     write(identifier);
                                 }
                                 return;
@@ -7124,13 +7122,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitCommonJSModule(node: SourceFile) {
                 let startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false);
-                emitEmitHelpers(node);
-                collectExternalModuleInfo(node);
-                emitExportStarHelper();
                 emitCaptureThisForNodeIfNecessary(node);
                 emitLinesStartingAt(node.statements, startIndex);
-                emitTempDeclarations(/*newLine*/ true);
-                emitExportEquals(/*emitAsReturn*/ false);
             }
 
             function emitUMDModule(node: SourceFile) {
