@@ -565,6 +565,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
+            function tryGenerateNameForNode(node: Node): string {
+                if (node.kind === SyntaxKind.Identifier ||
+                    node.kind === SyntaxKind.ModuleDeclaration ||
+                    node.kind === SyntaxKind.EnumDeclaration ||
+                    node.kind === SyntaxKind.ImportDeclaration ||
+                    node.kind === SyntaxKind.ExportDeclaration ||
+                    node.kind === SyntaxKind.FunctionDeclaration ||
+                    node.kind === SyntaxKind.ClassDeclaration ||
+                    node.kind === SyntaxKind.ExportAssignment ||
+                    node.kind === SyntaxKind.ClassExpression) {
+                    return generateNameForNode(node);
+                }
+
+                return "";
+            }
+
             function isModuleAlreadyGenerated(node: ModuleDeclaration): boolean {
                 return ensureModule(node).generated;
             }
@@ -578,7 +594,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     name = identifier.text;
                 }
                 else {
-                    name = getGeneratedNameForNode(node);
+                    name = tryGenerateNameForNode(node);
                 }
 
                 if (moduleFullPath) {
@@ -6814,21 +6830,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 //         }
                 //     };
                 // }
-                emitVariableDeclarationsForImports();
-                writeLine();
-                let exportedDeclarations = processTopLevelVariableAndFunctionDeclarations(node);
-                let exportStarFunction = emitLocalStorageForExportedNamesIfNecessary(exportedDeclarations);
-                writeLine();
-                write("return {");
-                increaseIndent();
-                writeLine();
-                emitSetters(exportStarFunction, dependencyGroups);
-                writeLine();
                 emitExecute(node, startIndex);
-                decreaseIndent();
-                writeLine();
-                write("}"); // return
-                emitTempDeclarations(/*newLine*/ true);
             }
 
             function emitSetters(exportStarFunction: string, dependencyGroups: DependencyGroup[]) {
@@ -6922,9 +6924,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitExecute(node: SourceFile, startIndex: number) {
-                write("execute: function() {");
-                increaseIndent();
-                writeLine();
                 for (let i = startIndex; i < node.statements.length; ++i) {
                     let statement = node.statements[i];
                     switch (statement.kind) {
@@ -6936,12 +6935,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         case SyntaxKind.ImportDeclaration:
                             continue;
                         case SyntaxKind.ExportDeclaration:
-                            if (!(<ExportDeclaration>statement).moduleSpecifier) {
-                                for (let element of (<ExportDeclaration>statement).exportClause.elements) {
-                                    // write call to exporter function for every export specifier in exports list
-                                    emitExportSpecifierInSystemModule(element);
-                                }
-                            }
                             continue;
                         case SyntaxKind.ImportEqualsDeclaration:
                             if (!isInternalModuleImportEqualsDeclaration(statement)) {
@@ -6950,17 +6943,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             }
                         // fall-though for import declarations that import internal modules
                         default:
-                            writeLine();
                             emit(statement);
                     }
                 }
-                decreaseIndent();
-                writeLine();
-                write("}"); // execute
             }
 
             function emitSystemModule(node: SourceFile): void {
-                collectExternalModuleInfo(node);
                 // System modules has the following shape
                 // System.register(['dep-1', ... 'dep-n'], function(exports) {/* module body function */})
                 // 'exports' here is a function 'exports<T>(name: string, value: T): T' that is used to publish exported values.
@@ -6969,48 +6957,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // expr -> exports('name', expr).
                 // The only exception in this rule is postfix unary operators,
                 // see comment to 'emitPostfixUnaryExpression' for more details
-                Debug.assert(!exportFunctionForFile);
                 // make sure that  name of 'exports' function does not conflict with existing identifiers
-                exportFunctionForFile = makeUniqueName("exports");
-                writeLine();
-                write("System.register(");
-                if (node.moduleName) {
-                    write(`"${node.moduleName}", `);
-                }
-                write("[");
-
                 let groupIndices: Map<number> = {};
                 let dependencyGroups: DependencyGroup[] = [];
 
-                for (let i = 0; i < externalImports.length; ++i) {
-                    let text = getExternalModuleNameText(externalImports[i]);
-                    if (hasProperty(groupIndices, text)) {
-                        // deduplicate/group entries in dependency list by the dependency name
-                        let groupIndex = groupIndices[text];
-                        dependencyGroups[groupIndex].push(externalImports[i]);
-                        continue;
-                    }
-                    else {
-                        groupIndices[text] = dependencyGroups.length;
-                        dependencyGroups.push([externalImports[i]]);
-                    }
+                externalImports = [];
 
-                    if (i !== 0) {
-                        write(", ");
-                    }
-
-                    write(text);
-                }
-                write(`], function(${exportFunctionForFile}) {`);
-                writeLine();
-                increaseIndent();
                 let startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ true);
-                emitEmitHelpers(node);
                 emitCaptureThisForNodeIfNecessary(node);
                 emitSystemModuleBody(node, dependencyGroups, startIndex);
-                decreaseIndent();
-                writeLine();
-                write("});");
             }
 
             interface AMDDependencyNames {
@@ -7099,25 +7054,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitAMDModule(node: SourceFile) {
-                emitEmitHelpers(node);
-                collectExternalModuleInfo(node);
-
-                writeLine();
-                write("define(");
-                if (node.moduleName) {
-                    write("\"" + node.moduleName + "\", ");
-                }
-                emitAMDDependencies(node, /*includeNonAmdDependencies*/ true);
-                increaseIndent();
                 let startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ true);
-                emitExportStarHelper();
                 emitCaptureThisForNodeIfNecessary(node);
                 emitLinesStartingAt(node.statements, startIndex);
-                emitTempDeclarations(/*newLine*/ true);
-                emitExportEquals(/*emitAsReturn*/ true);
-                decreaseIndent();
-                writeLine();
-                write("});");
             }
 
             function emitCommonJSModule(node: SourceFile) {
