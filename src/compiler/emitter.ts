@@ -1183,7 +1183,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // "comment1" is not considered leading comment for "y" but rather
                     // considered as trailing comment of the previous node.
                     emitTrailingCommentsOfPosition(node.pos);
-                    emitModuleIfNeeded(node);
+                    if (node.kind !== SyntaxKind.PropertyAccessExpression) {
+                        emitModuleIfNeeded(node);
+                    }
                     emitNode(node);
                     leadingComma = true;
                 }
@@ -4122,11 +4124,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (initializer) {
                         write(" = ");
-
-                        if (!isLiteral(initializer)) {
+                        if (!isLiteral(initializer) && initializer.kind !== SyntaxKind.PropertyAccessExpression) {
                             emitModuleIfNeeded(initializer);
                         }
-
                         emit(initializer);
                     }
 
