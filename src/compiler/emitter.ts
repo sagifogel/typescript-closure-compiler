@@ -374,10 +374,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
         function emitJavaScript(jsFilePath: string, root?: SourceFile) {
             let writer = createTextWriter(newLine);
-            let { rawWrite, write, writeTextOfNode, writeLine, increaseIndent, decreaseIndent } = writer;
-            let forceWriteLine = (): void => {
+            var rawWrite = writer.rawWrite, write = writer.write, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent, getIndent = writer.getIndent, getColumn = writer.getColumn;
+            var forceWriteLine = function (idnetation?: number) {
                 rawWrite(newLine);
-            }
+                rawWrite(ts.getIndentString(idnetation || getIndent()));
+            };
+
             let currentSourceFile: SourceFile;
             // name of an exporter function if file is a System external module
             // System.register([...], function (<exporter>) {...})
@@ -585,12 +587,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return ensureModule(node).generated;
             }
 
-            function getGeneratedPathForModule(node: Declaration): string {
+            function getGeneratedPathForModule(node: Node): string {
                 let name: string;
                 let moduleFullPath = getNodeParentPath(node);
 
-                if (node.name) {
-                    let identifier = <Identifier>node.name;
+                if ((<Declaration>node).name) {
+                    let decalration = <Declaration>node; 
+                    let identifier = <Identifier>decalration.name;
                     name = identifier.text;
                 }
                 else {
@@ -1165,18 +1168,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 for (let i = 0; i < count; i++) {
-                    if (multiLine) {
-                        if (i || leadingComma) {
-                            write(",");
-                        }
-                        writeLine();
+                    var node = nodes[start + i];
+
+                    if (i > 0 && node.kind === SyntaxKind.VariableDeclaration) {
+                        write(";");
+                        forceWriteLine();
+                        write("var ");
                     }
-                    else {
-                        if (i || leadingComma) {
-                            write(", ");
-                        }
-                    }
-                    let node = nodes[start + i];
                     // This emitting is to make sure we emit following comment properly
                     //   ...(x, /*comment1*/ y)...
                     //         ^ => node.pos
@@ -1901,10 +1899,34 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return false;
             }
 
+            function getImmediateContainerNode(node: Node): Declaration {
+                while (true) {
+                    node = node.parent;
+                    if (!node) {
+                        return undefined;
+                    }
+                    switch (node.kind) {
+                        case SyntaxKind.SourceFile:
+                        case SyntaxKind.Constructor:
+                        case SyntaxKind.MethodDeclaration:
+                        case SyntaxKind.MethodSignature:
+                        case SyntaxKind.FunctionDeclaration:
+                        case SyntaxKind.FunctionExpression:
+                        case SyntaxKind.GetAccessor:
+                        case SyntaxKind.SetAccessor:
+                        case SyntaxKind.ClassDeclaration:
+                        case SyntaxKind.InterfaceDeclaration:
+                        case SyntaxKind.EnumDeclaration:
+                        case SyntaxKind.ModuleDeclaration:
+                            return <Declaration>node;
+                    }
+                }
+            }
+
             function getSymbolScope(node: Node) {
                 let _node = node;
-                let containingNode;
                 let kind = node.kind;
+                let containingNode: Node;
                 let statements: NodeArray<Statement | ClassElement>;
                 let declarationList: Array<Declaration | Statement | Expression> = [];
                 let filter = function (d: Declaration | Statement): boolean {
@@ -1922,7 +1944,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     node = (<VariableStatement>node).declarationList.declarations[0];
                 }
 
-                while (containingNode = ts.getContainerNode(_node)) {
+                while (containingNode = getImmediateContainerNode(_node)) {
                     if (containingNode.kind === SyntaxKind.SourceFile) {
                         return containingNode;
                     }
@@ -1931,7 +1953,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             return containingNode;
                         }
 
-                        let declarations: Array<Declaration> = containingNode.symbol.getDeclarations();
+                        let declarations: Array<Declaration>;
+
+                        if (containingNode.kind === SyntaxKind.ClassDeclaration) {
+                            declarations = (<ClassDeclaration>containingNode).members;
+                        }
+
+                        declarations = declarations || containingNode.symbol.getDeclarations();
 
                         for (let i = 0; i < declarations.length; i++) {
                             let declaration = <FunctionLikeDeclaration | ModuleDeclaration>declarations[i];
@@ -2222,6 +2250,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitObjectLiteralBody(node: ObjectLiteralExpression, numElements: number): void {
+                let functions: Array<PropertyAssignment> = [];
+
                 if (numElements === 0) {
                     write("{}");
                     return;
@@ -2230,12 +2260,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 write("{");
 
                 if (numElements > 0) {
-                    let properties = node.properties;
+                    let index = 0;
+                    let firstIsNotFunction: boolean;
+                    let properties = <NodeArray<PropertyAssignment>>node.properties;
 
+                    functions = properties.filter(function (prop, index) { return ts.isFunctionLike(prop.initializer); });
+                    firstIsNotFunction = properties.indexOf(functions[0]) > 0;
                     // If we are not doing a downlevel transformation for object literals,
                     // then try to preserve the original shape of the object literal.
                     // Otherwise just try to preserve the formatting.
                     if (numElements === properties.length) {
+                        if (firstIsNotFunction) {
+                            forceWriteLine(getIndent() + 1);
+                        }
                         emitLinePreservingList(node, properties, /* allowTrailingComma */ languageVersion >= ScriptTarget.ES5, /* spacesBetweenBraces */ true);
                     }
                     else {
@@ -2258,6 +2295,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
+                if (functions.length) {
+                    forceWriteLine();
+                }
                 write("}");
             }
 
@@ -2479,6 +2519,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitPropertyAssignment(node: PropertyDeclaration) {
+                if (ts.isFunctionLike(node.initializer)) {
+                    forceWriteLine();
+                }
                 emit(node.name);
                 write(": ");
                 // This is to ensure that we emit comment in the following case:
@@ -3291,7 +3334,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         started = true;
                     }
                     else {
-                        write(", ");
+                        write(";");
+                        forceWriteLine();
                     }
 
                     emit(decl);
@@ -4119,6 +4163,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(`", `);
                     }
 
+                    if (initializer && (ts.isFunctionLike(initializer) || initializer.kind === SyntaxKind.ObjectLiteralExpression)) {
+                        if (!isNodeDeclaredWithinScope(node)) {
+                            forceWriteLine();
+                        }
+                    }
+
                     emitModuleIfNeeded(node);
                     emitModuleMemberName(node);
 
@@ -4164,7 +4214,34 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitVariableStatement(node: VariableStatement) {
+                let nodeIndex: number;
                 let startIsEmitted = false;
+                let statement: VariableStatement;
+                let parentStatements = (<Block>node.parent).statements;
+                let nodeFirstVariable = node.declarationList.declarations[0];
+
+                if (parentStatements) {
+                    nodeIndex = parentStatements.indexOf(node);
+
+                    if (nodeIndex === 0) {
+                        statement = <VariableStatement>parentStatements[0];
+                    }
+                    else {
+                        var prevStatement = parentStatements[nodeIndex - 1];
+
+                        if (prevStatement.kind !== SyntaxKind.VariableStatement) {
+                            statement = <VariableStatement>parentStatements[nodeIndex];
+                        }
+                    }
+
+                    if (statement) {
+                        var firstDeclaration = statement.declarationList.declarations[0];
+
+                        if (getSymbolScope(firstDeclaration).kind === SyntaxKind.SourceFile) {
+                            forceWriteLine();
+                        }
+                    }
+                }
 
                 if (node.flags & NodeFlags.Export) {
                     if (isES6ExportedDeclaration(node)) {
@@ -4174,7 +4251,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    if (isNodeDeclaredWithinScope(node)) {
+                    if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
                         startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
                     }
                 }
@@ -4407,7 +4484,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration) {
-                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isNodeDeclaredWithinScope(node);
+                        let symbolScope = getSymbolScope(node);
+                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isScopeLike(symbolScope);
+
+                        if (node.kind === SyntaxKind.FunctionDeclaration && !ts.isFunctionLike(symbolScope)) {
+                            forceWriteLine();
+                        }
 
                         if (tryEmitModule) {
                             if (isContainedWithinModule = emitModuleForFunctionIfNeeded(node)) {
@@ -4816,6 +4898,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitPropertyDeclaration(node: ClassLikeDeclaration, property: PropertyDeclaration, receiver?: Identifier, isExpression?: boolean) {
+                let symbolScope = getSymbolScope(property.name);
+                let isStaticProperty = property.flags & NodeFlags.Static;
+
+                if (isStaticProperty) {
+                    forceWriteLine();
+                }
+
                 writeLine();
                 emitLeadingComments(property);
                 emitStart(property);
@@ -4824,7 +4913,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emit(receiver);
                 }
                 else {
-                    if (property.flags & NodeFlags.Static) {
+                    if (isStaticProperty) {
                         emitModuleIfNeeded(node);
                         emitDeclarationName(node);
                     }
@@ -4855,7 +4944,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             return emitCommentsOnNotEmittedNode(member);
                         }
 
-                        writeLine();
+                        forceWriteLine();
+                        forceWriteLine();
                         emitLeadingComments(member);
                         emitStart(member);
                         emitStart((<MethodDeclaration>member).name);
@@ -4867,12 +4957,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitEnd(member);
                         write(";");
                         emitTrailingComments(member);
-                        forceWriteLine();
                     }
                     else if (member.kind === SyntaxKind.GetAccessor || member.kind === SyntaxKind.SetAccessor) {
                         let accessors = getAllAccessorDeclarations(node.members, <AccessorDeclaration>member);
                         if (member === accessors.firstAccessor) {
-                            writeLine();
+                            forceWriteLine();
                             emitStart(member);
                             write("Object.defineProperty(");
                             emitStart((<AccessorDeclaration>member).name);
@@ -4960,11 +5049,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 tempFlags = 0;
                 tempVariables = undefined;
                 tempParameters = undefined;
+                forceWriteLine();
                 emitConstructorWorker(node, baseTypeElement);
                 tempFlags = saveTempFlags;
                 tempVariables = saveTempVariables;
                 tempParameters = saveTempParameters;
-                forceWriteLine();
             }
 
             function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
@@ -4975,7 +5064,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // If there is no property assignment, we can omit constructor if users do not define it
                 let hasInstancePropertyWithInitializer = false;
 
-                forceWriteLine();
                 // Emit the constructor overload pinned comments
                 forEach(node.members, member => {
                     if (member.kind === SyntaxKind.Constructor && !(<ConstructorDeclaration>member).body) {
@@ -5322,6 +5410,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (baseTypeNode) {
                     writeLine();
                     emitStart(baseTypeNode);
+                    forceWriteLine();
                     write("__extends(");
                     emitModuleIfNeeded(node);
                     emitDeclarationName(node);
@@ -5329,7 +5418,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitModuleIfNeeded(baseTypeNode.expression);
                     emit(baseTypeNode.expression);
                     write(");");
-                    forceWriteLine();
                     emitEnd(baseTypeNode);
                 }
             }
@@ -5987,8 +6075,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let hoistedInDeclarationScope = !containingModule && !moduleAlreadyGenerated;
                 let name = getGeneratedNameForNode(node)
 
+                forceWriteLine();
+
                 if (hoistedInDeclarationScope) {
-                    forceWriteLine();
                     write("var ");
                     write(name);
                     write(" = {};");
