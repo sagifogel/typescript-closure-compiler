@@ -16,6 +16,7 @@
     export declare function isDeclaration(node: Node): boolean;
     export declare let fullTripleSlashReferencePathRegEx: RegExp;
     export declare function nodeIsDecorated(node: Node): boolean;
+    export declare function getIndentString(level: number): string;
     export declare function convertToBase64(input: string): string;
     export declare function nodeIsSynthesized(node: Node): boolean;
     export declare let fullTripleSlashAMDReferencePathRegEx: RegExp;
