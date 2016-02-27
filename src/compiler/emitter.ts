@@ -4163,7 +4163,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(`", `);
                     }
 
-                    if (initializer && (ts.isFunctionLike(initializer) || initializer.kind === SyntaxKind.ObjectLiteralExpression)) {
+                    if (initializer && initializer.kind === SyntaxKind.ObjectLiteralExpression) {
                         if (!isNodeDeclaredWithinScope(node)) {
                             forceWriteLine();
                         }
