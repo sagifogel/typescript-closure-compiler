@@ -1175,6 +1175,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         forceWriteLine();
                         write("var ");
                     }
+                    else if (i || leadingComma) {
+                        write(", ");
+                    }
                     // This emitting is to make sure we emit following comment properly
                     //   ...(x, /*comment1*/ y)...
                     //         ^ => node.pos
