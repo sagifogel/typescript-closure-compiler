@@ -396,6 +396,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             let generatedNameSet: Map<string> = {};
             let nodeToGeneratedName: string[] = [];
+            let typeAliases: { [name: string]: boolean } = {};
             let modulesToGeneratedName: { [name: string]: ModuleGeneration } = {};
             let computedPropertyNamesToGeneratedNames: string[];
 
@@ -5079,11 +5080,33 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 writeValueAndNewLine(" * " + value);
             }
 
-            function getParameterOrUnionTypeAnnotation(node: Node, genericTypes: Array<string>): string {
+            function getParameterOrUnionTypeAnnotation(node: Node, genericTypes: Array<string> = []): string {
                 let mapped: Array<string>;
                 let propertySig: any = node;
                 let typeNode = (<{ type: TypeNode }>propertySig);
-                let kind = node.kind === SyntaxKind.Parameter || node.kind === SyntaxKind.PropertySignature ? typeNode.type.kind : node.kind;
+                let hasTypeProperty = node.kind === SyntaxKind.Parameter || node.kind === SyntaxKind.PropertySignature;
+                let kind = hasTypeProperty ? typeNode.type.kind : node.kind;
+                let getTypeLiteral = (typeLiteral: TypeLiteralNode): string => {
+                    var mapped = ts.map(typeLiteral.members, (member: Declaration) => {
+                        let type = getParameterOrUnionTypeAnnotation(member, genericTypes);
+                        let isOptional = member.symbol.flags & SymbolFlags.Optional;
+
+                        if (isOptional) {
+                            type = `(${type}|undefined)`;
+                        }
+                        return `${ts.getTextOfNode(member.name)}: ${type}`;
+                    });
+
+                    return `{ ${mapped.join(", ")} }`;
+                };
+
+                let getUnionType = (unionType: UnionOrIntersectionTypeNode): string => {
+                    var mapped = ts.map(unionType.types, (type: Node) => {
+                        return getParameterOrUnionTypeAnnotation(type, genericTypes);
+                    });
+
+                    return `(${mapped.join("|")})`;
+                }
 
                 switch (kind) {
                     case SyntaxKind.AnyKeyword:
@@ -5095,15 +5118,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ThisKeyword:
                     case SyntaxKind.StringLiteral:
                         return ts.tokenToString(kind);
+                    case SyntaxKind.TypeAliasDeclaration:
+                        if (typeNode.type.kind === SyntaxKind.TypeLiteral) {
+                            return getTypeLiteral(<TypeLiteralNode>typeNode.type);
+                        }
 
+                        return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
                     case SyntaxKind.UnionType:
-                        let unionTypeTypes = <UnionOrIntersectionTypeNode>typeNode.type;
-
-                        mapped = ts.map(unionTypeTypes.types, (type) => {
-                            return getParameterOrUnionTypeAnnotation(type, genericTypes);
-                        });
-
-                        return mapped.join("|");
+                        return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
 
                     case SyntaxKind.TypeReference:
                         let typeRef = <TypeReferenceNode>node;
@@ -5113,7 +5135,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         if (!name) {
                             name = (<TypeReferenceNode>typeNode.type).typeName;
                             text = ts.getTextOfNode(name)
-                            genericTypes.push(text);
+
+                            if (!symbolIsTypeAlias(text)) {
+                                genericTypes.push(text);
+                            }
                         }
                         else {
                             text = ts.getTextOfNode(name)
@@ -5122,23 +5147,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return text;
 
                     case SyntaxKind.TypeLiteral:
-                        let typeLiteral = <TypeLiteralNode>typeNode.type;
-
-                        mapped = ts.map(typeLiteral.members, (member) => {
-                            let type = getParameterOrUnionTypeAnnotation(member, genericTypes);
-                            let isOptional = member.symbol.flags & SymbolFlags.Optional;
-
-                            if (isOptional) {
-                                type = `(${type}|undefined)`;
-                            }
-                            return ts.getTextOfNode(member) + ": " + type;
-                        });
-
-                        return `{ ${mapped.join(", ")} }`;
+                        return getTypeLiteral(<TypeLiteralNode>typeNode.type);
                 }
             }
 
-            function emitParametersAnnotations(parameters: Array<ParameterDeclaration>, genericTypes: Array<string>) {
+            function emitParametersAnnotations(parameters: Array<ParameterDeclaration>, genericTypes: Array<string>): void {
                 ts.forEach(parameters, (parameter) => {
                     let type = getParameterOrUnionTypeAnnotation(parameter, genericTypes);
 
@@ -5146,11 +5159,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 });
             }
 
-            function emitInterfaceDeclarationAnnotation(interfacesImpl: Array<ExpressionWithTypeArguments>) {
+            function emitInterfaceDeclarationAnnotation(interfacesImpl: Array<ExpressionWithTypeArguments>): void {
                 emitConstructorOrInterfaceAnnotation(false, interfacesImpl);
             }
 
-            function emitConstructorAnnotation(ctor: ConstructorDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>) {
+            function emitConstructorAnnotation(ctor: ConstructorDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
                 emitConstructorOrInterfaceAnnotation(true, interfacesImpl, baseTypeElement, ctor);
             }
 
@@ -5346,6 +5359,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 setModuleGenerated(node);
+            }
+            function emitTypeAliasDeclaration(node: TypeAliasDeclaration) {
+                let typeAliasName = ts.getTextOfNode(node.name);
+                let annotationValue = getParameterOrUnionTypeAnnotation(node);
+
+                forceWriteLine();
+                writeValueAndNewLine(`/** @typedef {${annotationValue}} */`);
+                write(`var ${typeAliasName};`);
+                typeAliases[typeAliasName] = true;
+            }
+
+            function symbolIsTypeAlias(symbol: string) :boolean {
+                return !!typeAliases[symbol];
             }
 
             function emitClassExpression(node: ClassExpression) {
@@ -7805,6 +7831,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return emitClassDeclaration(<ClassDeclaration>node);
                     case SyntaxKind.InterfaceDeclaration:
                         return emitInterfaceDeclaration(<InterfaceDeclaration>node);
+                    case SyntaxKind.TypeAliasDeclaration:
+                        return emitTypeAliasDeclaration(<TypeAliasDeclaration>node);
                     case SyntaxKind.EnumDeclaration:
                         return emitEnumDeclaration(<EnumDeclaration>node);
                     case SyntaxKind.EnumMember:
