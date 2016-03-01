@@ -47,7 +47,6 @@
     export declare function getTextOfNode(node: Node, includeTrivia? :boolean): string;
     export declare function isFunctionLike(node: Node): node is FunctionLikeDeclaration;
     export declare function isEmptyObjectLiteralOrArrayLiteral(expression: Node): boolean;
-    export declare function getClassExtendsHeritageClauseElement(node: ClassLikeDeclaration);
     export declare function getEntityNameFromTypeNode(node: TypeNode): EntityName | Expression;
     export declare function getLineOfLocalPosition(currentSourceFile: SourceFile, pos: number);
     export declare function isElementAccessExpression(node: Node): node is ElementAccessExpression;
@@ -61,8 +60,11 @@
     export declare function isInternalModuleImportEqualsDeclaration(node: Node): node is ImportEqualsDeclaration;
     export declare function getSourceFilePathInNewDir(sourceFile: SourceFile, host: EmitHost, newDirPath: string);
     export declare function shouldEmitToOwnFile(sourceFile: SourceFile, compilerOptions: CompilerOptions): boolean;
+    export declare function getInterfaceBaseTypeNodes(node: InterfaceDeclaration): NodeArray<ExpressionWithTypeArguments>;
+    export declare function getClassExtendsHeritageClauseElement(node: ClassLikeDeclaration) : ExpressionWithTypeArguments;
     export declare function getAllAccessorDeclarations(declarations: NodeArray<Declaration>, accessor: AccessorDeclaration);
     export declare function getSourceTextOfNodeFromSourceFile(sourceFile: SourceFile, node: Node, includeTrivia?: boolean): string;
+    export declare function getClassImplementsHeritageClauseElements(node: ClassLikeDeclaration): NodeArray<ExpressionWithTypeArguments>;
     export declare function writeCommentRange(currentSourceFile: SourceFile, writer: EmitTextWriter, comment: CommentRange, newLine: string);
     export declare function writeFile(host: EmitHost, diagnostics: Diagnostic[], fileName: string, data: string, writeByteOrderMark: boolean);
     export declare function emitNewLineBeforeLeadingComments(currentSourceFile: SourceFile, writer: EmitTextWriter, node: TextRange, leadingComments: CommentRange[]);

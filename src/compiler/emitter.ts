@@ -5129,12 +5129,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             let isOptional = member.symbol.flags & SymbolFlags.Optional;
 
                             if (isOptional) {
-                                type = "(" + type + "|undefined)";
+                                type = `(${type}|undefined)`;
                             }
                             return ts.getTextOfNode(member) + ": " + type;
                         });
 
-                        return "{" + mapped.join(", ") + "}";
+                        return `{ ${mapped.join(", ")} }`;
                 }
             }
 
@@ -5142,43 +5142,60 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 ts.forEach(parameters, (parameter) => {
                     let type = getParameterOrUnionTypeAnnotation(parameter, genericTypes);
 
-                    writeAnnotationWithComment("@param {" + type + "} " + ts.getTextOfNode(parameter.name));
+                    writeAnnotationWithComment(`@param {${type}} ${ts.getTextOfNode(parameter.name)}`);
                 });
             }
 
-            function emitInterfaceDeclarationAnnotation(baseTypeElement: ExpressionWithTypeArguments) {
-                emitConstructorOrInterfaceAnnotation("@interface", null, baseTypeElement);
+            function emitInterfaceDeclarationAnnotation(interfacesImpl: Array<ExpressionWithTypeArguments>) {
+                emitConstructorOrInterfaceAnnotation(false, interfacesImpl);
             }
 
-            function emitConstructorAnnotation(node: ConstructorDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
-                emitConstructorOrInterfaceAnnotation("@constructor", node, baseTypeElement);
+            function emitConstructorAnnotation(ctor: ConstructorDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>) {
+                emitConstructorOrInterfaceAnnotation(true, interfacesImpl, baseTypeElement, ctor);
             }
 
-            function emitConstructorOrInterfaceAnnotation(type :string, node: ConstructorDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
-                emitStartAnnotation();
+            function getClassOrInterfaceFullPath(node: ExpressionWithTypeArguments): string {
+                return getModuleName(node.expression) + ts.getTextOfNode(node);
+            }
 
-                if (baseTypeElement) {
-                    let nodeName = getModuleName(baseTypeElement.expression) + ts.getTextOfNode(baseTypeElement);
+            function emitConstructorOrInterfaceAnnotation(isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments, ctor?: ConstructorDeclaration) {
+                let type: string;
+                let heritageType: string;
 
-                    writeAnnotationWithComment("@extends {" + nodeName + "}");
+                if (isClass) {
+                    type = "@constructor";
+                    heritageType = "implements";
+                }
+                else {
+                    type = "@interface";
+                    heritageType = "extends";
                 }
 
+                emitStartAnnotation();
                 writeAnnotationWithComment(type);
 
-                if (node && node.parameters) {
+                if (baseTypeElement) {
+                    writeAnnotationWithComment(`@extends {${getClassOrInterfaceFullPath(baseTypeElement)}}`);
+                }
+
+                ts.forEach(interfacesImpl, (_interface) => {
+                    writeAnnotationWithComment(`@${heritageType} {${getClassOrInterfaceFullPath(_interface)}}`);
+                });
+
+                if (ctor) {
                     let genericTypes: Array<string> = [];
 
-                    emitParametersAnnotations(node.parameters, genericTypes);
+                    emitParametersAnnotations(ctor.parameters, genericTypes);
 
                     ts.forEach(genericTypes, (type) => {
-                        writeAnnotationWithComment("@template " + type);
+                        writeAnnotationWithComment(`@template ${type}`);
                     });
                 }
 
                 emitEndAnnotation();
             }
 
-            function emitConstructor(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
+            function emitConstructor(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments> = []) {
                 let saveTempFlags = tempFlags;
                 let saveTempVariables = tempVariables;
                 let saveTempParameters = tempParameters;
@@ -5186,13 +5203,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 tempVariables = undefined;
                 tempParameters = undefined;
                 forceWriteLine();
-                emitConstructorWorker(node, baseTypeElement);
+                emitConstructorWorker(node, baseTypeElement, interfacesImpl);
                 tempFlags = saveTempFlags;
                 tempVariables = saveTempVariables;
                 tempParameters = saveTempParameters;
             }
 
-            function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
+            function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>) {
                 let isDeclaredInAModule = false;
                 let nodeName = ts.declarationNameToString(node.name);
                 // Check if we have property assignment inside class declaration.
@@ -5215,10 +5232,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let ctor = getFirstConstructorWithBody(node);
 
                 if (!nodeIsInterface) {
-                    emitConstructorAnnotation(ctor, baseTypeElement);
+                    emitConstructorAnnotation(ctor, baseTypeElement, interfacesImpl);
                 }
                 else {
-                    emitInterfaceDeclarationAnnotation(baseTypeElement);
+                    emitInterfaceDeclarationAnnotation(interfacesImpl);
                 }
                 // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
                 // do not emit constructor in class declaration.
@@ -5528,18 +5545,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitClassLikeDeclarationBelowES6(node: ClassLikeDeclaration) {
-                let baseTypeNode = getClassExtendsHeritageClauseElement(node);
+                let baseTypeNode = ts.getClassExtendsHeritageClauseElement(node);
+                var interfacesImpl = ts.getClassImplementsHeritageClauseElements(node);
                 let saveTempFlags = tempFlags;
                 let saveTempVariables = tempVariables;
                 let saveTempParameters = tempParameters;
                 let saveComputedPropertyNamesToGeneratedNames = computedPropertyNamesToGeneratedNames;
+
                 tempFlags = 0;
                 tempVariables = undefined;
                 tempParameters = undefined;
                 computedPropertyNamesToGeneratedNames = undefined;
                 scopeEmitStart(node);
                 writeLine();
-                emitConstructor(node, baseTypeNode);
+                emitConstructor(node, baseTypeNode, interfacesImpl);
                 emitMemberFunctionsForES5AndLower(node);
                 emitPropertyDeclarations(node, getInitializedProperties(node, /*static:*/ true));
                 writeLine();
@@ -6079,9 +6098,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitInterfaceDeclaration(node: InterfaceDeclaration) {
                 let anyNode = <any>node;
                 let classLikeDeclaration = <ClassLikeDeclaration>anyNode;
-                let baseTypeNode = getClassExtendsHeritageClauseElement(classLikeDeclaration);
+                let interfacesImpl = ts.getInterfaceBaseTypeNodes(node);
 
-                emitConstructor(classLikeDeclaration, baseTypeNode);
+                emitConstructor(classLikeDeclaration, null, interfacesImpl);
                 emitModuleIfNeeded(node)
                 emitMemberFunctionsForES5AndLower(classLikeDeclaration);
                 emitPropertyDeclarations(classLikeDeclaration, getInitializedProperties(classLikeDeclaration, /*static:*/ true));
