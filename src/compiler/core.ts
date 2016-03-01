@@ -26,5 +26,6 @@
     export declare function hasProperty<T>(map: Map<T>, key: string): boolean;
     export declare function sortAndDeduplicateDiagnostics(diagnostics: Diagnostic[]): Diagnostic[];
     export declare function forEach<T, U>(array: T[], callback: (element: T, index: number) => U): U;
+    export declare function map<U, T>(array : Array<T>, callbackfn: (value: T, index: number, array: T[]) => U, thisArg ?: any): U[];
     export declare function getRelativePathToDirectoryOrUrl(directoryPathOrUrl: string, relativeOrAbsolutePath: string, currentDirectory: string, getCanonicalFileName: (fileName: string) => string, isAbsolutePathAnUrl: boolean);
 }
