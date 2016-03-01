@@ -5114,13 +5114,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (!name) {
                         name = typeRef.typeName;
                         text = ts.getTextOfNode(name);
-
-                        if (!symbolIsTypeAlias(text)) {
-                            genericTypes.push(text);
-                        }
                     }
                     else {
                         text = ts.getTextOfNode(name);
+                    }
+
+                    if (!symbolIsTypeAlias(text)) {
+                        genericTypes.push(text);
                     }
 
                     return text;
@@ -5130,7 +5130,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.Parameter:
                     case SyntaxKind.PropertySignature:
                     case SyntaxKind.TypeAliasDeclaration:
-                        return getParameterOrUnionTypeAnnotation(typeNode.type);
+                        return getParameterOrUnionTypeAnnotation(typeNode.type, genericTypes);
                     case SyntaxKind.UnionType:
                         return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
                     case SyntaxKind.TypeReference:
