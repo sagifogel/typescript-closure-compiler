@@ -5084,8 +5084,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let mapped: Array<string>;
                 let propertySig: any = node;
                 let typeNode = (<{ type: TypeNode }>propertySig);
-                let hasTypeProperty = node.kind === SyntaxKind.Parameter || node.kind === SyntaxKind.PropertySignature;
-                let kind = hasTypeProperty ? typeNode.type.kind : node.kind;
                 let getTypeLiteral = (typeLiteral: TypeLiteralNode): string => {
                     var mapped = ts.map(typeLiteral.members, (member: Declaration) => {
                         let type = getParameterOrUnionTypeAnnotation(member, genericTypes);
@@ -5094,6 +5092,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         if (isOptional) {
                             type = `(${type}|undefined)`;
                         }
+
                         return `${ts.getTextOfNode(member.name)}: ${type}`;
                     });
 
@@ -5101,69 +5100,55 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 };
 
                 let getUnionType = (unionType: UnionOrIntersectionTypeNode): string => {
-                    var mapped = ts.map(unionType.types, (type: Node) => {
+                    let mapped = ts.map(unionType.types, (type: Node) => {
                         return getParameterOrUnionTypeAnnotation(type, genericTypes);
                     });
 
                     return `(${mapped.join("|")})`;
-                }
-
-                let isPrimitiveKind = (kind): boolean => {
-                    return kind === SyntaxKind.AnyKeyword ||
-                        kind === SyntaxKind.StringKeyword ||
-                        kind === SyntaxKind.NumberKeyword ||
-                        kind === SyntaxKind.BooleanKeyword ||
-                        kind === SyntaxKind.SymbolKeyword ||
-                        kind === SyntaxKind.VoidKeyword ||
-                        kind === SyntaxKind.ThisKeyword ||
-                        kind === SyntaxKind.StringLiteral;
                 };
 
-                switch (kind) {
+                let getTypeReference = (typeRef: TypeReferenceNode): string  => {
+                    let text: string
+                    let name = ts.getEntityNameFromTypeNode(typeRef);
+
+                    if (!name) {
+                        name = typeRef.typeName;
+                        text = ts.getTextOfNode(name);
+
+                        if (!symbolIsTypeAlias(text)) {
+                            genericTypes.push(text);
+                        }
+                    }
+                    else {
+                        text = ts.getTextOfNode(name);
+                    }
+
+                    return text;
+                };
+
+                switch (node.kind) {
+                    case SyntaxKind.Parameter:
+                    case SyntaxKind.PropertySignature:
                     case SyntaxKind.TypeAliasDeclaration:
-                        kind = typeNode.type.kind;
-
-                        if (kind === SyntaxKind.TypeLiteral) {
-                            return getTypeLiteral(<TypeLiteralNode>typeNode.type);
-                        }
-                        else if (kind === SyntaxKind.UnionType) {
-                            return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
-
-                        }
-                        else if (isPrimitiveKind(kind)) {
-                            return ts.tokenToString(kind);
-                        }
-                        break;
+                        return getParameterOrUnionTypeAnnotation(typeNode.type);
                     case SyntaxKind.UnionType:
                         return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
-
                     case SyntaxKind.TypeReference:
-                        let typeRef = <TypeReferenceNode>node;
-                        let name = ts.getEntityNameFromTypeNode(typeRef);
-                        let text: string;
-
-                        if (!name) {
-                            name = (<TypeReferenceNode>typeNode.type).typeName;
-                            text = ts.getTextOfNode(name)
-
-                            if (!symbolIsTypeAlias(text)) {
-                                genericTypes.push(text);
-                            }
-                        }
-                        else {
-                            text = ts.getTextOfNode(name)
-                        }
-
-                        return text;
-
+                        return getTypeReference(<TypeReferenceNode>node);
                     case SyntaxKind.TypeLiteral:
                         return getTypeLiteral(<TypeLiteralNode>typeNode.type);
-                    default:
-                        if (isPrimitiveKind(kind)) {
-                            return ts.tokenToString(kind);
-                        }
-
+                    case SyntaxKind.AnyKeyword:
+                    case SyntaxKind.StringKeyword:
+                    case SyntaxKind.NumberKeyword:
+                    case SyntaxKind.BooleanKeyword:
+                    case SyntaxKind.SymbolKeyword:
+                    case SyntaxKind.VoidKeyword:
+                    case SyntaxKind.ThisKeyword:
+                    case SyntaxKind.StringLiteral:
+                        return ts.tokenToString(node.kind);
                 }
+
+                return "";
             }
 
             function emitParametersAnnotations(parameters: Array<ParameterDeclaration>, genericTypes: Array<string>): void {
