@@ -26,6 +26,7 @@
     export declare function nodeOrChildIsDecorated(node: Node): boolean;
     export declare function escapeNonAsciiCharacters(s: string): string;
     export declare function getCombinedNodeFlags(node: Node): NodeFlags;
+    export declare function isConstEnumDeclaration(node: Node): boolean;
     export declare function escapeIdentifier(identifier: string): string;
     export declare function createSynthesizedNodeArray(): NodeArray<any>;
     export declare function cloneEntityName(node: EntityName): EntityName;
