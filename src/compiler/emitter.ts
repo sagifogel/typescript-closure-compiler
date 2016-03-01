@@ -5108,22 +5108,32 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return `(${mapped.join("|")})`;
                 }
 
+                let isPrimitiveKind = (kind): boolean => {
+                    return kind === SyntaxKind.AnyKeyword ||
+                        kind === SyntaxKind.StringKeyword ||
+                        kind === SyntaxKind.NumberKeyword ||
+                        kind === SyntaxKind.BooleanKeyword ||
+                        kind === SyntaxKind.SymbolKeyword ||
+                        kind === SyntaxKind.VoidKeyword ||
+                        kind === SyntaxKind.ThisKeyword ||
+                        kind === SyntaxKind.StringLiteral;
+                };
+
                 switch (kind) {
-                    case SyntaxKind.AnyKeyword:
-                    case SyntaxKind.StringKeyword:
-                    case SyntaxKind.NumberKeyword:
-                    case SyntaxKind.BooleanKeyword:
-                    case SyntaxKind.SymbolKeyword:
-                    case SyntaxKind.VoidKeyword:
-                    case SyntaxKind.ThisKeyword:
-                    case SyntaxKind.StringLiteral:
-                        return ts.tokenToString(kind);
                     case SyntaxKind.TypeAliasDeclaration:
-                        if (typeNode.type.kind === SyntaxKind.TypeLiteral) {
+                        kind = typeNode.type.kind;
+
+                        if (kind === SyntaxKind.TypeLiteral) {
                             return getTypeLiteral(<TypeLiteralNode>typeNode.type);
                         }
+                        else if (kind === SyntaxKind.UnionType) {
+                            return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
 
-                        return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
+                        }
+                        else if (isPrimitiveKind(kind)) {
+                            return ts.tokenToString(kind);
+                        }
+                        break;
                     case SyntaxKind.UnionType:
                         return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
 
@@ -5148,6 +5158,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     case SyntaxKind.TypeLiteral:
                         return getTypeLiteral(<TypeLiteralNode>typeNode.type);
+                    default:
+                        if (isPrimitiveKind(kind)) {
+                            return ts.tokenToString(kind);
+                        }
+
                 }
             }
 
@@ -5370,7 +5385,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 typeAliases[typeAliasName] = true;
             }
 
-            function symbolIsTypeAlias(symbol: string) :boolean {
+            function symbolIsTypeAlias(symbol: string): boolean {
                 return !!typeAliases[symbol];
             }
 
