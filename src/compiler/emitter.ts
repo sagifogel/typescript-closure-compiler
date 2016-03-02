@@ -5132,11 +5132,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.TypeAliasDeclaration:
                         return getParameterOrUnionTypeAnnotation(typeNode.type, genericTypes);
                     case SyntaxKind.UnionType:
-                        return getUnionType(<UnionOrIntersectionTypeNode>typeNode.type);
+                        return getUnionType(<UnionOrIntersectionTypeNode>node);
                     case SyntaxKind.TypeReference:
                         return getTypeReference(<TypeReferenceNode>node);
                     case SyntaxKind.TypeLiteral:
-                        return getTypeLiteral(<TypeLiteralNode>typeNode.type);
+                        return getTypeLiteral(<TypeLiteralNode>node);
                     case SyntaxKind.AnyKeyword:
                     case SyntaxKind.StringKeyword:
                     case SyntaxKind.NumberKeyword:
