@@ -4463,7 +4463,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitFunctionDeclaration(node: FunctionLikeDeclaration) {
                 let emitFunctionName = true;
                 let emittedNode: Node = node;
-                let isContainedWithinModule = false
+                let shouldEmitSemicolon = false;
+                let symbolScope = getSymbolScope(node);
+                let isDeclaredWithinFunction = ts.isFunctionLike(symbolScope);
                 let nodeIsInterfaceFunctionMember = isInterfaceFunctionMember(node);
 
                 // TODO (yuisu) : we should not have special cases to condition emitting comments
@@ -4499,21 +4501,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration || nodeIsInterfaceFunctionMember) {
-                        let symbolScope = getSymbolScope(node);
                         let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isScopeLike(symbolScope) || nodeIsInterfaceFunctionMember;
 
-                        if (node.kind === SyntaxKind.FunctionDeclaration && !ts.isFunctionLike(symbolScope)) {
+                        if (node.kind === SyntaxKind.FunctionDeclaration && !isDeclaredWithinFunction) {
                             forceWriteLine();
                         }
 
                         if (tryEmitModule) {
-                            if (isContainedWithinModule = emitModuleForFunctionIfNeeded(node)) {
+                            if (shouldEmitSemicolon = emitModuleForFunctionIfNeeded(node)) {
                                 emitFunctionName = false;
                                 emitDeclarationName(node);
                                 write(" = ");
                             }
                         }
                         else {
+                            if (node.kind === SyntaxKind.FunctionDeclaration && (symbolScope.kind === SyntaxKind.SourceFile || isDeclaredWithinFunction)) {
+                                shouldEmitSemicolon = true;
+                            }
                             emitFunctionName = false;
                             write("var ");
                             emitDeclarationName(node);
@@ -4553,7 +4557,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitTrailingComments(node);
                 }
 
-                if (isContainedWithinModule) {
+                if (shouldEmitSemicolon) {
                     write(";");
                 }
             }
@@ -5081,6 +5085,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getParameterOrUnionTypeAnnotation(node: Node, genericTypes: Array<string> = []): string {
+                if (!node) { return; }
                 let mapped: Array<string>;
                 let propertySig: any = node;
                 let typeNode = (<{ type: TypeNode }>propertySig);
