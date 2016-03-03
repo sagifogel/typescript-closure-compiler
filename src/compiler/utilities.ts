@@ -38,6 +38,7 @@
     export declare function isTemplateLiteralKind(kind: SyntaxKind): boolean;
     export declare function getEnclosingBlockScopeContainer(node: Node): Node;
     export declare function createTextWriter(newLine: String): EmitTextWriter;
+    export declare function isAccessibilityModifier(kind: SyntaxKind): boolean;
     export declare function hasRestParameter(s: SignatureDeclaration): boolean;
     export declare function isLeftHandSideExpression(expr: Expression): boolean;
     export declare function isExternalModuleImportEqualsDeclaration(node: Node);
@@ -45,7 +46,7 @@
     export declare function isBindingPattern(node: Node): node is BindingPattern;
     export declare function isNodeDescendentOf(node: Node, ancestor: Node): boolean;
     export declare function makeIdentifierFromModuleName(moduleName: string): string;
-    export declare function getTextOfNode(node: Node, includeTrivia? :boolean): string;
+    export declare function getTextOfNode(node: Node, includeTrivia?: boolean): string;
     export declare function isFunctionLike(node: Node): node is FunctionLikeDeclaration;
     export declare function isEmptyObjectLiteralOrArrayLiteral(expression: Node): boolean;
     export declare function getEntityNameFromTypeNode(node: TypeNode): EntityName | Expression;
@@ -62,7 +63,7 @@
     export declare function getSourceFilePathInNewDir(sourceFile: SourceFile, host: EmitHost, newDirPath: string);
     export declare function shouldEmitToOwnFile(sourceFile: SourceFile, compilerOptions: CompilerOptions): boolean;
     export declare function getInterfaceBaseTypeNodes(node: InterfaceDeclaration): NodeArray<ExpressionWithTypeArguments>;
-    export declare function getClassExtendsHeritageClauseElement(node: ClassLikeDeclaration) : ExpressionWithTypeArguments;
+    export declare function getClassExtendsHeritageClauseElement(node: ClassLikeDeclaration): ExpressionWithTypeArguments;
     export declare function getAllAccessorDeclarations(declarations: NodeArray<Declaration>, accessor: AccessorDeclaration);
     export declare function getSourceTextOfNodeFromSourceFile(sourceFile: SourceFile, node: Node, includeTrivia?: boolean): string;
     export declare function getClassImplementsHeritageClauseElements(node: ClassLikeDeclaration): NodeArray<ExpressionWithTypeArguments>;

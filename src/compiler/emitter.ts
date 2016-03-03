@@ -4979,6 +4979,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitLeadingComments(member);
                         emitStart(member);
                         emitStart((<MethodDeclaration>member).name);
+                        emitFunctionAnnotation(<MethodDeclaration>member);
                         emitClassMemberPrefix(node, member);
                         emitMemberAccessForPropertyName((<MethodDeclaration>member).name);
                         emitEnd((<MethodDeclaration>member).name);
@@ -5004,6 +5005,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             if (accessors.getAccessor) {
                                 writeLine();
                                 emitLeadingComments(accessors.getAccessor);
+                                emitFunctionAnnotation(<AccessorDeclaration>member);
                                 write("get: ");
                                 emitStart(accessors.getAccessor);
                                 write("function ");
@@ -5015,6 +5017,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             if (accessors.setAccessor) {
                                 writeLine();
                                 emitLeadingComments(accessors.setAccessor);
+                                emitFunctionAnnotation(<AccessorDeclaration>member);
                                 write("set: ");
                                 emitStart(accessors.setAccessor);
                                 write("function ");
@@ -5180,12 +5183,37 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return "?";
             }
 
-            function emitParametersAnnotations(parameters: Array<ParameterDeclaration>, genericTypes: Array<string>): void {
+            function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
+                let genericTypes: Array<string> = [];
+
+                emitStartAnnotation();
+                emitParametersAnnotations(node.parameters, genericTypes);
+                emitGenericTypes(genericTypes);
+
+                if (node.modifiers) {
+                    let accessModifiers = ts.filter(node.modifiers, (modifier) => ts.isAccessibilityModifier(modifier.kind));
+
+                    if (accessModifiers.length) {
+                        writeAnnotationWithComment(`@${ts.tokenToString(accessModifiers[0].kind)}`);
+                    }
+                }
+
+                emitEndAnnotation();
+            }
+
+            function emitParametersAnnotations(parameters: NodeArray<ParameterDeclaration>, genericTypes: Array<string>): void {
                 ts.forEach(parameters, (parameter) => {
                     let type = getParameterOrUnionTypeAnnotation(parameter, genericTypes);
 
                     writeAnnotationWithComment(`@param {${type}} ${ts.getTextOfNode(parameter.name)}`);
                 });
+            }
+
+            function emitExtendsAnnotation(): void {
+                emitStartAnnotation();
+                writeAnnotationWithComment("@param {Function} d");
+                writeAnnotationWithComment("@param {Function} b");
+                write(" */");
             }
 
             function emitInterfaceDeclarationAnnotation(interfacesImpl: Array<ExpressionWithTypeArguments>): void {
@@ -5228,13 +5256,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let genericTypes: Array<string> = [];
 
                     emitParametersAnnotations(ctor.parameters, genericTypes);
-
-                    ts.forEach(genericTypes, (type) => {
-                        writeAnnotationWithComment(`@template ${type}`);
-                    });
+                    emitGenericTypes(genericTypes);
                 }
 
                 emitEndAnnotation();
+            }
+
+            function emitGenericTypes(genericTypes: Array<string>): void {
+                ts.forEach(genericTypes, (type) => {
+                    writeAnnotationWithComment(`@template ${type}`);
+                });
             }
 
             function emitConstructor(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments> = []) {
@@ -7620,6 +7651,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // Only Emit __extends function when target ES5.
                     // For target ES6 and above, we can emit classDeclaration as is.
                     if ((languageVersion < ScriptTarget.ES6) && (!extendsEmitted && resolver.getNodeCheckFlags(node) & NodeCheckFlags.EmitExtends)) {
+                        emitExtendsAnnotation();
                         writeLines(extendsHelper);
                         extendsEmitted = true;
                     }
