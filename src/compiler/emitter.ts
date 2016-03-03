@@ -5085,23 +5085,36 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getParameterOrUnionTypeAnnotation(node: Node, genericTypes: Array<string> = []): string {
-                if (!node) { return; }
                 let mapped: Array<string>;
                 let propertySig: any = node;
-                let typeNode = (<{ type: TypeNode }>propertySig);
+                let typeNode = (<{ type: TypeNode, initializer?: Expression }>propertySig);
                 let getTypeLiteral = (typeLiteral: TypeLiteralNode): string => {
                     var mapped = ts.map(typeLiteral.members, (member: Declaration) => {
                         let type = getParameterOrUnionTypeAnnotation(member, genericTypes);
-                        let isOptional = member.symbol.flags & SymbolFlags.Optional;
 
-                        if (isOptional) {
-                            type = `(${type}|undefined)`;
-                        }
+                        type = addOptionalIfNeeded(member, type);
 
-                        return `${ts.getTextOfNode(member.name)}: ${type}`;
+                        return `${ts.getTextOfNode(member.name)}:${type}`;
                     });
 
-                    return `{ ${mapped.join(", ")} }`;
+                    return `{${mapped.join(", ")}}`;
+                };
+
+                let addOptionalIfNeeded = (node: Node, type: string): string => {
+                    let isOptional: boolean;
+
+                    if (node.kind === SyntaxKind.Parameter) {
+                        isOptional = resolver.isOptionalParameter(<ParameterDeclaration>node);
+                    }
+                    else if (node.symbol) {
+                        isOptional = (node.symbol.flags & SymbolFlags.Optional) > 0;
+                    }
+
+                    if (isOptional) {
+                        type = `(${type}|undefined)`;
+                    }
+
+                    return type;
                 };
 
                 let getUnionType = (unionType: UnionOrIntersectionTypeNode): string => {
@@ -5135,7 +5148,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.Parameter:
                     case SyntaxKind.PropertySignature:
                     case SyntaxKind.TypeAliasDeclaration:
-                        return getParameterOrUnionTypeAnnotation(typeNode.type, genericTypes);
+                        if (typeNode.type) {
+                            return getParameterOrUnionTypeAnnotation(typeNode.type, genericTypes);
+                        }
+                        else if (typeNode.initializer) {
+                            return getParameterOrUnionTypeAnnotation(typeNode.type, genericTypes);
+                        }
+                        break;
                     case SyntaxKind.UnionType:
                         return getUnionType(<UnionOrIntersectionTypeNode>node);
                     case SyntaxKind.TypeReference:
@@ -5149,11 +5168,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.SymbolKeyword:
                     case SyntaxKind.VoidKeyword:
                     case SyntaxKind.ThisKeyword:
+                        return addOptionalIfNeeded(node.parent, ts.tokenToString(node.kind));
+                    case SyntaxKind.NumericLiteral:
+                        return addOptionalIfNeeded(node.parent, "number");
                     case SyntaxKind.StringLiteral:
-                        return ts.tokenToString(node.kind);
+                        return addOptionalIfNeeded(node.parent, "string");
+                    case SyntaxKind.RegularExpressionLiteral:
+                        return addOptionalIfNeeded(node.parent, "RegEx");
                 }
 
-                return "";
+                return "?";
             }
 
             function emitParametersAnnotations(parameters: Array<ParameterDeclaration>, genericTypes: Array<string>): void {
