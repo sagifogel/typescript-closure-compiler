@@ -5095,8 +5095,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     var mapped = ts.map(typeLiteral.members, (member: Declaration) => {
                         let type = getParameterOrUnionTypeAnnotation(member, genericTypes);
 
-                        type = addOptionalIfNeeded(member, type);
-
                         return `${ts.getTextOfNode(member.name)}:${type}`;
                     });
 
@@ -5104,16 +5102,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 };
 
                 let addOptionalIfNeeded = (node: Node, type: string): string => {
-                    let isOptional: boolean;
-
-                    if (node.kind === SyntaxKind.Parameter) {
-                        isOptional = resolver.isOptionalParameter(<ParameterDeclaration>node);
+                    if (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) {
+                        type = `${type}=`;
                     }
-                    else if (node.symbol) {
-                        isOptional = (node.symbol.flags & SymbolFlags.Optional) > 0;
-                    }
-
-                    if (isOptional) {
+                    else if (node.symbol && (node.symbol.flags & SymbolFlags.Optional) > 0) {
                         type = `(${type}|undefined)`;
                     }
 
@@ -5150,6 +5142,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 switch (node.kind) {
                     case SyntaxKind.Parameter:
                     case SyntaxKind.PropertySignature:
+                    case SyntaxKind.ParenthesizedType:
                     case SyntaxKind.TypeAliasDeclaration:
                         if (typeNode.type) {
                             return getParameterOrUnionTypeAnnotation(typeNode.type, genericTypes);
@@ -5159,11 +5152,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                         break;
                     case SyntaxKind.UnionType:
-                        return getUnionType(<UnionOrIntersectionTypeNode>node);
+                        return addOptionalIfNeeded(node.parent, getUnionType(<UnionOrIntersectionTypeNode>node));
                     case SyntaxKind.TypeReference:
-                        return getTypeReference(<TypeReferenceNode>node);
+                        return addOptionalIfNeeded(node.parent, getTypeReference(<TypeReferenceNode>node));
                     case SyntaxKind.TypeLiteral:
-                        return getTypeLiteral(<TypeLiteralNode>node);
+                        return addOptionalIfNeeded(node.parent, getTypeLiteral(<TypeLiteralNode>node));
                     case SyntaxKind.AnyKeyword:
                     case SyntaxKind.StringKeyword:
                     case SyntaxKind.NumberKeyword:
@@ -5172,6 +5165,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.VoidKeyword:
                     case SyntaxKind.ThisKeyword:
                         return addOptionalIfNeeded(node.parent, ts.tokenToString(node.kind));
+                    case SyntaxKind.FunctionType:
+                        return addOptionalIfNeeded(node.parent, "Function");
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number");
                     case SyntaxKind.StringLiteral:
