@@ -5144,7 +5144,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return text;
                 };
 
-                var getFunctionType = (funcType) : string => {
+                var getFunctionType = (funcType): string => {
                     let returnType = "";
                     let hasReturnType = funcType.type.kind !== SyntaxKind.VoidKeyword;
 
@@ -5196,6 +5196,42 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 return "?";
+            }
+
+            function emitEnumAnnotation(node: EnumDeclaration) {
+                var type = "number";
+                var multipleTypes = false;
+                var types = { number: 0, string: 0, other: 0 };
+                var notNumbers = ts.filter(node.members, (member) => member.initializer && member.initializer.kind === SyntaxKind.TypeAssertionExpression)
+                                    .map(member => <TypeAssertion>member.initializer);
+
+                if (notNumbers.length) {
+                    types.number = node.members.length - notNumbers.length;
+                    notNumbers.map(function (initializer) { return initializer.expression; })
+                        .forEach(function (type) {
+                            if (type.kind === SyntaxKind.NumericLiteral) {
+                                types.number++;
+                                multipleTypes = types.string + types.other > 0;
+                            }
+                            else if (type.kind === SyntaxKind.StringLiteral) {
+                                types.string++;
+                                multipleTypes = types.number + types.other > 0;
+                            }
+                            else {
+                                types.other++;
+                                multipleTypes = types.string + types.number > 0;
+                            }
+                        });
+                }
+
+                if (!multipleTypes && !types.other) {
+                    if (types.string) {
+                        type = "string";
+                    }
+                    emitStartAnnotation();
+                    writeAnnotationWithComment(`@enum {${type}}`);
+                    emitEndAnnotation();
+                }
             }
 
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
@@ -6228,6 +6264,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 forceWriteLine();
+                emitEnumAnnotation(node);
 
                 if (!emitModuleIfNeeded(node)) {
                     write("var ");
