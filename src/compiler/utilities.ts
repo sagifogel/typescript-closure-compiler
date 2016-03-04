@@ -43,6 +43,7 @@
     export declare function isLeftHandSideExpression(expr: Expression): boolean;
     export declare function isExternalModuleImportEqualsDeclaration(node: Node);
     export declare function isAccessor(node: Node): node is AccessorDeclaration;
+    export declare function isRestParameter(node: ParameterDeclaration): boolean;
     export declare function isBindingPattern(node: Node): node is BindingPattern;
     export declare function isNodeDescendentOf(node: Node, ancestor: Node): boolean;
     export declare function makeIdentifierFromModuleName(moduleName: string): string;

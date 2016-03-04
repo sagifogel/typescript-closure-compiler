@@ -4576,8 +4576,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 write("(");
                 if (node) {
                     let parameters = node.parameters;
-                    let omitCount = languageVersion < ScriptTarget.ES6 && hasRestParameter(node) ? 1 : 0;
-                    emitList(parameters, 0, parameters.length - omitCount, /*multiLine*/ false, /*trailingComma*/ false);
+                    emitList(parameters, 0, parameters.length - 0, /*multiLine*/ false, /*trailingComma*/ false);
                 }
                 write(")");
                 decreaseIndent();
@@ -5087,25 +5086,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 writeValueAndNewLine(" * " + value);
             }
 
-            function getParameterOrUnionTypeAnnotation(node: Node, genericTypes: Array<string> = []): string {
+            function getParameterOrUnionTypeAnnotation(node: Node): string {
                 let mapped: Array<string>;
                 let propertySig: any = node;
-                let typeNode = (<{ type: TypeNode, initializer?: Expression }>propertySig);
-                var getParameterizedNode = function (members: NodeArray<Declaration>, omitName?: boolean) {
+                let typeNode = (<{ type: TypeNode, initializer?: Expression, elementType?: TypeNode }>propertySig);
+                let getParameterizedNode = function (members: NodeArray<Declaration | TypeNode>, omitName?: boolean) {
                     var mapped = ts.map(members, function (member) {
-                        let type = getParameterOrUnionTypeAnnotation(member, genericTypes);
+                        let type = getParameterOrUnionTypeAnnotation(member);
 
                         if (omitName) {
                             return type;
                         }
-                        return ts.getTextOfNode(member.name) + ":" + type;
+                        return `${ts.getTextOfNode((<Declaration>member).name)}:${type}`;
                     });
                     return mapped.join(", ");
                 };
                 let getTypeLiteral = (typeLiteral: TypeLiteralNode): string => {
                     return `{${getParameterizedNode(<NodeArray<Declaration>>typeLiteral.members)}}`;
                 };
-
                 let addOptionalIfNeeded = (node: Node, type: string): string => {
                     if (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) {
                         type = `${type}=`;
@@ -5116,10 +5114,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     return type;
                 };
-
+                let isVarArgsParameter = (node: ParameterDeclaration): boolean => {
+                    return ts.isRestParameter(node);
+                };
+                let addVarArgsIfNeeded = (node: ParameterDeclaration, type: string): string => {
+                    return isVarArgsParameter(node) ? addVarArgs(type) : type;
+                };
+                let addVarArgs = (type: string): string => {
+                    return `...${type}`;
+                };
                 let getUnionType = (unionType: UnionOrIntersectionTypeNode): string => {
                     let mapped = ts.map(unionType.types, (type: Node) => {
-                        return getParameterOrUnionTypeAnnotation(type, genericTypes);
+                        return getParameterOrUnionTypeAnnotation(type);
                     });
 
                     return `(${mapped.join("|")})`;
@@ -5127,18 +5133,25 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 let getTypeReference = (typeRef: TypeReferenceNode): string  => {
                     let text: string
-                    let name = ts.getEntityNameFromTypeNode(typeRef);
+                    var isVarArgs = isVarArgsParameter(<ParameterDeclaration>typeRef.parent);
 
-                    if (!name) {
-                        name = typeRef.typeName;
-                        text = ts.getTextOfNode(name);
-                    }
-                    else {
-                        text = ts.getTextOfNode(name);
-                    }
+                    if (!isVarArgs) {
+                        let name = ts.getEntityNameFromTypeNode(typeRef);
 
-                    if (!symbolIsTypeAlias(text)) {
-                        genericTypes.push(text);
+                        if (!name) {
+                            name = typeRef.typeName;
+                            text = ts.getTextOfNode(name);
+                        }
+                        else {
+                            text = ts.getTextOfNode(name);
+                        }
+
+                        if (typeRef.typeArguments) {
+                            text = `${text}<${getParameterizedNode(typeRef.typeArguments, true)}>`;
+                        }
+                    }
+                    else if (typeRef.typeArguments) {
+                        text = getParameterizedNode(typeRef.typeArguments, true);
                     }
 
                     return text;
@@ -5149,11 +5162,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let hasReturnType = funcType.type.kind !== SyntaxKind.VoidKeyword;
 
                     if (hasReturnType) {
-                        returnType = ":" + getParameterOrUnionTypeAnnotation(funcType.type);
+                        returnType = `:${getParameterOrUnionTypeAnnotation(funcType.type)}`;
                     }
 
                     if (funcType.parameters.length || hasReturnType) {
-                        return "function(" + getParameterizedNode(funcType.parameters, true) + ")" + returnType;
+                        return `function(${getParameterizedNode(funcType.parameters, true)})${returnType}`;
                     }
 
                     return "Function";
@@ -5165,16 +5178,26 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ParenthesizedType:
                     case SyntaxKind.TypeAliasDeclaration:
                         if (typeNode.type) {
-                            return getParameterOrUnionTypeAnnotation(typeNode.type, genericTypes);
+                            return getParameterOrUnionTypeAnnotation(typeNode.type);
                         }
                         else if (typeNode.initializer) {
-                            return getParameterOrUnionTypeAnnotation(typeNode.type, genericTypes);
+                            return getParameterOrUnionTypeAnnotation(typeNode.type);
                         }
                         break;
+                    case SyntaxKind.ArrayType:
+                        var type = getParameterOrUnionTypeAnnotation(typeNode.elementType);
+
+                        if (!isVarArgsParameter(<ParameterDeclaration>node.parent)) {
+                            return `Array<${type}>`;
+                        }
+
+                        return addVarArgs(type);
                     case SyntaxKind.UnionType:
                         return addOptionalIfNeeded(node.parent, getUnionType(<UnionOrIntersectionTypeNode>node));
                     case SyntaxKind.TypeReference:
-                        return addOptionalIfNeeded(node.parent, getTypeReference(<TypeReferenceNode>node));
+                        var type = addOptionalIfNeeded(node.parent, getTypeReference(<TypeReferenceNode>node));
+
+                        return addVarArgsIfNeeded(<ParameterDeclaration>node.parent, type);
                     case SyntaxKind.TypeLiteral:
                         return addOptionalIfNeeded(node.parent, getTypeLiteral(<TypeLiteralNode>node));
                     case SyntaxKind.AnyKeyword:
@@ -5203,7 +5226,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 var multipleTypes = false;
                 var types = { number: 0, string: 0, other: 0 };
                 var notNumbers = ts.filter(node.members, (member) => member.initializer && member.initializer.kind === SyntaxKind.TypeAssertionExpression)
-                                    .map(member => <TypeAssertion>member.initializer);
+                    .map(member => <TypeAssertion>member.initializer);
 
                 if (notNumbers.length) {
                     types.number = node.members.length - notNumbers.length;
@@ -5235,11 +5258,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
-                let genericTypes: Array<string> = [];
-
                 emitStartAnnotation();
-                emitParametersAnnotations(node.parameters, genericTypes);
-                emitGenericTypes(genericTypes);
+                emitParametersAnnotations(node.parameters);
 
                 if (node.type && node.type.kind !== SyntaxKind.VoidKeyword) {
                     writeAnnotationWithComment(`@returns {${getParameterOrUnionTypeAnnotation(node.type)}}`);
@@ -5260,9 +5280,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitEndAnnotation();
             }
 
-            function emitParametersAnnotations(parameters: NodeArray<ParameterDeclaration>, genericTypes: Array<string>): void {
+            function emitParametersAnnotations(parameters: NodeArray<ParameterDeclaration>): void {
                 ts.forEach(parameters, (parameter) => {
-                    let type = getParameterOrUnionTypeAnnotation(parameter, genericTypes);
+                    let type = getParameterOrUnionTypeAnnotation(parameter);
 
                     writeAnnotationWithComment(`@param {${type}} ${ts.getTextOfNode(parameter.name)}`);
                 });
@@ -5312,10 +5332,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 });
 
                 if (ctor) {
-                    let genericTypes: Array<string> = [];
-
-                    emitParametersAnnotations(ctor.parameters, genericTypes);
-                    emitGenericTypes(genericTypes);
+                    emitParametersAnnotations(ctor.parameters);
                 }
 
                 emitEndAnnotation();
