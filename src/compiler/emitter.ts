@@ -5091,14 +5091,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let mapped: Array<string>;
                 let propertySig: any = node;
                 let typeNode = (<{ type: TypeNode, initializer?: Expression }>propertySig);
-                let getTypeLiteral = (typeLiteral: TypeLiteralNode): string => {
-                    var mapped = ts.map(typeLiteral.members, (member: Declaration) => {
+                var getParameterizedNode = function (members: NodeArray<Declaration>, omitName?: boolean) {
+                    var mapped = ts.map(members, function (member) {
                         let type = getParameterOrUnionTypeAnnotation(member, genericTypes);
 
-                        return `${ts.getTextOfNode(member.name)}:${type}`;
+                        if (omitName) {
+                            return type;
+                        }
+                        return ts.getTextOfNode(member.name) + ":" + type;
                     });
-
-                    return `{${mapped.join(", ")}}`;
+                    return mapped.join(", ");
+                };
+                let getTypeLiteral = (typeLiteral: TypeLiteralNode): string => {
+                    return `{${getParameterizedNode(<NodeArray<Declaration>>typeLiteral.members)}}`;
                 };
 
                 let addOptionalIfNeeded = (node: Node, type: string): string => {
@@ -5139,6 +5144,21 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return text;
                 };
 
+                var getFunctionType = (funcType) : string => {
+                    let returnType = "";
+                    let hasReturnType = funcType.type.kind !== SyntaxKind.VoidKeyword;
+
+                    if (hasReturnType) {
+                        returnType = ":" + getParameterOrUnionTypeAnnotation(funcType.type);
+                    }
+
+                    if (funcType.parameters.length || hasReturnType) {
+                        return "function(" + getParameterizedNode(funcType.parameters, true) + ")" + returnType;
+                    }
+
+                    return "Function";
+                };
+
                 switch (node.kind) {
                     case SyntaxKind.Parameter:
                     case SyntaxKind.PropertySignature:
@@ -5166,7 +5186,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ThisKeyword:
                         return addOptionalIfNeeded(node.parent, ts.tokenToString(node.kind));
                     case SyntaxKind.FunctionType:
-                        return addOptionalIfNeeded(node.parent, "Function");
+                        return addOptionalIfNeeded(node.parent, getFunctionType(node));
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number");
                     case SyntaxKind.StringLiteral:
@@ -5185,11 +5205,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitParametersAnnotations(node.parameters, genericTypes);
                 emitGenericTypes(genericTypes);
 
+                if (node.type && node.type.kind !== SyntaxKind.VoidKeyword) {
+                    writeAnnotationWithComment(`@returns {${getParameterOrUnionTypeAnnotation(node.type)}}`);
+                }
+
                 if (node.modifiers) {
                     let accessModifiers = ts.filter(node.modifiers, (modifier) => ts.isAccessibilityModifier(modifier.kind));
 
                     if (accessModifiers.length) {
-                        writeAnnotationWithComment(`@${ts.tokenToString(accessModifiers[0].kind)}`);
+                        let accessModifierKind = accessModifiers[0].kind;
+
+                        if (accessModifierKind !== SyntaxKind.PublicKeyword) {
+                            writeAnnotationWithComment(`@${ts.tokenToString(accessModifierKind)}`);
+                        }
                     }
                 }
 
