@@ -382,7 +382,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             var writeValueAndNewLine = function (value: string): void {
                 write(value);
-                rawWrite(newLine);
+                forceWriteLine();
             };
 
             let currentSourceFile: SourceFile;
@@ -4172,9 +4172,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(`", `);
                     }
 
-                    if (initializer && initializer.kind === SyntaxKind.ObjectLiteralExpression) {
-                        if (!isNodeDeclaredWithinScope(node)) {
+                    if (initializer) {
+                        if (initializer.kind === SyntaxKind.ObjectLiteralExpression && !isNodeDeclaredWithinScope(node)) {
                             forceWriteLine();
+                        }
+                        if (ts.isFunctionLike(initializer)) {
+                            emitFunctionAnnotation(<ArrowFunction>initializer);
                         }
                     }
 
@@ -4503,8 +4506,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration || nodeIsInterfaceFunctionMember) {
                         let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isScopeLike(symbolScope) || nodeIsInterfaceFunctionMember;
 
-                        if (node.kind === SyntaxKind.FunctionDeclaration && !isDeclaredWithinFunction) {
-                            forceWriteLine();
+                        if (node.kind === SyntaxKind.FunctionDeclaration) {
+                            if (!isDeclaredWithinFunction) {
+                                forceWriteLine();
+                            }
+
+                            emitFunctionAnnotation(node);
                         }
 
                         if (tryEmitModule) {
@@ -5181,7 +5188,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             return getParameterOrUnionTypeAnnotation(typeNode.type);
                         }
                         else if (typeNode.initializer) {
-                            return getParameterOrUnionTypeAnnotation(typeNode.type);
+                            return getParameterOrUnionTypeAnnotation(typeNode.type || typeNode.initializer);
                         }
                         break;
                     case SyntaxKind.ArrayType:
@@ -5258,12 +5265,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
-                emitStartAnnotation();
-                emitParametersAnnotations(node.parameters);
-
-                if (node.type && node.type.kind !== SyntaxKind.VoidKeyword) {
-                    writeAnnotationWithComment(`@returns {${getParameterOrUnionTypeAnnotation(node.type)}}`);
-                }
+                let hasModifiers = false;
+                let accessModifierKind: SyntaxKind;
+                let hasParameters = node.parameters.length > 0;
+                let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
 
                 if (node.modifiers) {
                     let accessModifiers = ts.filter(node.modifiers, (modifier) => ts.isAccessibilityModifier(modifier.kind));
@@ -5272,12 +5277,25 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let accessModifierKind = accessModifiers[0].kind;
 
                         if (accessModifierKind !== SyntaxKind.PublicKeyword) {
-                            writeAnnotationWithComment(`@${ts.tokenToString(accessModifierKind)}`);
+                            hasModifiers = true;
                         }
                     }
                 }
 
-                emitEndAnnotation();
+                if (hasReturnType || hasParameters || hasModifiers) {
+                    emitStartAnnotation();
+                    emitParametersAnnotations(node.parameters);
+
+                    if (hasReturnType) {
+                        writeAnnotationWithComment(`@returns {${getParameterOrUnionTypeAnnotation(node.type)}}`);
+                    }
+
+                    if (hasModifiers) {
+                        writeAnnotationWithComment(`@${ts.tokenToString(accessModifierKind)}`);
+                    }
+
+                    emitEndAnnotation();
+                }
             }
 
             function emitParametersAnnotations(parameters: NodeArray<ParameterDeclaration>): void {
