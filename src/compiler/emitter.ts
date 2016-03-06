@@ -4936,10 +4936,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitPropertyDeclaration(node: ClassLikeDeclaration, property: PropertyDeclaration, receiver?: Identifier, isExpression?: boolean) {
                 let symbolScope = getSymbolScope(property.name);
                 let isStaticProperty = property.flags & NodeFlags.Static;
-
-                if (isStaticProperty) {
-                    forceWriteLine();
-                }
+                let nodeIsInterface = node.kind === SyntaxKind.InterfaceDeclaration;
 
                 writeLine();
                 emitLeadingComments(property);
@@ -4950,8 +4947,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 else {
                     if (isStaticProperty) {
+                        forceWriteLine();
+                        emitPropertyAnnotation(property);
                         emitModuleIfNeeded(node);
                         emitDeclarationName(node);
+                    }
+                    else if (nodeIsInterface) {
+                        forceWriteLine();
+                        emitPropertyAnnotation(property);
+                        emitClassMemberPrefix(node, property);
                     }
                     else {
                         write("this");
@@ -4959,8 +4963,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 emitMemberAccessForPropertyName(property.name);
                 emitEnd(property.name);
-                write(" = ");
-                emit(property.initializer);
+
+                if (!nodeIsInterface) {
+                    write(" = ");
+                    emit(property.initializer);
+                }
+
                 if (!isExpression) {
                     write(";");
                 }
@@ -5153,6 +5161,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             text = ts.getTextOfNode(name);
                         }
 
+                        text = `${getModuleName(name)}${text}`;
+
                         if (typeRef.typeArguments) {
                             text = `${text}<${getParameterizedNode(typeRef.typeArguments, true)}>`;
                         }
@@ -5260,7 +5270,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 emitCommentedAnnotation(`@typedef {${rightParenthesis}${indexOrCallSignatures.join("|")}${leftParenthesis}}`);
                 emitEndAnnotation();
-                write(`var ${indexOrCallSignatureName};`);
+
+                if (!emitModuleIfNeeded(node)) {
+                    write("var ");
+                }
+
+                write(`${indexOrCallSignatureName};`);
             }
 
             function emitEnumAnnotation(node: EnumDeclaration) {
@@ -5299,10 +5314,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
+            function emitPropertyAnnotation(node: PropertyDeclaration): void {
+                emitStartAnnotation();
+                emitCommentedAnnotation(`@type {${getParameterOrUnionTypeAnnotation(node.type || node.initializer)}}`);
+                emitEndAnnotation();
+            }
+
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
                 let hasModifiers = false;
                 let accessModifierKind: SyntaxKind;
-                let hasParameters = node.parameters.length > 0;
+                let hasParameters = node.parameters && node.parameters.length > 0;
                 let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
 
                 if (node.modifiers) {
@@ -5319,7 +5340,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 if (hasReturnType || hasParameters || hasModifiers) {
                     emitStartAnnotation();
-                    emitParametersAnnotations(node.parameters);
+
+                    if (hasParameters) {
+                        emitParametersAnnotations(node.parameters);
+                    }
 
                     if (hasReturnType) {
                         emitCommentedAnnotation(`@returns {${getParameterOrUnionTypeAnnotation(node.type)}}`);
@@ -5557,7 +5581,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitStartAnnotation();
                 emitCommentedAnnotation(`@typedef {${annotationValue}}`);
                 emitEndAnnotation();
-                write(`var ${typeAliasName};`);
+
+                if (!emitModuleIfNeeded(node)) {
+                    write("var ");
+                }
+
+                write(`${typeAliasName};`);
                 typeAliases[typeAliasName] = true;
             }
 
@@ -6320,7 +6349,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (!callOrIndexSignatures.length) {
                     emitConstructor(classLikeDeclaration, null, ts.getInterfaceBaseTypeNodes(node));
                     emitMemberFunctionsForES5AndLower(classLikeDeclaration);
-                    emitPropertyDeclarations(classLikeDeclaration, getInitializedProperties(classLikeDeclaration, true));
+                    emitPropertyDeclarations(classLikeDeclaration, <Array<PropertyDeclaration>>ts.filter(node.members, member  => !isInterfaceFunctionMember(member)));
                     emitCommentsOnNotEmittedNode(node);
                 }
                 else {
