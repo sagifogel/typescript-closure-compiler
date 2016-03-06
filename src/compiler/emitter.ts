@@ -5089,7 +5089,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 writeValueAndNewLine(" */");
             }
 
-            function writeAnnotationWithComment(value: string) {
+            function emitCommentedAnnotation(value: string) {
                 writeValueAndNewLine(" * " + value);
             }
 
@@ -5169,7 +5169,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let hasReturnType = funcType.type.kind !== SyntaxKind.VoidKeyword;
 
                     if (hasReturnType) {
-                        returnType = `:${getParameterOrUnionTypeAnnotation(funcType.type)}`;
+                        returnType = `: ${getParameterOrUnionTypeAnnotation(funcType.type)}`;
                     }
 
                     if (funcType.parameters.length || hasReturnType) {
@@ -5225,7 +5225,42 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return addOptionalIfNeeded(node.parent, "RegEx");
                 }
 
-                return "?";
+                return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
+            }
+
+            function emitCallSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
+                emitCallOrIndexSignatures(node, members, (indexSignature): string => {
+                    var params = ts.map(indexSignature.parameters, function (param: Node) { return getParameterOrUnionTypeAnnotation(param); });
+                    var returnType = getParameterOrUnionTypeAnnotation(indexSignature.type);
+
+                    return `function(${params.join(", ")}): ${returnType}`;
+                });
+            }
+
+            function emitIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
+                emitCallOrIndexSignatures(node, members, (indexSignature): string => {
+                    var params = ts.map(indexSignature.parameters, function (param: Node) { return getParameterOrUnionTypeAnnotation(param); });
+                    var returnType = getParameterOrUnionTypeAnnotation(indexSignature.type);
+
+                    return `Object<${params.join(", ")}, ${returnType}>`;
+                });
+            }
+
+            function emitCallOrIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>, mapFunction: (member: SignatureDeclaration) => string) {
+                var rightParenthesis = "", leftParenthesis = "";
+                var indexOrCallSignatureName = ts.getTextOfNode(node.name);
+                var indexOrCallSignatures = ts.map(members, mapFunction);
+
+                forceWriteLine();
+                emitStartAnnotation();
+
+                if (indexOrCallSignatures.length > 1) {
+                    rightParenthesis = "(";
+                    leftParenthesis = ")";
+                }
+                emitCommentedAnnotation(`@typedef {${rightParenthesis}${indexOrCallSignatures.join("|")}${leftParenthesis}}`);
+                emitEndAnnotation();
+                write(`var ${indexOrCallSignatureName};`);
             }
 
             function emitEnumAnnotation(node: EnumDeclaration) {
@@ -5259,7 +5294,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         type = "string";
                     }
                     emitStartAnnotation();
-                    writeAnnotationWithComment(`@enum {${type}}`);
+                    emitCommentedAnnotation(`@enum {${type}}`);
                     emitEndAnnotation();
                 }
             }
@@ -5287,11 +5322,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitParametersAnnotations(node.parameters);
 
                     if (hasReturnType) {
-                        writeAnnotationWithComment(`@returns {${getParameterOrUnionTypeAnnotation(node.type)}}`);
+                        emitCommentedAnnotation(`@returns {${getParameterOrUnionTypeAnnotation(node.type)}}`);
                     }
 
                     if (hasModifiers) {
-                        writeAnnotationWithComment(`@${ts.tokenToString(accessModifierKind)}`);
+                        emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
                     }
 
                     emitEndAnnotation();
@@ -5302,14 +5337,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 ts.forEach(parameters, (parameter) => {
                     let type = getParameterOrUnionTypeAnnotation(parameter);
 
-                    writeAnnotationWithComment(`@param {${type}} ${ts.getTextOfNode(parameter.name)}`);
+                    emitCommentedAnnotation(`@param {${type}} ${ts.getTextOfNode(parameter.name)}`);
                 });
             }
 
             function emitExtendsAnnotation(): void {
                 emitStartAnnotation();
-                writeAnnotationWithComment("@param {Function} d");
-                writeAnnotationWithComment("@param {Function} b");
+                emitCommentedAnnotation("@param {Function} d");
+                emitCommentedAnnotation("@param {Function} b");
                 write(" */");
             }
 
@@ -5339,14 +5374,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 emitStartAnnotation();
-                writeAnnotationWithComment(type);
+                emitCommentedAnnotation(type);
 
                 if (baseTypeElement) {
-                    writeAnnotationWithComment(`@extends {${getClassOrInterfaceFullPath(baseTypeElement)}}`);
+                    emitCommentedAnnotation(`@extends {${getClassOrInterfaceFullPath(baseTypeElement)}}`);
                 }
 
                 ts.forEach(interfacesImpl, (_interface) => {
-                    writeAnnotationWithComment(`@${heritageType} {${getClassOrInterfaceFullPath(_interface)}}`);
+                    emitCommentedAnnotation(`@${heritageType} {${getClassOrInterfaceFullPath(_interface)}}`);
                 });
 
                 if (ctor) {
@@ -5358,7 +5393,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitGenericTypes(genericTypes: Array<string>): void {
                 ts.forEach(genericTypes, (type) => {
-                    writeAnnotationWithComment(`@template ${type}`);
+                    emitCommentedAnnotation(`@template ${type}`);
                 });
             }
 
@@ -5519,7 +5554,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let annotationValue = getParameterOrUnionTypeAnnotation(node);
 
                 forceWriteLine();
-                writeValueAndNewLine(`/** @typedef {${annotationValue}} */`);
+                emitStartAnnotation();
+                emitCommentedAnnotation(`@typedef {${annotationValue}}`);
+                emitEndAnnotation();
                 write(`var ${typeAliasName};`);
                 typeAliases[typeAliasName] = true;
             }
@@ -6278,12 +6315,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitInterfaceDeclaration(node: InterfaceDeclaration) {
                 let anyNode = <any>node;
                 let classLikeDeclaration = <ClassLikeDeclaration>anyNode;
-                let interfacesImpl = ts.getInterfaceBaseTypeNodes(node);
+                let callOrIndexSignatures = <Array<SignatureDeclaration>>ts.filter(node.members, member => member.kind === SyntaxKind.IndexSignature || member.kind === SyntaxKind.CallSignature);
 
-                emitConstructor(classLikeDeclaration, null, interfacesImpl);
-                emitMemberFunctionsForES5AndLower(classLikeDeclaration);
-                emitPropertyDeclarations(classLikeDeclaration, getInitializedProperties(classLikeDeclaration, /*static:*/ true));
-                emitCommentsOnNotEmittedNode(node);
+                if (!callOrIndexSignatures.length) {
+                    emitConstructor(classLikeDeclaration, null, ts.getInterfaceBaseTypeNodes(node));
+                    emitMemberFunctionsForES5AndLower(classLikeDeclaration);
+                    emitPropertyDeclarations(classLikeDeclaration, getInitializedProperties(classLikeDeclaration, true));
+                    emitCommentsOnNotEmittedNode(node);
+                }
+                else {
+                    let filtered = ts.filter(callOrIndexSignatures, callOrIndexSignature => callOrIndexSignature.kind === SyntaxKind.CallSignature);
+
+                    if (filtered.length) {
+                        emitCallSignatures(node, filtered);
+                    }
+                    else {
+                        emitIndexSignatures(node, callOrIndexSignatures);
+                    }
+                }
             }
 
             function shouldEmitEnumDeclaration(node: EnumDeclaration) {
