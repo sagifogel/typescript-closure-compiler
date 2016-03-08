@@ -1174,11 +1174,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 for (let i = 0; i < count; i++) {
-                    var node = nodes[start + i];
+                    var node: Node = nodes[start + i];
 
                     if (i > 0 && node.kind === SyntaxKind.VariableDeclaration) {
                         write(";");
                         forceWriteLine();
+                        if (node.kind !== SyntaxKind.Parameter) {
+                            emitVariableTypeAnnotation(<VariableDeclaration>node);
+                        }
                         write("var ");
                     }
                     else if (i || leadingComma) {
@@ -1193,7 +1196,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (node.kind !== SyntaxKind.PropertyAccessExpression) {
                         emitModuleIfNeeded(node);
                     }
-                    emitNode(node);
+                    emitNode(<TNode>node);
                     leadingComma = true;
                 }
                 if (trailingComma) {
@@ -3316,6 +3319,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(" ");
                 }
                 else {
+                    if (firstDeclaration.kind !== SyntaxKind.Parameter) {
+                        emitVariableTypeAnnotation(<VariableDeclaration>firstDeclaration);
+                    }
                     switch (tokenKind) {
                         case SyntaxKind.VarKeyword:
                             write("var ");
@@ -5105,19 +5111,42 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let mapped: Array<string>;
                 let propertySig: any = node;
                 let typeNode = (<{ type: TypeNode, initializer?: Expression, elementType?: TypeNode }>propertySig);
-                let getParameterizedNode = function (members: NodeArray<Declaration | TypeNode>, omitName?: boolean) {
-                    var mapped = ts.map(members, function (member) {
-                        let type = getParameterOrUnionTypeAnnotation(member);
+                var getPropertyKeValue = (member: Declaration | TypeNode, omitName?: boolean) => {
+                    let type = getParameterOrUnionTypeAnnotation(member);
 
-                        if (omitName) {
-                            return type;
-                        }
-                        return `${ts.getTextOfNode((<Declaration>member).name)}:${type}`;
+                    if (omitName) {
+                        return type;
+                    }
+                    return `${ts.getTextOfNode((<Declaration>member).name)}:${type}`;
+                };
+                let getParameterizedNode = (members: NodeArray<Declaration | TypeNode>, omitName?: boolean): string => {
+                    let mapped = ts.map(members, (member) => {
+                        return getPropertyKeValue(member, omitName);
                     });
                     return mapped.join(", ");
                 };
-                let getTypeLiteral = (typeLiteral: TypeLiteralNode): string => {
-                    return `{${getParameterizedNode(<NodeArray<Declaration>>typeLiteral.members)}}`;
+                let getTypeLiteral = (members: NodeArray<Declaration | Node>): string => {
+                    if (members.length) {
+                        var other: Array<string> = [];
+                        var indexSignatures: Array<string> = [];
+
+                        ts.forEach(members, (member: Declaration | TypeNode): void => {
+                            if (member.kind === SyntaxKind.IndexSignature) {
+                                indexSignatures.push(getIndexSignature(<IndexSignatureDeclaration>member));
+                            }
+                            else {
+                                other.push(getPropertyKeValue(member));
+                            }
+                        });
+
+                        if (other.length) {
+                            indexSignatures.push(`{${other.join(", ")}}`);
+                        }
+
+                        return indexSignatures.join("|");
+                    }
+
+                    return "Object";
                 };
                 let addOptionalIfNeeded = (node: Node, type: string): string => {
                     if (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) {
@@ -5145,7 +5174,28 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     return `(${mapped.join("|")})`;
                 };
+                var getArrayLiteral = (node: ArrayLiteralExpression) => {
+                    let type: string;
+                    let typeCounter = 0;
+                    let map: { [name: string]: boolean } = {};
 
+                    ts.forEach(node.elements, (element) => {
+                        type = getParameterOrUnionTypeAnnotation(element);
+
+                        if (!map[type]) {
+                            typeCounter++;
+                        }
+
+                        map[type] = true;
+                        return;
+                    });
+
+                    if (typeCounter !== 1) {
+                        return "Array<*>";
+                    }
+
+                    return `Array<${type}>`;
+                };
                 let getTypeReference = (typeRef: TypeReferenceNode): string  => {
                     let text: string
                     var isVarArgs = isVarArgsParameter(<ParameterDeclaration>typeRef.parent);
@@ -5174,12 +5224,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return text;
                 };
 
-                var getFunctionType = (funcType): string => {
+                var getFunctionType = (funcType: FunctionLikeDeclaration): string => {
                     let returnType = "";
-                    let hasReturnType = funcType.type.kind !== SyntaxKind.VoidKeyword;
+                    let type = funcType.type || funcType.body;
+                    let hasReturnType = type.kind !== SyntaxKind.VoidKeyword;
 
                     if (hasReturnType) {
-                        returnType = `: ${getParameterOrUnionTypeAnnotation(funcType.type)}`;
+                        returnType = `: ${getParameterOrUnionTypeAnnotation(type)}`;
                     }
 
                     if (funcType.parameters.length || hasReturnType) {
@@ -5193,6 +5244,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.Parameter:
                     case SyntaxKind.PropertySignature:
                     case SyntaxKind.ParenthesizedType:
+                    case SyntaxKind.PropertyAssignment:
                     case SyntaxKind.TypeAliasDeclaration:
                         if (typeNode.type) {
                             return getParameterOrUnionTypeAnnotation(typeNode.type);
@@ -5209,6 +5261,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
 
                         return addVarArgs(type);
+                    case SyntaxKind.ArrayLiteralExpression:
+                        return getArrayLiteral(<ArrayLiteralExpression>node);
                     case SyntaxKind.UnionType:
                         return addOptionalIfNeeded(node.parent, getUnionType(<UnionOrIntersectionTypeNode>node));
                     case SyntaxKind.TypeReference:
@@ -5216,7 +5270,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         return addVarArgsIfNeeded(<ParameterDeclaration>node.parent, type);
                     case SyntaxKind.TypeLiteral:
-                        return addOptionalIfNeeded(node.parent, getTypeLiteral(<TypeLiteralNode>node));
+                    case SyntaxKind.ObjectLiteralExpression:
+                        return addOptionalIfNeeded(node.parent, getTypeLiteral((<TypeLiteralNode>node).members || (<ObjectLiteralExpression>node).properties));
+                    case SyntaxKind.IndexSignature:
+                        return getIndexSignature(<IndexSignatureDeclaration>node);
                     case SyntaxKind.AnyKeyword:
                     case SyntaxKind.StringKeyword:
                     case SyntaxKind.NumberKeyword:
@@ -5226,13 +5283,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ThisKeyword:
                         return addOptionalIfNeeded(node.parent, ts.tokenToString(node.kind));
                     case SyntaxKind.FunctionType:
-                        return addOptionalIfNeeded(node.parent, getFunctionType(node));
+                    case SyntaxKind.ArrowFunction:
+                        return addOptionalIfNeeded(node.parent, getFunctionType(<FunctionLikeDeclaration>node));
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number");
                     case SyntaxKind.StringLiteral:
                         return addOptionalIfNeeded(node.parent, "string");
                     case SyntaxKind.RegularExpressionLiteral:
                         return addOptionalIfNeeded(node.parent, "RegEx");
+                    case SyntaxKind.TrueKeyword:
+                    case SyntaxKind.FalseKeyword:
+                        return addOptionalIfNeeded(node.parent, "boolean");
+                    case SyntaxKind.VoidExpression:
+                        return "undefined";
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
@@ -5247,13 +5310,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 });
             }
 
-            function emitIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
-                emitCallOrIndexSignatures(node, members, (indexSignature): string => {
-                    var params = ts.map(indexSignature.parameters, function (param: Node) { return getParameterOrUnionTypeAnnotation(param); });
-                    var returnType = getParameterOrUnionTypeAnnotation(indexSignature.type);
+            function getIndexSignature(indexSignature: IndexSignatureDeclaration): string {
+                var params = ts.map(indexSignature.parameters, function (param: Node) { return getParameterOrUnionTypeAnnotation(param); });
+                var returnType = getParameterOrUnionTypeAnnotation(indexSignature.type);
 
-                    return `Object<${params.join(", ")}, ${returnType}>`;
-                });
+                return `Object<${params.join(", ")}, ${returnType}>`;
+            }
+
+            function emitIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
+                emitCallOrIndexSignatures(node, members, getIndexSignature);
             }
 
             function emitCallOrIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>, mapFunction: (member: SignatureDeclaration) => string) {
@@ -5314,6 +5379,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
+            function emitVariableTypeAnnotation(node: VariableDeclaration): void {
+                if (node.type || node.initializer) {
+                    write(`/** @type {${getParameterOrUnionTypeAnnotation(node.type || node.initializer)}} */ `);
+                }
+            }
+
             function emitPropertyAnnotation(node: PropertyDeclaration): void {
                 emitStartAnnotation();
                 emitCommentedAnnotation(`@type {${getParameterOrUnionTypeAnnotation(node.type || node.initializer)}}`);
@@ -5346,7 +5417,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (hasReturnType) {
-                        emitCommentedAnnotation(`@returns {${getParameterOrUnionTypeAnnotation(node.type)}}`);
+                        emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node.type)}}`);
                     }
 
                     if (hasModifiers) {
