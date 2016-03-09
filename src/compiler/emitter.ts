@@ -1935,36 +1935,57 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
-            function getSymbolScope(node: Node) {
+            function getSymbolScope(node: Node): Node {
+                var result = getSymbolAndScope(node);
+
+                if (result) {
+                    return result.scope;
+                }
+
+                return null;
+            }
+
+            function getSymbolDeclaration(node): Node {
+                var result = getSymbolAndScope(node);
+
+                if (result) {
+                    return result.node;
+                }
+
+                return null;
+            }
+
+            function getSymbolAndScope(node: Node): { scope: Node, node: Node } {
                 let _node = node;
                 let kind = node.kind;
                 let containingNode: Node;
                 let statements: NodeArray<Statement | ClassElement>;
                 let declarationList: Array<Declaration | Statement | Expression> = [];
-                let filter = function (d: Declaration | Statement): boolean {
-                    let name: string;
+
+                function filter(d: Declaration | Statement): boolean {
                     let symbolName = d.symbol ? d.symbol.name : "";
 
-                    if (name = node.hasOwnProperty("text") ? (<any>node).text : node.hasOwnProperty("name") ? (<any>node).name.text : "") {
-                        return name === symbolName;
-                    }
-
-                    return false;
-                };
+                    return symbolName === getNodeName(node);
+                }
 
                 if (node.kind === SyntaxKind.VariableStatement) {
                     node = (<VariableStatement>node).declarationList.declarations[0];
                 }
 
                 while (containingNode = getImmediateContainerNode(_node)) {
-                    if (containingNode.kind === SyntaxKind.SourceFile) {
-                        return containingNode;
-                    }
-                    if (containingNode.kind === SyntaxKind.ModuleDeclaration || containingNode.kind === SyntaxKind.ClassDeclaration || ts.isFunctionLike(containingNode)) {
-                        if (node.kind === SyntaxKind.ModuleDeclaration && (<ModuleDeclaration>node).name.text in containingNode.locals) {
-                            return containingNode;
-                        }
+                    if (containingNode.kind === SyntaxKind.SourceFile || containingNode.kind === SyntaxKind.ModuleDeclaration) {
+                        let nodeName = getNodeName(node);
+                        let localNode: any = containingNode.locals[nodeName];
 
+                        if (containingNode.kind === SyntaxKind.SourceFile || (containingNode.kind === SyntaxKind.ModuleDeclaration && localNode)) {
+                            return {
+                                node: <Node>localNode,
+                                scope: containingNode
+                            };
+                        }
+                    }
+
+                    if (containingNode.kind === SyntaxKind.ClassDeclaration || ts.isFunctionLike(containingNode)) {
                         let declarations: Array<Declaration>;
 
                         if (containingNode.kind === SyntaxKind.ClassDeclaration) {
@@ -2010,23 +2031,33 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                     declarationList = [statement];
                                 }
 
-                                if (declarationList.some(filter)) {
-                                    return containingNode;
+                                let filteredNodes = declarationList.filter(filter);
+
+                                if (filteredNodes.length) {
+                                    return {
+                                        scope: containingNode,
+                                        node: filteredNodes[0]
+                                    };
                                 }
                             }
 
                             if (containingNode.kind !== SyntaxKind.ModuleDeclaration) {
                                 let moduleDeclaration = (<FunctionLikeDeclaration>declaration);
-                                var parameters = moduleDeclaration.parameters || <NodeArray<ParameterDeclaration>>[];
+                                var parameters = moduleDeclaration.parameters || <Array<ParameterDeclaration>>[];
 
-                                if (parameters.some(filter)) {
-                                    return containingNode;
+                                parameters = parameters.filter(filter);
+
+                                if (parameters.length) {
+                                    return {
+                                        node: parameters[0],
+                                        scope: containingNode
+                                    };
                                 }
 
                                 let tryStatements = <Array<TryStatement>>statements.filter(statement => statement.kind === SyntaxKind.TryStatement);
 
                                 if (tryStatements.length) {
-                                    let declaredWithinCatchClause = tryStatements.some(tryStatement => {
+                                    let declaredWithinCatchClause = tryStatements.reduce((arr, tryStatement) => {
                                         declarationList = [];
                                         statements = tryStatement.tryBlock.statements;
 
@@ -2043,11 +2074,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                                 return arr.concat(variableStatement.declarationList.declarations);
                                             }, declarationList);
 
-                                        return declarationList.some(filter);
-                                    });
+                                        return arr.concat(declarationList.filter(filter));
+                                    }, []);
 
-                                    if (declaredWithinCatchClause) {
-                                        return containingNode;
+                                    if (declaredWithinCatchClause.length) {
+                                        return {
+                                            scope: containingNode,
+                                            node: declaredWithinCatchClause[0]
+                                        }
                                     }
                                 }
                             }
@@ -5114,146 +5148,164 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 writeValueAndNewLine(" * " + value);
             }
 
+            function getParameterizedNode(members: NodeArray<Declaration | TypeNode>, omitName?: boolean): string {
+                let mapped = ts.map(members, (member) => {
+                    return getPropertyKeValue(member, omitName);
+                });
+                return mapped.join(", ");
+            }
+
+            function getTypeLiteral(members: NodeArray<Declaration | Node>): string {
+                if (members.length) {
+                    var other: Array<string> = [];
+                    var indexSignatures: Array<string> = [];
+
+                    ts.forEach(members, (member: Declaration | TypeNode): void => {
+                        if (member.kind === SyntaxKind.IndexSignature) {
+                            indexSignatures.push(getIndexSignature(<IndexSignatureDeclaration>member));
+                        }
+                        else {
+                            other.push(getPropertyKeValue(member));
+                        }
+                    });
+
+                    if (other.length) {
+                        indexSignatures.push(`{${other.join(", ")}}`);
+                    }
+
+                    return indexSignatures.join("|");
+                }
+
+                return "Object";
+            }
+
+            function addOptionalIfNeeded(node: Node, type: string): string {
+                if (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) {
+                    type = `${type}=`;
+                }
+                else if (node.symbol && (node.symbol.flags & SymbolFlags.Optional) > 0) {
+                    type = `(${type}|undefined)`;
+                }
+
+                return type;
+            }
+
+            function isVarArgsParameter(node: ParameterDeclaration): boolean {
+                return ts.isRestParameter(node);
+            }
+
+            function addVarArgsIfNeeded(node: ParameterDeclaration, type: string): string {
+                return isVarArgsParameter(node) ? addVarArgs(type) : type;
+            }
+
+            function addVarArgs(type: string): string {
+                return `...${type}`;
+            }
+
+            function getUnionType(unionType: UnionOrIntersectionTypeNode): string {
+                let mapped = ts.map(unionType.types, (type: Node) => {
+                    return getParameterOrUnionTypeAnnotation(type);
+                });
+
+                return `(${mapped.join("|")})`;
+            }
+
+            function getArrayLiteral(node: ArrayLiteralExpression): string {
+                let type: string;
+                let typeCounter = 0;
+                let map: { [name: string]: boolean } = {};
+
+                ts.forEach(node.elements, (element) => {
+                    type = getParameterOrUnionTypeAnnotation(element);
+
+                    if (!map[type]) {
+                        typeCounter++;
+                    }
+
+                    map[type] = true;
+                    return;
+                });
+
+                if (typeCounter !== 1) {
+                    return "Array<*>";
+                }
+
+                return `Array<${type}>`;
+            }
+
+            function getTypeReference(typeRef: TypeReferenceNode): string {
+                let text: string
+                var isVarArgs = isVarArgsParameter(<ParameterDeclaration>typeRef.parent);
+
+                if (!isVarArgs) {
+                    let name = ts.getEntityNameFromTypeNode(typeRef);
+
+                    if (!name) {
+                        name = typeRef.typeName;
+                        text = ts.getTextOfNode(name);
+                    }
+                    else {
+                        text = ts.getTextOfNode(name);
+                    }
+
+                    text = `${getModuleName(name)}${text}`;
+
+                    if (typeRef.typeArguments) {
+                        text = `${text}<${getParameterizedNode(typeRef.typeArguments, true)}>`;
+                    }
+                }
+                else if (typeRef.typeArguments) {
+                    text = getParameterizedNode(typeRef.typeArguments, true);
+                }
+
+                return text;
+            }
+
+            function getFunctionType(funcType: FunctionLikeDeclaration): string {
+                let returnType = "";
+                let type = funcType.type || funcType.body;
+                let isCtor = funcType.kind === SyntaxKind.ConstructorType
+                let hasReturnType = type.kind !== SyntaxKind.VoidKeyword;
+
+                if (hasReturnType) {
+                    returnType = getParameterOrUnionTypeAnnotation(type);
+                }
+
+                if (funcType.parameters.length || hasReturnType) {
+                    var params = getParameterizedNode(funcType.parameters, true);
+
+                    if (isCtor) {
+                        return `function(new:${returnType}, ${params})`;
+                    }
+                    else {
+                        if (returnType) {
+                            returnType = `: ${returnType}`;
+                        }
+
+                        return `function(${params})${returnType}`;
+                    }
+                }
+
+                return "Function";
+            }
+
+            function getPropertyKeValue(member: Declaration | TypeNode, omitName?: boolean): string {
+                let type = getParameterOrUnionTypeAnnotation(member);
+
+                if (omitName) {
+                    return type;
+                }
+                return `${ts.getTextOfNode((<Declaration>member).name)}:${type}`;
+            }
+
+            function getNodeName(node): string {
+                return node.hasOwnProperty("text") ? node.text : node.hasOwnProperty("name") ? node.name.text : "";
+            }
+
             function getParameterOrUnionTypeAnnotation(node: Node): string {
                 let mapped: Array<string>;
                 let propertySig: any = node;
                 let typeNode = (<{ type: TypeNode, initializer?: Expression, elementType?: TypeNode }>propertySig);
-                var getPropertyKeValue = (member: Declaration | TypeNode, omitName?: boolean) => {
-                    let type = getParameterOrUnionTypeAnnotation(member);
-
-                    if (omitName) {
-                        return type;
-                    }
-                    return `${ts.getTextOfNode((<Declaration>member).name)}:${type}`;
-                };
-                let getParameterizedNode = (members: NodeArray<Declaration | TypeNode>, omitName?: boolean): string => {
-                    let mapped = ts.map(members, (member) => {
-                        return getPropertyKeValue(member, omitName);
-                    });
-                    return mapped.join(", ");
-                };
-                let getTypeLiteral = (members: NodeArray<Declaration | Node>): string => {
-                    if (members.length) {
-                        var other: Array<string> = [];
-                        var indexSignatures: Array<string> = [];
-
-                        ts.forEach(members, (member: Declaration | TypeNode): void => {
-                            if (member.kind === SyntaxKind.IndexSignature) {
-                                indexSignatures.push(getIndexSignature(<IndexSignatureDeclaration>member));
-                            }
-                            else {
-                                other.push(getPropertyKeValue(member));
-                            }
-                        });
-
-                        if (other.length) {
-                            indexSignatures.push(`{${other.join(", ")}}`);
-                        }
-
-                        return indexSignatures.join("|");
-                    }
-
-                    return "Object";
-                };
-                let addOptionalIfNeeded = (node: Node, type: string): string => {
-                    if (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) {
-                        type = `${type}=`;
-                    }
-                    else if (node.symbol && (node.symbol.flags & SymbolFlags.Optional) > 0) {
-                        type = `(${type}|undefined)`;
-                    }
-
-                    return type;
-                };
-                let isVarArgsParameter = (node: ParameterDeclaration): boolean => {
-                    return ts.isRestParameter(node);
-                };
-                let addVarArgsIfNeeded = (node: ParameterDeclaration, type: string): string => {
-                    return isVarArgsParameter(node) ? addVarArgs(type) : type;
-                };
-                let addVarArgs = (type: string): string => {
-                    return `...${type}`;
-                };
-                let getUnionType = (unionType: UnionOrIntersectionTypeNode): string => {
-                    let mapped = ts.map(unionType.types, (type: Node) => {
-                        return getParameterOrUnionTypeAnnotation(type);
-                    });
-
-                    return `(${mapped.join("|")})`;
-                };
-                var getArrayLiteral = (node: ArrayLiteralExpression) => {
-                    let type: string;
-                    let typeCounter = 0;
-                    let map: { [name: string]: boolean } = {};
-
-                    ts.forEach(node.elements, (element) => {
-                        type = getParameterOrUnionTypeAnnotation(element);
-
-                        if (!map[type]) {
-                            typeCounter++;
-                        }
-
-                        map[type] = true;
-                        return;
-                    });
-
-                    if (typeCounter !== 1) {
-                        return "Array<*>";
-                    }
-
-                    return `Array<${type}>`;
-                };
-                let getTypeReference = (typeRef: TypeReferenceNode): string  => {
-                    let text: string
-                    var isVarArgs = isVarArgsParameter(<ParameterDeclaration>typeRef.parent);
-
-                    if (!isVarArgs) {
-                        let name = ts.getEntityNameFromTypeNode(typeRef);
-
-                        if (!name) {
-                            name = typeRef.typeName;
-                            text = ts.getTextOfNode(name);
-                        }
-                        else {
-                            text = ts.getTextOfNode(name);
-                        }
-
-                        text = `${getModuleName(name)}${text}`;
-
-                        if (typeRef.typeArguments) {
-                            text = `${text}<${getParameterizedNode(typeRef.typeArguments, true)}>`;
-                        }
-                    }
-                    else if (typeRef.typeArguments) {
-                        text = getParameterizedNode(typeRef.typeArguments, true);
-                    }
-
-                    return text;
-                };
-
-                var getFunctionType = (funcType: FunctionLikeDeclaration): string => {
-                    let returnType = "";
-                    let type = funcType.type || funcType.body;
-                    let isCtor = funcType.kind === SyntaxKind.ConstructorType
-                    let hasReturnType = type.kind !== SyntaxKind.VoidKeyword;
-
-                    if (hasReturnType) {
-                        returnType = getParameterOrUnionTypeAnnotation(type);
-                    }
-
-                    if (funcType.parameters.length || hasReturnType) {
-                        var params = getParameterizedNode(funcType.parameters, true);
-
-                        if (isCtor) {
-                            return `function(new:${returnType}, ${params})`;
-                        }
-                        else {
-                            return `function(${params}): ${returnType}`;
-                        }
-                    }
-
-                    return "Function";
-                };
 
                 switch (node.kind) {
                     case SyntaxKind.Parameter:
@@ -5289,7 +5341,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return addOptionalIfNeeded(node.parent, getTypeLiteral((<TypeLiteralNode>node).members || (<ObjectLiteralExpression>node).properties));
                     case SyntaxKind.IndexSignature:
                         return getIndexSignature(<IndexSignatureDeclaration>node);
-                    case SyntaxKind.AnyKeyword:
                     case SyntaxKind.StringKeyword:
                     case SyntaxKind.NumberKeyword:
                     case SyntaxKind.BooleanKeyword:
@@ -5313,6 +5364,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return addOptionalIfNeeded(node.parent, "boolean");
                     case SyntaxKind.VoidExpression:
                         return "undefined";
+                    case SyntaxKind.Identifier:
+                        var symbol = getSymbolDeclaration(node);
+
+                        if (symbol) {
+                            return getParameterOrUnionTypeAnnotation(symbol)
+                        }
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
