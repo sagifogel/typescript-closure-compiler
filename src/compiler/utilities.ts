@@ -45,11 +45,13 @@
     export declare function isAccessor(node: Node): node is AccessorDeclaration;
     export declare function isRestParameter(node: ParameterDeclaration): boolean;
     export declare function isBindingPattern(node: Node): node is BindingPattern;
+    export declare function isClassLike(node: Node): node is ClassLikeDeclaration;
     export declare function isNodeDescendentOf(node: Node, ancestor: Node): boolean;
     export declare function makeIdentifierFromModuleName(moduleName: string): string;
     export declare function getTextOfNode(node: Node, includeTrivia?: boolean): string;
     export declare function isFunctionLike(node: Node): node is FunctionLikeDeclaration;
     export declare function isEmptyObjectLiteralOrArrayLiteral(expression: Node): boolean;
+    export declare function getThisContainer(node: Node, includeArrowFunctions: boolean): Node;
     export declare function getEntityNameFromTypeNode(node: TypeNode): EntityName | Expression;
     export declare function getLineOfLocalPosition(currentSourceFile: SourceFile, pos: number);
     export declare function isElementAccessExpression(node: Node): node is ElementAccessExpression;

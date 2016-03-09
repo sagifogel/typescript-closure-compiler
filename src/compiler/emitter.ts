@@ -5190,12 +5190,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return type;
             }
 
-            function isVarArgsParameter(node: ParameterDeclaration): boolean {
-                return ts.isRestParameter(node);
-            }
-
             function addVarArgsIfNeeded(node: ParameterDeclaration, type: string): string {
-                return isVarArgsParameter(node) ? addVarArgs(type) : type;
+                return ts.isRestParameter(node) ? addVarArgs(type) : type;
             }
 
             function addVarArgs(type: string): string {
@@ -5203,7 +5199,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getUnionType(unionType: UnionOrIntersectionTypeNode): string {
-                let mapped = ts.map(unionType.types, (type: Node) => {
+                return getTypes(unionType.types);
+            }
+
+            function getTypes(types: Array<Node>): string {
+                let mapped = ts.map(types, (type: Node) => {
                     return getParameterOrUnionTypeAnnotation(type);
                 });
 
@@ -5235,7 +5235,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function getTypeReference(typeRef: TypeReferenceNode): string {
                 let text: string
-                var isVarArgs = isVarArgsParameter(<ParameterDeclaration>typeRef.parent);
+                var isVarArgs = ts.isRestParameter(<ParameterDeclaration>typeRef.parent);
 
                 if (!isVarArgs) {
                     let name = ts.getEntityNameFromTypeNode(typeRef);
@@ -5261,18 +5261,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return text;
             }
 
-            function getFunctionType(funcType: FunctionLikeDeclaration): string {
+            function getFunctionType(func: FunctionLikeDeclaration): string {
                 let returnType = "";
-                let type = funcType.type || funcType.body;
-                let isCtor = funcType.kind === SyntaxKind.ConstructorType
-                let hasReturnType = type.kind !== SyntaxKind.VoidKeyword;
+                let hasReturnType: boolean;
+                let type = func.type || func.body;
+                let isCtor = func.kind === SyntaxKind.ConstructorType || func.kind === SyntaxKind.Constructor;
 
-                if (hasReturnType) {
-                    returnType = getParameterOrUnionTypeAnnotation(type);
+                if (func.kind === SyntaxKind.Constructor) {
+                    returnType = getGeneratedPathForModule(func.parent);
+                }
+                else {
+                    if (hasReturnType = type.kind !== SyntaxKind.VoidKeyword) {
+                        returnType = getParameterOrUnionTypeAnnotation(type);
+                    }
                 }
 
-                if (funcType.parameters.length || hasReturnType) {
-                    var params = getParameterizedNode(funcType.parameters, true);
+                if (func.parameters.length || hasReturnType) {
+                    var params = getParameterizedNode(func.parameters, true);
 
                     if (isCtor) {
                         return `function(new:${returnType}, ${params})`;
@@ -5302,6 +5307,36 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return node.hasOwnProperty("text") ? node.text : node.hasOwnProperty("name") ? node.name.text : "";
             }
 
+            function getThisType(node: Node): { nodeType: ClassLikeDeclaration, container: Node } {
+                var container = ts.getThisContainer(node, false);
+                var parent = container && container.parent;
+
+                if (parent && (ts.isClassLike(parent) || parent.kind === SyntaxKind.InterfaceDeclaration)) {
+                    if (container.kind !== SyntaxKind.Constructor || ts.isNodeDescendentOf(node, (<FunctionLikeDeclaration>container).body)) {
+                        return {
+                            container,
+                            nodeType: <ClassLikeDeclaration>parent
+                        };
+                    }
+                }
+
+                return null;
+            }
+
+            function getThis(node): string {
+                var type = getThisType(node);
+
+                if (!type) {
+                    return "Window";
+                }
+
+                if (type.container.flags & NodeFlags.Static) {
+                    return getTypes(ts.filter(type.nodeType.members, member => member.kind === SyntaxKind.Constructor));
+                }
+
+                return getGeneratedPathForModule(type.nodeType);
+            }
+
             function getParameterOrUnionTypeAnnotation(node: Node): string {
                 let mapped: Array<string>;
                 let propertySig: any = node;
@@ -5323,7 +5358,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ArrayType:
                         var type = getParameterOrUnionTypeAnnotation(typeNode.elementType);
 
-                        if (!isVarArgsParameter(<ParameterDeclaration>node.parent)) {
+                        if (!ts.isRestParameter(<ParameterDeclaration>node.parent)) {
                             return `Array<${type}>`;
                         }
 
@@ -5346,8 +5381,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.BooleanKeyword:
                     case SyntaxKind.SymbolKeyword:
                     case SyntaxKind.VoidKeyword:
-                    case SyntaxKind.ThisKeyword:
                         return addOptionalIfNeeded(node.parent, ts.tokenToString(node.kind));
+                    case SyntaxKind.Constructor:
                     case SyntaxKind.FunctionType:
                     case SyntaxKind.ArrowFunction:
                     case SyntaxKind.ConstructorType:
@@ -5370,6 +5405,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         if (symbol) {
                             return getParameterOrUnionTypeAnnotation(symbol)
                         }
+                        break;
+                    case SyntaxKind.ThisKeyword:
+                        return getThis(node);
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
