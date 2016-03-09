@@ -5227,16 +5227,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 var getFunctionType = (funcType: FunctionLikeDeclaration): string => {
                     let returnType = "";
                     let type = funcType.type || funcType.body;
+                    let isCtor = funcType.kind === SyntaxKind.ConstructorType
                     let hasReturnType = type.kind !== SyntaxKind.VoidKeyword;
 
                     if (hasReturnType) {
-                        returnType = `: ${getParameterOrUnionTypeAnnotation(type)}`;
+                        returnType = getParameterOrUnionTypeAnnotation(type);
                     }
 
                     if (funcType.parameters.length || hasReturnType) {
-                        return `function(${getParameterizedNode(funcType.parameters, true)})${returnType}`;
-                    }
+                        var params = getParameterizedNode(funcType.parameters, true);
 
+                        if (isCtor) {
+                            return `function(new:${returnType}, ${params})`;
+                        }
+                        else {
+                            return `function(${params}): ${returnType}`;
+                        }
+                    }
+                    
                     return "Function";
                 };
 
@@ -5284,6 +5292,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return addOptionalIfNeeded(node.parent, ts.tokenToString(node.kind));
                     case SyntaxKind.FunctionType:
                     case SyntaxKind.ArrowFunction:
+                    case SyntaxKind.ConstructorType:
                         return addOptionalIfNeeded(node.parent, getFunctionType(<FunctionLikeDeclaration>node));
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number");
@@ -5380,9 +5389,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitVariableTypeAnnotation(node: VariableDeclaration): void {
+                var type = "?";
+
                 if (node.type || node.initializer) {
-                    write(`/** @type {${getParameterOrUnionTypeAnnotation(node.type || node.initializer)}} */ `);
+                    type = getParameterOrUnionTypeAnnotation(node.type || node.initializer);
                 }
+
+                write(`/** @type {${type}} */ `);
             }
 
             function emitPropertyAnnotation(node: PropertyDeclaration): void {
