@@ -3288,10 +3288,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
              * Returns false if nothing was written - this can happen for source file level variable declarations
              *     in system modules where such variable declarations are hoisted.
              */
-            function tryEmitStartOfVariableDeclarationList(decl: VariableDeclarationList, startPos?: number): boolean {
+            function tryGetStartOfVariableDeclarationList(decl: VariableDeclarationList, startPos?: number): string {
+                let empty = "";
                 if (shouldHoistVariable(decl, /*checkIfSourceFileLevelDecl*/ true)) {
                     // variables in variable declaration list were already hoisted
-                    return false;
+                    return empty;
                 }
 
                 let tokenKind = SyntaxKind.VarKeyword;
@@ -3307,11 +3308,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let firstDeclaration = decl.declarations[0];
 
                 if (isForLoop(decl.parent) && !isNodeDeclaredWithinFunction(firstDeclaration) && isNodeContainedWithinModule(decl.parent)) {
-                    return;
+                    return empty;
                 }
 
                 if (!trySetVariableDeclarationInModule(firstDeclaration)) {
-                    return;
+                    return empty;
                 }
 
                 if (startPos !== undefined) {
@@ -3319,23 +3320,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(" ");
                 }
                 else {
-                    if (firstDeclaration.kind !== SyntaxKind.Parameter) {
-                        emitVariableTypeAnnotation(<VariableDeclaration>firstDeclaration);
-                    }
                     switch (tokenKind) {
                         case SyntaxKind.VarKeyword:
-                            write("var ");
-                            break;
+                            return "var ";
                         case SyntaxKind.LetKeyword:
-                            write("let ");
-                            break;
+                            return "let ";
                         case SyntaxKind.ConstKeyword:
-                            write("const ");
-                            break;
+                            return "const ";
                     }
                 }
 
-                return true;
+                return empty;
             }
 
             function emitVariableDeclarationListSkippingUninitializedEntries(list: VariableDeclarationList): boolean {
@@ -3353,6 +3348,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         forceWriteLine();
                     }
 
+                    if (decl.kind !== SyntaxKind.Parameter) {
+                        emitVariableTypeAnnotation(decl);
+                    }
                     emit(decl);
                 }
 
@@ -3365,8 +3363,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
                 if (node.initializer && node.initializer.kind === SyntaxKind.VariableDeclarationList) {
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
-                    let startIsEmitted = tryEmitStartOfVariableDeclarationList(variableDeclarationList, endPos);
+                    let startIsEmitted = tryGetStartOfVariableDeclarationList(variableDeclarationList, endPos);
                     if (startIsEmitted) {
+                        write(startIsEmitted);
                         emitCommaList(variableDeclarationList.declarations);
                     }
                     else {
@@ -3402,7 +3401,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length >= 1) {
                         if (!isContainedWithinModule) {
-                            tryEmitStartOfVariableDeclarationList(variableDeclarationList, endPos);
+                            let start = tryGetStartOfVariableDeclarationList(variableDeclarationList, endPos);
+
+                            if (start) {
+                                write(start);
+                            }
                         }
                         emit(variableDeclarationList.declarations[0]);
                     }
@@ -4233,7 +4236,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitVariableStatement(node: VariableStatement) {
                 let nodeIndex: number;
-                let startIsEmitted = false;
+                let startIsEmitted: string;
                 let statement: VariableStatement;
                 let parentStatements = (<Block>node.parent).statements;
                 let nodeFirstVariable = node.declarationList.declarations[0];
@@ -4265,16 +4268,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (isES6ExportedDeclaration(node)) {
                         // Exported ES6 module member
                         write("export ");
-                        startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
+                        startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                     }
                 }
                 else {
                     if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
-                        startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
+                        startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                     }
                 }
 
                 if (startIsEmitted) {
+                    if (nodeFirstVariable.kind !== SyntaxKind.Parameter) {
+                        emitVariableTypeAnnotation(nodeFirstVariable);
+                    }
+                    write(startIsEmitted);
                     emitCommaList(node.declarationList.declarations);
                     write(";");
                 }
@@ -5244,7 +5251,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             return `function(${params}): ${returnType}`;
                         }
                     }
-                    
+
                     return "Function";
                 };
 
@@ -5293,6 +5300,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.FunctionType:
                     case SyntaxKind.ArrowFunction:
                     case SyntaxKind.ConstructorType:
+                    case SyntaxKind.FunctionExpression:
                         return addOptionalIfNeeded(node.parent, getFunctionType(<FunctionLikeDeclaration>node));
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number");
