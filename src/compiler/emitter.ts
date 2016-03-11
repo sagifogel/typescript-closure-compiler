@@ -560,7 +560,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return makeUniqueName((<Identifier>node).text);
                     case SyntaxKind.ModuleDeclaration:
                     case SyntaxKind.EnumDeclaration:
-                        return generateNameForModuleOrEnum(<ModuleDeclaration | EnumDeclaration>node);
+                        return (<ModuleDeclaration | EnumDeclaration>node).name.text;
                     case SyntaxKind.ImportDeclaration:
                     case SyntaxKind.ExportDeclaration:
                         return generateNameForImportOrExportDeclaration(<ImportDeclaration | ExportDeclaration>node);
@@ -5414,7 +5414,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.StringLiteral:
                         return addOptionalIfNeeded(node.parent, "string", isParameterPropertyAssignment);
                     case SyntaxKind.RegularExpressionLiteral:
-                        return addOptionalIfNeeded(node.parent, "RegEx", isParameterPropertyAssignment);
+                        return addOptionalIfNeeded(node.parent, "RegExp", isParameterPropertyAssignment);
                     case SyntaxKind.TrueKeyword:
                     case SyntaxKind.FalseKeyword:
                         return addOptionalIfNeeded(node.parent, "boolean", isParameterPropertyAssignment);
@@ -5427,6 +5427,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             return getParameterOrUnionTypeAnnotation(symbol, isParameterPropertyAssignment)
                         }
                         break;
+                    case SyntaxKind.NewExpression:
+                        let buffer: Array<string> = [];
+                        let propertyAccess = <PropertyAccessExpression>node;
+
+                        do {
+                            propertyAccess = <PropertyAccessExpression>propertyAccess.expression;
+                            buffer.push(getNodeName(propertyAccess))
+                        }
+                        while (propertyAccess.expression);
+
+                        return buffer.reverse().join(".");
                     case SyntaxKind.ThisKeyword:
                         return getThis(node);
                 }
