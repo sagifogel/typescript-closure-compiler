@@ -279,7 +279,7 @@ namespace ts {
         const extendsHelper = `
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
+    /** @constructor */ function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };`;
 
@@ -4451,6 +4451,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     writeLine();
                     emitLeadingComments(restParam);
                     emitStart(restParam);
+                    emitArrayTypeAnnotation(restParam);
                     write("var ");
                     emitNodeWithCommentsAndWithoutSourcemap(restParam.name);
                     write(" = [];");
@@ -5509,6 +5510,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitCommentedAnnotation(`@enum {${type}}`);
                     emitEndAnnotation();
                 }
+            }
+
+            function emitArrayTypeAnnotation(node: ParameterDeclaration): void {
+                var cloned = (<any>Object).assign({}, node);
+
+                delete cloned.dotDotDotToken;
+                cloned.type.parent = cloned;
+
+                emitVariableTypeAnnotation(<ParameterDeclaration>cloned);
             }
 
             function emitVariableTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
