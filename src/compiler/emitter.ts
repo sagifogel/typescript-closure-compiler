@@ -1983,8 +1983,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         if (containingNode.kind === SyntaxKind.SourceFile || (containingNode.kind === SyntaxKind.ModuleDeclaration && localNode)) {
                             return {
-                                node: <Node>localNode,
-                                scope: containingNode
+                                scope: containingNode,
+                                node: localNode ? localNode.declarations[0] : void 0
                             };
                         }
                     }
@@ -5445,24 +5445,34 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
             }
 
-            function emitCallSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
-                emitCallOrIndexSignatures(node, members, (indexSignature): string => {
-                    var params = ts.map(indexSignature.parameters, function (param: Node) { return getParameterOrUnionTypeAnnotation(param); });
-                    var returnType = getParameterOrUnionTypeAnnotation(indexSignature.type);
+            function createGenericsTypeChecker(genericArguments): (param: string) => string {
+                return (param: string) => genericArguments.indexOf(param) > -1 ? "?" : param;
+            }
+
+            function emitCallSignatures(interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
+                let genericArguments = getGenericArguments(interface);
+                let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
+
+                emitCallOrIndexSignatures(interface, members, (indexSignature): string => {
+                    var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(param)));
+                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature.type));
 
                     return `function(${params.join(", ")}): ${returnType}`;
                 });
             }
 
-            function getIndexSignature(indexSignature: IndexSignatureDeclaration): string {
-                var params = ts.map(indexSignature.parameters, function (param: Node) { return getParameterOrUnionTypeAnnotation(param); });
-                var returnType = getParameterOrUnionTypeAnnotation(indexSignature.type);
+            function getIndexSignature(indexSignature: IndexSignatureDeclaration, genericsTypeChecker = (param: string) => param): string {
+                var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(param)));
+                var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature.type));
 
                 return `Object<${params.join(", ")}, ${returnType}>`;
             }
 
-            function emitIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
-                emitCallOrIndexSignatures(node, members, getIndexSignature);
+            function emitIndexSignatures(interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
+                let genericArguments = getGenericArguments(interface);
+                let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
+
+                emitCallOrIndexSignatures(interface, members, member => getIndexSignature(<IndexSignatureDeclaration>member, genericsTypeChecker));
             }
 
             function emitCallOrIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>, mapFunction: (member: SignatureDeclaration) => string) {
@@ -5591,6 +5601,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
                     }
 
+                    emitGenericTypes(getGenericArguments(node));
                     emitEndAnnotation();
                 }
             }
@@ -5610,19 +5621,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 write(" */");
             }
 
-            function emitInterfaceDeclarationAnnotation(interfacesImpl: Array<ExpressionWithTypeArguments>): void {
-                emitConstructorOrInterfaceAnnotation(false, interfacesImpl);
+            function emitInterfaceDeclarationAnnotation(node: InterfaceDeclaration, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
+                emitConstructorOrInterfaceAnnotation(node, false, interfacesImpl);
             }
 
-            function emitConstructorAnnotation(ctor: ConstructorDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
-                emitConstructorOrInterfaceAnnotation(true, interfacesImpl, baseTypeElement, ctor);
+            function emitConstructorAnnotation(node: ClassLikeDeclaration, ctor: ConstructorDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
+                emitConstructorOrInterfaceAnnotation(node, true, interfacesImpl, baseTypeElement, ctor);
             }
 
             function getClassOrInterfaceFullPath(node: ExpressionWithTypeArguments): string {
                 return getModuleName(node.expression) + ts.getTextOfNode(node);
             }
 
-            function emitConstructorOrInterfaceAnnotation(isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments, ctor?: ConstructorDeclaration) {
+            function emitConstructorOrInterfaceAnnotation(node: InterfaceDeclaration | ClassLikeDeclaration, isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments, ctor?: ConstructorDeclaration) {
                 let type: string;
                 let heritageType: string;
 
@@ -5650,13 +5661,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitParametersAnnotations(ctor.parameters);
                 }
 
+                emitGenericTypes(getGenericArguments(node));
                 emitEndAnnotation();
             }
 
+            function getGenericArguments(node: ClassLikeDeclaration | InterfaceDeclaration | FunctionLikeDeclaration): Array<string> {
+                return ts.map(node.typeParameters || <NodeArray<TypeParameterDeclaration>>[], getNodeName);
+            }
+
             function emitGenericTypes(genericTypes: Array<string>): void {
-                ts.forEach(genericTypes, (type) => {
-                    emitCommentedAnnotation(`@template ${type}`);
-                });
+                if (genericTypes.length) {
+                    emitCommentedAnnotation(`@template ${genericTypes.join(", ")}`);
+                }
             }
 
             function emitConstructor(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments> = []) {
@@ -5696,10 +5712,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let ctor = getFirstConstructorWithBody(node);
 
                 if (!nodeIsInterface) {
-                    emitConstructorAnnotation(ctor, baseTypeElement, interfacesImpl);
+                    emitConstructorAnnotation(node, ctor, baseTypeElement, interfacesImpl);
                 }
                 else {
-                    emitInterfaceDeclarationAnnotation(interfacesImpl);
+                    let interface: any = node;
+                    emitInterfaceDeclarationAnnotation(<InterfaceDeclaration>interface, interfacesImpl);
                 }
                 // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
                 // do not emit constructor in class declaration.
