@@ -5534,12 +5534,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitVariableTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
                 var type = "?";
+                var annotation = ts.isConst(node) ? "@const" : "@type";
 
                 if (node.type || node.initializer) {
                     type = getParameterOrUnionTypeAnnotation(node.type || node.initializer, isParameterPropertyAssignment);
                 }
 
-                write(`/** @type {${type}} */ `);
+                write(`/** ${annotation} {${type}} */ `);
             }
 
             function emitPropertyOrParamterAnnotation(node: PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
