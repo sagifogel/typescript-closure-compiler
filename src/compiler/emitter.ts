@@ -4374,6 +4374,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                     else {
                         emit(node.name);
+
+                        if (ts.isRestParameter(node)) {
+                            write("$rest");
+                        }
                     }
                 }
                 else {
@@ -5255,6 +5259,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 var isVarArgs = ts.isRestParameter(<ParameterDeclaration>typeRef.parent);
 
                 if (!isVarArgs) {
+                    let symbol: { members?: NodeArray<Node> };
+                    let hasCallSignatures = false;
                     let name = ts.getEntityNameFromTypeNode(typeRef);
 
                     if (!name) {
@@ -5266,8 +5272,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     text = `${getModuleName(name)}${text}`;
+                    symbol = <{ members?: NodeArray<Node> }>getSymbolDeclaration(name);
 
-                    if (typeRef.typeArguments) {
+                    if (symbol && symbol.members) {
+                        hasCallSignatures = symbol.members.some(member => member.kind === SyntaxKind.CallSignature);
+                    }
+
+                    if (!hasCallSignatures && typeRef.typeArguments) {
                         text = `${text}<${getParameterizedNode(typeRef.typeArguments, true)}>`;
                     }
                 }
@@ -5611,8 +5622,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitParametersAnnotations(parameters: NodeArray<ParameterDeclaration>): void {
                 ts.forEach(parameters, (parameter) => {
                     let type = getParameterOrUnionTypeAnnotation(parameter);
+                    let name = ts.getTextOfNode(parameter.name);
 
-                    emitCommentedAnnotation(`@param {${type}} ${ts.getTextOfNode(parameter.name)}`);
+                    if (ts.isRestParameter(parameter)) {
+                        name += "$rest";
+                    }
+
+                    emitCommentedAnnotation(`@param {${type}} ${name}`);
                 });
             }
 
