@@ -4993,7 +4993,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitPropertyDeclaration(node: ClassLikeDeclaration, property: PropertyDeclaration, receiver?: Identifier, isExpression?: boolean) {
-                let symbolScope = getSymbolScope(property.name);
                 let isStaticProperty = property.flags & NodeFlags.Static;
                 let nodeIsInterface = node.kind === SyntaxKind.InterfaceDeclaration;
 
@@ -5012,6 +5011,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitDeclarationName(node);
                     }
                     else if (nodeIsInterface) {
+                        if (property.kind === SyntaxKind.IndexSignature) {
+                            return;
+                        }
                         forceWriteLine();
                         emitPropertyOrParamterAnnotation(property);
                         emitClassMemberPrefix(node, property);
@@ -6599,7 +6601,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitInterfaceDeclaration(node: InterfaceDeclaration) {
                 let anyNode = <any>node;
                 let classLikeDeclaration = <ClassLikeDeclaration>anyNode;
-                let callOrIndexSignatures = <Array<SignatureDeclaration>>ts.filter(node.members, member => member.kind === SyntaxKind.IndexSignature || member.kind === SyntaxKind.CallSignature);
+                let callOrIndexSignatures = <Array<SignatureDeclaration>>ts.filter(node.members, member => member.kind === SyntaxKind.CallSignature);
 
                 if (!callOrIndexSignatures.length) {
                     emitConstructor(classLikeDeclaration, null, ts.getInterfaceBaseTypeNodes(node));
@@ -6608,14 +6610,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitCommentsOnNotEmittedNode(node);
                 }
                 else {
-                    let filtered = ts.filter(callOrIndexSignatures, callOrIndexSignature => callOrIndexSignature.kind === SyntaxKind.CallSignature);
-
-                    if (filtered.length) {
-                        emitCallSignatures(node, filtered);
-                    }
-                    else {
-                        emitIndexSignatures(node, callOrIndexSignatures);
-                    }
+                    emitCallSignatures(node, callOrIndexSignatures);
                 }
             }
 
