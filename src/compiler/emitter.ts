@@ -468,7 +468,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
             else {
                 forEach(host.getSourceFiles(), sourceFile => {
-                    if (!isExternalModuleOrDeclarationFile(sourceFile)) {
+                    if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
                         emitSourceFile(sourceFile);
                     }
                 });
@@ -1984,7 +1984,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         if (containingNode.kind === SyntaxKind.SourceFile || (containingNode.kind === SyntaxKind.ModuleDeclaration && localNode)) {
                             return {
                                 scope: containingNode,
-                                node: localNode ? localNode.declarations[0] : void 0
+                                node: localNode ? localNode.declarations ? localNode.declarations[0] : void 0 : void 0
                             };
                         }
                     }
@@ -5027,7 +5027,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write("this");
                     }
                 }
-                emitMemberAccessForPropertyName(property.name);
+                if (property.name) {
+                    emitMemberAccessForPropertyName(property.name);
+                }
+
                 emitEnd(property.name);
 
                 if (!nodeIsInterface && property.initializer) {
