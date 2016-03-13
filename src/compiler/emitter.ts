@@ -5584,7 +5584,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let accessModifiers = ts.filter(node.modifiers, (modifier) => ts.isAccessibilityModifier(modifier.kind));
 
                     if (accessModifiers.length) {
-                        let accessModifierKind = accessModifiers[0].kind;
+                        accessModifierKind = accessModifiers[0].kind;
 
                         if (accessModifierKind !== SyntaxKind.PublicKeyword) {
                             hasModifiers = true;
