@@ -5202,13 +5202,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function addOptionalIfNeeded(node: Node, type: string, isParameterPropertyAssignment: boolean): string {
-                if (!isParameterPropertyAssignment) {
-                    if (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) {
-                        type = `${type}=`;
-                    }
-                    else if (node.symbol && (node.symbol.flags & SymbolFlags.Optional) > 0) {
-                        type = `(${type}|undefined)`;
-                    }
+                let isOptional = (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) ||
+                                 (node.symbol && (node.symbol.flags & SymbolFlags.Optional) > 0);
+
+                if (isOptional) {
+                    return isParameterPropertyAssignment ? `(${type}|undefined)` : `${type}=`;
                 }
 
                 return type;
@@ -5341,7 +5339,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getNodeName(node): string {
-                return node.hasOwnProperty("text") ? node.text : node.hasOwnProperty("name") ? node.name.text : "";
+                return node.text ? node.text : node.name ? node.name.text : "";
             }
 
             function getThisType(node: Node): { nodeType: ClassLikeDeclaration, container: Node } {
@@ -5465,7 +5463,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return getThis(node);
                     case SyntaxKind.CallExpression:
                     case SyntaxKind.PropertyAccessExpression:
-                        return getExpression(node);
+                        return addOptionalIfNeeded(node.parent, getExpression(node), isParameterPropertyAssignment);
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
