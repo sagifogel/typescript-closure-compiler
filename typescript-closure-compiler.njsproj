@@ -36,13 +36,16 @@
     <Content Include="package.json" />
     <Content Include="README.md" />
     <TypeScriptCompile Include="compiler.ts" />
+    <TypeScriptCompile Include="Scripts\typings\node\node.d.ts" />
+    <TypeScriptCompile Include="src\compiler\binder.ts" />
     <TypeScriptCompile Include="src\compiler\checker.ts" />
     <TypeScriptCompile Include="src\compiler\core.ts" />
     <TypeScriptCompile Include="src\compiler\declarationEmitter.ts" />
     <TypeScriptCompile Include="src\compiler\emitter.ts" />
-    <TypeScriptCompile Include="Scripts\typings\node\node.d.ts" />
     <TypeScriptCompile Include="src\compiler\parser.ts" />
+    <TypeScriptCompile Include="src\compiler\program.ts" />
     <TypeScriptCompile Include="src\compiler\scanner.ts" />
+    <TypeScriptCompile Include="src\compiler\sys.ts" />
     <TypeScriptCompile Include="src\compiler\types.ts" />
     <TypeScriptCompile Include="src\compiler\utilities.ts" />
     <TypeScriptCompile Include="src\services\services.ts" />

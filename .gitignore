@@ -39,4 +39,4 @@ node_modules
 *.js
 *.dat
 *.tmp
-
+!*jakefile.js

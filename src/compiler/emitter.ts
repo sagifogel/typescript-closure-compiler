@@ -274,7 +274,7 @@ namespace ts {
     }
 
     // targetSourceFile is when users only want one file in entire project to be emitted. This is used in compileOnSave feature
-    export function emitFiles(resolver: EmitResolver, host: EmitHost, targetSourceFile: SourceFile): EmitResult {
+    export function emitFiles(typeChecker: TypeChecker, resolver: EmitResolver, host: EmitHost, targetSourceFile: SourceFile): EmitResult {
         // emit output for the __extends helper function
         const extendsHelper = `
 var __extends = (this && this.__extends) || function (d, b) {
@@ -829,7 +829,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         host.getCanonicalFileName,
                         /*isAbsolutePathAnUrl*/ true));
                     sourceMapSourceIndex = sourceMapData.sourceMapSources.length - 1;
-
+                    
                     // The one that can be used from program to get the actual source file
                     sourceMapData.inputSourceFileNames.push(node.fileName);
 
@@ -5374,6 +5374,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return getGeneratedPathForModule(type.nodeType);
             }
 
+            function getExpression(node: Node): string {
+                var type = typeChecker.getTypeAtLocation(node);
+                var name = type.symbol ? type.symbol.name : (<IntrinsicType>type).intrinsicName;
+
+                return name === "any" ? "?" : name;
+            }
+
             function getParameterOrUnionTypeAnnotation(node: Node, isParameterPropertyAssignment?: boolean): string {
                 let mapped: Array<string>;
                 let propertySig: any = node;
@@ -5456,6 +5463,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return buffer.reverse().join(".");
                     case SyntaxKind.ThisKeyword:
                         return getThis(node);
+                    case SyntaxKind.CallExpression:
+                    case SyntaxKind.PropertyAccessExpression:
+                        return getExpression(node);
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");

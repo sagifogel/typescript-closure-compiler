@@ -38,6 +38,7 @@
     export declare function isTemplateLiteralKind(kind: SyntaxKind): boolean;
     export declare function getEnclosingBlockScopeContainer(node: Node): Node;
     export declare function createTextWriter(newLine: String): EmitTextWriter;
+    export declare function createDiagnosticCollection(): DiagnosticCollection;
     export declare function isAccessibilityModifier(kind: SyntaxKind): boolean;
     export declare function hasRestParameter(s: SignatureDeclaration): boolean;
     export declare function isLeftHandSideExpression(expr: Expression): boolean;
@@ -46,11 +47,16 @@
     export declare function isRestParameter(node: ParameterDeclaration): boolean;
     export declare function isBindingPattern(node: Node): node is BindingPattern;
     export declare function isClassLike(node: Node): node is ClassLikeDeclaration;
+    export declare function getNewLineCharacter(options: CompilerOptions): string;
+    export declare function getDefaultLibFileName(options: CompilerOptions): string;
     export declare function isNodeDescendentOf(node: Node, ancestor: Node): boolean;
     export declare function makeIdentifierFromModuleName(moduleName: string): string;
+    export declare function isExternalModuleNameRelative(moduleName: string): boolean;
     export declare function getTextOfNode(node: Node, includeTrivia?: boolean): string;
     export declare function isFunctionLike(node: Node): node is FunctionLikeDeclaration;
     export declare function isEmptyObjectLiteralOrArrayLiteral(expression: Node): boolean;
+    export declare function getTokenPosOfNode(node: Node, sourceFile?: SourceFile): number;
+    export declare function getErrorSpanForNode(sourceFile: SourceFile, node: Node): TextSpan;
     export declare function getThisContainer(node: Node, includeArrowFunctions: boolean): Node;
     export declare function getEntityNameFromTypeNode(node: TypeNode): EntityName | Expression;
     export declare function getLineOfLocalPosition(currentSourceFile: SourceFile, pos: number);
@@ -61,7 +67,9 @@
     export declare function getSetAccessorTypeAnnotationNode(accessor: AccessorDeclaration): TypeNode;
     export declare function isInstantiatedModule(node: ModuleDeclaration, preserveConstEnums: boolean);
     export declare function getFirstConstructorWithBody(node: ClassLikeDeclaration): ConstructorDeclaration;
+    export declare function getResolvedModule(sourceFile: SourceFile, moduleNameText: string): ResolvedModule;
     export declare function getOwnEmitOutputFilePath(sourceFile: SourceFile, host: EmitHost, extension: string);
+    export declare function arrayIsEqualTo<T>(arr1: T[], arr2: T[], comparer?: (a: T, b: T) => boolean): boolean;
     export declare function isInternalModuleImportEqualsDeclaration(node: Node): node is ImportEqualsDeclaration;
     export declare function getSourceFilePathInNewDir(sourceFile: SourceFile, host: EmitHost, newDirPath: string);
     export declare function shouldEmitToOwnFile(sourceFile: SourceFile, compilerOptions: CompilerOptions): boolean;
@@ -69,6 +77,7 @@
     export declare function getClassExtendsHeritageClauseElement(node: ClassLikeDeclaration): ExpressionWithTypeArguments;
     export declare function getAllAccessorDeclarations(declarations: NodeArray<Declaration>, accessor: AccessorDeclaration);
     export declare function getSourceTextOfNodeFromSourceFile(sourceFile: SourceFile, node: Node, includeTrivia?: boolean): string;
+    export declare function setResolvedModule(sourceFile: SourceFile, moduleNameText: string, resolvedModule: ResolvedModule): void;
     export declare function getClassImplementsHeritageClauseElements(node: ClassLikeDeclaration): NodeArray<ExpressionWithTypeArguments>;
     export declare function writeCommentRange(currentSourceFile: SourceFile, writer: EmitTextWriter, comment: CommentRange, newLine: string);
     export declare function writeFile(host: EmitHost, diagnostics: Diagnostic[], fileName: string, data: string, writeByteOrderMark: boolean);
