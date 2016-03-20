@@ -9,6 +9,11 @@ let currentDirPath = path.resolve(__dirname, "tests");
 
 readdirSync(currentDirPath)
     .filter(function (file) { return path.extname(file) === '.ts'; })
+    .sort((a, b) => {
+        if (a === b) { return 0; }
+        if (a.indexOf("d.ts")) { return 1; }
+        return -1;
+    })
     .forEach(function (file) {
         var filePath = path.join(currentDirPath, file);
         var stat = statSync(filePath);
@@ -37,7 +42,7 @@ export function compile(fileNames: string[], options: ts.CompilerOptions): void 
 }
 
 compile(fileNames, {
-    out: "sagi.js",
+    out: "tests/Greeter.js",
     noEmitOnError: true,
     noImplicitAny: false,
     removeComments: true,

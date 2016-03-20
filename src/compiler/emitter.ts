@@ -396,7 +396,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             let generatedNameSet: Map<string> = {};
             let nodeToGeneratedName: string[] = [];
-            let typeAliases: { [name: string]: boolean } = {};
+            let typeAliases: { [name: string]: TypeAliasDeclaration } = {};
             let modulesToGeneratedName: { [name: string]: ModuleGeneration } = {};
             let computedPropertyNamesToGeneratedNames: string[];
 
@@ -5047,13 +5047,41 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitMemberFunctionsForES5AndLower(node: ClassLikeDeclaration) {
+                let functionMap: { [name: string]: boolean } = {};
+
                 forEach(node.members, member => {
                     if (member.kind === SyntaxKind.SemicolonClassElement) {
                         writeLine();
                         write(";");
                     }
                     else if (member.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.MethodSignature || isInterfaceFunctionMember(member)) {
-                        if (ts.nodeIsMissing((<MethodDeclaration>member).body) && member.parent.kind !== SyntaxKind.InterfaceDeclaration) {
+                        if (member.parent.kind === SyntaxKind.InterfaceDeclaration) {
+                            let hasOverloades: boolean;
+                            let overloads: Array<ClassElement>;
+                            let memberName = getNodeName(member);
+
+                            if (functionMap[memberName]) {
+                                return emitCommentsOnNotEmittedNode(member);
+                            }
+
+                            overloads = node.members.filter(m => getNodeName(m) === memberName);
+                            hasOverloades = overloads.length > 1;
+
+                            if (hasOverloades) {
+                                let maxParams = 0;
+                                let memberWithMostParams;
+
+                                overloads.forEach(function (overloadedFunction: MethodDeclaration) {
+                                    if (overloadedFunction.parameters.length >= maxParams) {
+                                        member = overloadedFunction;
+                                        maxParams = overloadedFunction.parameters.length;
+                                    }
+                                });
+
+                                functionMap[memberName] = true;
+                            }
+                        }
+                        else if (ts.nodeIsMissing((<MethodDeclaration>member).body)) {
                             return emitCommentsOnNotEmittedNode(member);
                         }
 
@@ -5170,14 +5198,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 writeValueAndNewLine(" * " + value);
             }
 
-            function getParameterizedNode(members: NodeArray<Declaration | TypeNode>, omitName?: boolean): string {
+            function getParameterizedNode(rootNode: Node, members: NodeArray<Declaration | TypeNode>, omitName?: boolean, genericsTypeChecker?: (param: string) => string): string {
                 let mapped = ts.map(members, (member) => {
-                    return getPropertyKeValue(member, omitName);
+                    return getPropertyKeValue(rootNode, member, omitName, genericsTypeChecker);
                 });
                 return mapped.join(", ");
             }
 
-            function getTypeLiteral(members: NodeArray<Declaration | Node>): string {
+            function getTypeLiteral(rootNode: Node, members: NodeArray<Declaration | Node>): string {
                 if (members.length) {
                     var other: Array<string> = [];
                     var indexSignatures: Array<string> = [];
@@ -5187,7 +5215,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             indexSignatures.push(getIndexSignature(<IndexSignatureDeclaration>member));
                         }
                         else {
-                            other.push(getPropertyKeValue(member));
+                            other.push(getPropertyKeValue(rootNode, member));
                         }
                     });
 
@@ -5203,10 +5231,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function addOptionalIfNeeded(node: Node, type: string, isParameterPropertyAssignment: boolean): string {
                 let isOptional = (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) ||
-                                 (node.symbol && (node.symbol.flags & SymbolFlags.Optional) > 0);
+                    (node.symbol && (node.symbol.flags & SymbolFlags.Optional) > 0);
 
                 if (isOptional) {
-                    return isParameterPropertyAssignment ? `(${type}|undefined)` : `${type}=`;
+                    if (isParameterPropertyAssignment || !ts.isFunctionLike(node.parent)) {
+                        type = `(${type}|undefined)`;
+                    }
+                    else {
+                        type = `${type}=`;
+                    }
                 }
 
                 return type;
@@ -5220,13 +5253,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return `...${type}`;
             }
 
-            function getUnionType(unionType: UnionOrIntersectionTypeNode): string {
-                return getTypes(unionType.types);
+            function getUnionType(rootNode: Node, unionType: UnionOrIntersectionTypeNode): string {
+                return getTypes(rootNode, unionType.types);
             }
 
-            function getTypes(types: Array<Node>): string {
+            function getTypes(rootNode: Node, types: Array<Node>): string {
                 let mapped = ts.map(types, (type: Node) => {
-                    return getParameterOrUnionTypeAnnotation(type);
+                    return getParameterOrUnionTypeAnnotation(rootNode, type);
                 });
 
                 return `(${mapped.join("|")})`;
@@ -5238,7 +5271,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let map: { [name: string]: boolean } = {};
 
                 ts.forEach(node.elements, (element) => {
-                    type = getParameterOrUnionTypeAnnotation(element);
+                    type = getParameterOrUnionTypeAnnotation(node, element);
 
                     if (!map[type]) {
                         typeCounter++;
@@ -5255,7 +5288,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return `Array<${type}>`;
             }
 
-            function getTypeReference(typeRef: TypeReferenceNode): string {
+            function getTypeReference(rootNode: Node, typeRef: TypeReferenceNode): string {
                 let text: string
                 var isVarArgs = ts.isRestParameter(<ParameterDeclaration>typeRef.parent);
 
@@ -5280,21 +5313,33 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (!hasCallSignatures && typeRef.typeArguments) {
-                        text = `${text}<${getParameterizedNode(typeRef.typeArguments, true)}>`;
+                        text = `${text}<${getParameterizedNode(rootNode, typeRef.typeArguments, true)}>`;
                     }
                 }
                 else if (typeRef.typeArguments) {
-                    text = getParameterizedNode(typeRef.typeArguments, true);
+                    text = getParameterizedNode(rootNode, typeRef.typeArguments, true);
                 }
 
                 return text;
             }
 
-            function getFunctionType(func: FunctionLikeDeclaration): string {
+            function getCallSignatures(rootNode: InterfaceDeclaration): Array<Declaration> {
+                return rootNode.members.filter(member => member.kind === SyntaxKind.CallSignature);
+            }
+
+            function getFunctionType(rootNode: Node, func: FunctionLikeDeclaration): string {
                 let returnType = "";
                 let hasReturnType: boolean;
                 let type = func.type || func.body;
+                let genericsTypeChecker: (param: string) => string;
                 let isCtor = func.kind === SyntaxKind.ConstructorType || func.kind === SyntaxKind.Constructor;
+
+                if (rootNode.kind === SyntaxKind.InterfaceDeclaration && getCallSignatures(<InterfaceDeclaration>rootNode).length) {
+                    genericsTypeChecker = createGenericsTypeChecker(getGenericArguments(<InterfaceDeclaration>rootNode));
+                }
+                else {
+                    genericsTypeChecker = createGenericsTypeChecker([]);
+                }
 
                 if (func.kind === SyntaxKind.Constructor) {
                     returnType = getGeneratedPathForModule(func.parent);
@@ -5304,15 +5349,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let symbol = <PropertyDeclaration>getSymbolDeclaration(type);
 
                         hasReturnType = true;
-                        returnType = getParameterOrUnionTypeAnnotation(symbol.initializer);
+                        returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, symbol.initializer));
                     }
                     else if (hasReturnType = type.kind !== SyntaxKind.VoidKeyword) {
-                        returnType = getParameterOrUnionTypeAnnotation(type);
+                        returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
                     }
                 }
 
                 if (func.parameters.length || hasReturnType) {
-                    var params = getParameterizedNode(func.parameters, true);
+                    var params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
 
                     if (isCtor) {
                         return `function(new:${returnType}, ${params})`;
@@ -5329,8 +5374,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return "Function";
             }
 
-            function getPropertyKeValue(member: Declaration | TypeNode, omitName?: boolean): string {
-                let type = getParameterOrUnionTypeAnnotation(member);
+            function getPropertyKeValue(rootNode: Node, member: Declaration | TypeNode, omitName?: boolean, genericsTypeChecker?: (param: string) => string): string {
+                if (!genericsTypeChecker) { genericsTypeChecker = (type) => type; }
+                let type = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, member));
 
                 if (omitName) {
                     return type;
@@ -5358,7 +5404,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return null;
             }
 
-            function getThis(node): string {
+            function getThis(rootNode: Node, node): string {
                 var type = getThisType(node);
 
                 if (!type) {
@@ -5366,7 +5412,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 if (type.container.flags & NodeFlags.Static) {
-                    return getTypes(ts.filter(type.nodeType.members, member => member.kind === SyntaxKind.Constructor));
+                    return getTypes(rootNode, ts.filter(type.nodeType.members, member => member.kind === SyntaxKind.Constructor));
                 }
 
                 return getGeneratedPathForModule(type.nodeType);
@@ -5379,7 +5425,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return name === "any" ? "?" : name;
             }
 
-            function getParameterOrUnionTypeAnnotation(node: Node, isParameterPropertyAssignment?: boolean): string {
+            function getParameterOrUnionTypeAnnotation(rootNode: Node, node: Node, isParameterPropertyAssignment?: boolean): string {
+                let type: string;
                 let mapped: Array<string>;
                 let propertySig: any = node;
                 let typeNode = (<{ type: TypeNode, initializer?: Expression, elementType?: TypeNode }>propertySig);
@@ -5391,14 +5438,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.PropertyAssignment:
                     case SyntaxKind.TypeAliasDeclaration:
                         if (typeNode.type) {
-                            return getParameterOrUnionTypeAnnotation(typeNode.type, isParameterPropertyAssignment);
+                            return getParameterOrUnionTypeAnnotation(rootNode, typeNode.type, isParameterPropertyAssignment);
                         }
                         else if (typeNode.initializer) {
-                            return getParameterOrUnionTypeAnnotation(typeNode.type || typeNode.initializer, isParameterPropertyAssignment);
+                            return getParameterOrUnionTypeAnnotation(rootNode, typeNode.initializer, isParameterPropertyAssignment);
                         }
                         break;
                     case SyntaxKind.ArrayType:
-                        var type = getParameterOrUnionTypeAnnotation(typeNode.elementType, isParameterPropertyAssignment);
+                        type = getParameterOrUnionTypeAnnotation(rootNode, typeNode.elementType, isParameterPropertyAssignment);
 
                         if (!ts.isRestParameter(<ParameterDeclaration>node.parent)) {
                             return `Array<${type}>`;
@@ -5408,14 +5455,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ArrayLiteralExpression:
                         return getArrayLiteral(<ArrayLiteralExpression>node);
                     case SyntaxKind.UnionType:
-                        return addOptionalIfNeeded(node.parent, getUnionType(<UnionOrIntersectionTypeNode>node), isParameterPropertyAssignment);
+                        return addOptionalIfNeeded(node.parent, getUnionType(rootNode, <UnionOrIntersectionTypeNode>node), isParameterPropertyAssignment);
                     case SyntaxKind.TypeReference:
-                        var type = addOptionalIfNeeded(node.parent, getTypeReference(<TypeReferenceNode>node), isParameterPropertyAssignment);
+                        let typeRef = <TypeReferenceNode>node;
+                        let symbol = typeChecker.getSymbolAtLocation(typeRef.typeName);
+                        let declaration = symbol.valueDeclaration || symbol.declarations[0];
+
+                        if (declaration.kind === SyntaxKind.TypeAliasDeclaration) {
+                            let typeAlias = getMergedTypeAliasDeclaration(getNodeName(typeRef.typeName), typeRef, <TypeAliasDeclaration>declaration);
+                            return getParameterOrUnionTypeAnnotation(rootNode, typeAlias, false);
+                        }
+
+                        type = addOptionalIfNeeded(node.parent, getTypeReference(rootNode, typeRef), isParameterPropertyAssignment);
 
                         return addVarArgsIfNeeded(<ParameterDeclaration>node.parent, type);
                     case SyntaxKind.TypeLiteral:
                     case SyntaxKind.ObjectLiteralExpression:
-                        return addOptionalIfNeeded(node.parent, getTypeLiteral((<TypeLiteralNode>node).members || (<ObjectLiteralExpression>node).properties), isParameterPropertyAssignment);
+                        return addOptionalIfNeeded(node.parent, getTypeLiteral(rootNode, (<TypeLiteralNode>node).members || (<ObjectLiteralExpression>node).properties), isParameterPropertyAssignment);
                     case SyntaxKind.IndexSignature:
                         return getIndexSignature(<IndexSignatureDeclaration>node);
                     case SyntaxKind.StringKeyword:
@@ -5429,7 +5485,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ArrowFunction:
                     case SyntaxKind.ConstructorType:
                     case SyntaxKind.FunctionExpression:
-                        return addOptionalIfNeeded(node.parent, getFunctionType(<FunctionLikeDeclaration>node), isParameterPropertyAssignment);
+                        return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number", isParameterPropertyAssignment);
                     case SyntaxKind.StringLiteral:
@@ -5442,10 +5498,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.VoidExpression:
                         return "undefined";
                     case SyntaxKind.Identifier:
-                        var symbol = getSymbolDeclaration(node);
+                        let symbolDeclaration = getSymbolDeclaration(node);
 
                         if (symbol) {
-                            return getParameterOrUnionTypeAnnotation(symbol, isParameterPropertyAssignment)
+                            return getParameterOrUnionTypeAnnotation(rootNode, symbolDeclaration, isParameterPropertyAssignment)
                         }
                         break;
                     case SyntaxKind.NewExpression:
@@ -5460,7 +5516,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         return buffer.reverse().join(".");
                     case SyntaxKind.ThisKeyword:
-                        return getThis(node);
+                        return getThis(rootNode, node);
                     case SyntaxKind.CallExpression:
                     case SyntaxKind.PropertyAccessExpression:
                         return addOptionalIfNeeded(node.parent, getExpression(node), isParameterPropertyAssignment);
@@ -5478,16 +5534,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
 
                 emitCallOrIndexSignatures(interface, members, (indexSignature): string => {
-                    var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(param)));
-                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature.type));
+                    var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)));
+                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
 
                     return `function(${params.join(", ")}): ${returnType}`;
                 });
             }
 
             function getIndexSignature(indexSignature: IndexSignatureDeclaration, genericsTypeChecker = (param: string) => param): string {
-                var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(param)));
-                var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature.type));
+                var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, param)));
+                var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, indexSignature.type));
 
                 return `Object<${params.join(", ")}, ${returnType}>`;
             }
@@ -5566,19 +5622,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitVariableTypeAnnotation(<ParameterDeclaration>cloned);
             }
 
-            function emitVariableTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
+            function emitVariableTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration): void {
+                emitVariableOrPropertyTypeAnnotation(node);
+            }
+
+            function emitPropertyOrParamterAnnotation(node: PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
+                emitVariableOrPropertyTypeAnnotation(node, isParameterPropertyAssignment);
+            }
+
+            function emitVariableOrPropertyTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
                 var type = "?";
                 var annotation = ts.isConst(node) ? "@const" : "@type";
 
                 if (node.type || node.initializer) {
-                    type = getParameterOrUnionTypeAnnotation(node.type || node.initializer, isParameterPropertyAssignment);
+                    type = getParameterOrUnionTypeAnnotation(node, node.type || node.initializer, isParameterPropertyAssignment);
                 }
 
                 write(`/** ${annotation} {${type}} */ `);
-            }
-
-            function emitPropertyOrParamterAnnotation(node: PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
-                emitVariableTypeAnnotation(node, isParameterPropertyAssignment);
             }
 
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
@@ -5603,8 +5663,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (hasReturnType || hasParameters || hasModifiers) {
                     emitStartAnnotation();
 
+                    if (hasModifiers) {
+                        emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
+                    }
+
                     if (hasParameters) {
-                        emitParametersAnnotations(node.parameters);
+                        emitParametersAnnotations(node, node.parameters);
                     }
 
                     if (hasReturnType) {
@@ -5617,12 +5681,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
 
                         if (returnType) {
-                            emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(returnType)}}`);
+                            emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, returnType)}}`);
                         }
-                    }
-
-                    if (hasModifiers) {
-                        emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
                     }
 
                     emitGenericTypes(getGenericArguments(node));
@@ -5630,9 +5690,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
-            function emitParametersAnnotations(parameters: NodeArray<ParameterDeclaration>): void {
+            function emitParametersAnnotations(rootNode: Node, parameters: NodeArray<ParameterDeclaration>): void {
                 ts.forEach(parameters, (parameter) => {
-                    let type = getParameterOrUnionTypeAnnotation(parameter);
+                    let type = getParameterOrUnionTypeAnnotation(rootNode, parameter);
                     let name = ts.getTextOfNode(parameter.name);
 
                     if (ts.isRestParameter(parameter)) {
@@ -5687,7 +5747,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 });
 
                 if (ctor) {
-                    emitParametersAnnotations(ctor.parameters);
+                    emitParametersAnnotations(node, ctor.parameters);
                 }
 
                 emitGenericTypes(getGenericArguments(node));
@@ -5719,7 +5779,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>) {
-                let isDeclaredInAModule = false;
+                let shouldEmitSemicolon = false;
                 let nodeName = ts.declarationNameToString(node.name);
                 // Check if we have property assignment inside class declaration.
                 // If there is property assignment, we need to emit constructor whether users define it or not
@@ -5759,7 +5819,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitStart(ctor);
 
                 if (languageVersion < ScriptTarget.ES6) {
-                    if (isDeclaredInAModule = emitModuleIfNeeded(node)) {
+                    if (shouldEmitSemicolon = emitModuleIfNeeded(node)) {
                         emitDeclarationName(node);
                         write(" = function ");
                     }
@@ -5851,31 +5911,63 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitTrailingComments(ctor);
                 }
 
-                if (isDeclaredInAModule) {
+                if (shouldEmitSemicolon) {
                     write(";");
                 }
 
                 setModuleGenerated(node);
             }
             function emitTypeAliasDeclaration(node: TypeAliasDeclaration) {
-                let typeAliasName = ts.getTextOfNode(node.name);
-                let annotationValue = getParameterOrUnionTypeAnnotation(node);
-
-                forceWriteLine();
-                emitStartAnnotation();
-                emitCommentedAnnotation(`@typedef {${annotationValue}}`);
-                emitEndAnnotation();
-
-                if (!emitModuleIfNeeded(node)) {
-                    write("var ");
-                }
-
-                write(`${typeAliasName};`);
-                typeAliases[typeAliasName] = true;
+                var typeAliasName = ts.getTextOfNode(node.name);
+                typeAliases[typeAliasName] = node;
             }
 
-            function symbolIsTypeAlias(symbol: string): boolean {
-                return !!typeAliases[symbol];
+            function getMergedTypeAliasDeclaration(typeAliasName: string, node: TypeReferenceNode, declaration: TypeAliasDeclaration) {
+                let typeAlias = typeAliases[typeAliasName] || declaration;
+                let cloned = (<any>Object).assign({}, typeAlias);
+                let tuples = {};
+                let recurse = (node: Node): void => {
+                    switch (node.kind) {
+                        case SyntaxKind.ParenthesizedType:
+                            recurse((<ParenthesizedTypeNode>node).type);
+                            break;
+                        case SyntaxKind.UnionType:
+                            ts.forEach((<UnionTypeNode>node).types, recurse);
+                            break;
+                        case SyntaxKind.FunctionType:
+                            if ((<FunctionOrConstructorTypeNode>node).parameters) {
+                                ts.forEach((<FunctionOrConstructorTypeNode>node).parameters, recurse);
+                            }
+                        case SyntaxKind.ArrayType:
+                            if ((<ArrayTypeNode>node).elementType) {
+                                recurse((<ArrayTypeNode>node).elementType);
+                                break;
+                            }
+                        default:
+                            let anyNode: any = node; 
+
+                            if (anyNode.type && anyNode.type.typeName) {
+                                let typeName = anyNode.type.typeName;
+                                let name = getNodeName(typeName);
+
+                                if (tuples[name]) {
+                                    anyNode.type = tuples[name];
+                                }
+                            }
+                    }
+                };
+
+                if (typeAlias.typeParameters) {
+                    typeAlias.typeParameters.forEach((ta, i) => {
+                        tuples[getNodeName(ta)] = node.typeArguments[i];
+                    });
+                }
+
+                cloned.kind = typeAlias.kind;
+                recurse(cloned.type);
+                cloned.typeParameters = node.typeArguments;
+
+                return cloned;
             }
 
             function emitClassExpression(node: ClassExpression) {
@@ -6089,16 +6181,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 scopeEmitStart(node);
                 writeLine();
                 emitConstructor(node, baseTypeNode, interfacesImpl);
-                emitMemberFunctionsForES5AndLower(node);
-                emitPropertyDeclarations(node, getProperties(node, /*static:*/ true));
-                writeLine();
-                emitDecoratorsOfClass(node);
-                writeLine();
-                emitTempDeclarations(/*newLine*/ true);
-                tempFlags = saveTempFlags;
-                tempVariables = saveTempVariables;
-                tempParameters = saveTempParameters;
-                computedPropertyNamesToGeneratedNames = saveComputedPropertyNamesToGeneratedNames;
                 if (baseTypeNode) {
                     writeLine();
                     emitStart(baseTypeNode);
@@ -6112,6 +6194,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(");");
                     emitEnd(baseTypeNode);
                 }
+                emitMemberFunctionsForES5AndLower(node);
+                emitPropertyDeclarations(node, getProperties(node, /*static:*/ true));
+                writeLine();
+                emitDecoratorsOfClass(node);
+                writeLine();
+                emitTempDeclarations(/*newLine*/ true);
+                tempFlags = saveTempFlags;
+                tempVariables = saveTempVariables;
+                tempParameters = saveTempParameters;
+                computedPropertyNamesToGeneratedNames = saveComputedPropertyNamesToGeneratedNames;
             }
 
             function emitClassMemberPrefix(node: ClassLikeDeclaration, member: Node) {
@@ -8100,7 +8192,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (!compilerOptions.noEmitHelpers) {
                     // Only Emit __extends function when target ES5.
                     // For target ES6 and above, we can emit classDeclaration as is.
-                    if ((languageVersion < ScriptTarget.ES6) && (!extendsEmitted && resolver.getNodeCheckFlags(node) & NodeCheckFlags.EmitExtends)) {
+                    if ((languageVersion < ScriptTarget.ES6) && (!extendsEmitted)) {
                         emitExtendsAnnotation();
                         writeLines(extendsHelper);
                         extendsEmitted = true;
@@ -8134,6 +8226,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 if (isExternalModule(node) || compilerOptions.isolatedModules) {
                     let emitModule = moduleEmitDelegates[modulekind] || moduleEmitDelegates[ModuleKind.CommonJS];
+                    emitEmitHelpers(node);
                     emitModule(node);
                 }
                 else {
@@ -8158,10 +8251,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitNodeConsideringCommentsOption(node: Node, emitNodeConsideringSourcemap: (node: Node) => void): void {
                 if (node) {
-                    if (node.flags & NodeFlags.Ambient) {
-                        return emitCommentsOnNotEmittedNode(node);
-                    }
-
                     if (isSpecializedCommentHandling(node)) {
                         // This is the node that will handle its own comments and sourcemap
                         return emitNodeWithoutSourceMap(node);
