@@ -3590,7 +3590,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             // to emit it separately.
                             emitNodeWithCommentsAndWithoutSourcemap(declaration);
                             write(" = ");
-                            emitModuleIfNeeded(rhsIterationValue);
+                            emitModuleIfNeeded(rhsIterationValue.expression);
                             emitNodeWithoutSourceMap(rhsIterationValue);
                         }
                     }
@@ -5418,11 +5418,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return getGeneratedPathForModule(type.nodeType);
             }
 
-            function getExpression(node: Node): string {
-                var type = typeChecker.getTypeAtLocation(node);
+            function getSymbolName(type: Type): string {
                 var name = type.symbol ? type.symbol.name : (<IntrinsicType>type).intrinsicName;
 
+                if ((<TypeReference>type).typeArguments) {
+                    name = name + "<" + (<TypeReference>type).typeArguments.map(getSymbolName).join(", ") + ">";
+                }
+
                 return name === "any" ? "?" : name;
+            }
+
+            function getExpression(node: Node): string {
+                var type = typeChecker.getTypeAtLocation(node);
+
+                return getSymbolName(type);
             }
 
             function getParameterOrUnionTypeAnnotation(rootNode: Node, node: Node, isParameterPropertyAssignment?: boolean): string {
@@ -5436,6 +5445,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.PropertySignature:
                     case SyntaxKind.ParenthesizedType:
                     case SyntaxKind.PropertyAssignment:
+                    case SyntaxKind.VariableDeclaration:
                     case SyntaxKind.TypeAliasDeclaration:
                         if (typeNode.type) {
                             return getParameterOrUnionTypeAnnotation(rootNode, typeNode.type, isParameterPropertyAssignment);
@@ -5500,7 +5510,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.Identifier:
                         let symbolDeclaration = getSymbolDeclaration(node);
 
-                        if (symbol) {
+                        if (symbolDeclaration) {
                             return getParameterOrUnionTypeAnnotation(rootNode, symbolDeclaration, isParameterPropertyAssignment)
                         }
                         break;
@@ -5944,7 +5954,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                 break;
                             }
                         default:
-                            let anyNode: any = node; 
+                            let anyNode: any = node;
 
                             if (anyNode.type && anyNode.type.typeName) {
                                 let typeName = anyNode.type.typeName;
@@ -6881,7 +6891,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function getModuleName(node: Node): string {
                 let scope = getSymbolScope(node)
 
-                if (!isScopeLike(scope)) {
+                if (scope && !isScopeLike(scope)) {
                     let generatedPath;
 
                     if (generatedPath = getGeneratedPathForModule(scope)) {
