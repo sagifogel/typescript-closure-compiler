@@ -1930,6 +1930,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         case SyntaxKind.InterfaceDeclaration:
                         case SyntaxKind.EnumDeclaration:
                         case SyntaxKind.ModuleDeclaration:
+                        case SyntaxKind.ArrowFunction:
                             return <Declaration>node;
                     }
                 }
