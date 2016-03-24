@@ -589,6 +589,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return "";
             }
 
+            function isNodeAlreadyDeclared(node: Declaration): boolean {
+                var module = ensureModule(node);
+                var declarations = module.declarations;
+                var name = getNodeName(node);
+
+                return name in declarations;
+            }
+
             function isModuleAlreadyGenerated(node: ModuleDeclaration): boolean {
                 return ensureModule(node).generated;
             }
@@ -626,11 +634,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return true;
             }
 
+            function getNodeFullPath(node: Node): string {
+                var path: Array<string> = [];
+
+                do {
+                    path.push(getNodeName(node));
+                    node = getImmediateContainerNode(node)
+                }
+                while (node && node.kind !== SyntaxKind.SourceFile);
+
+                return path.reverse().join(".");
+            }
+
             function ensureModule(node: Declaration): ModuleGeneration {
                 let scope = getSymbolScope(node);
-                let moduleFullPath = scope && scope.kind !== SyntaxKind.SourceFile ? getGeneratedPathForModule(scope) : "global";
+                let moduleFullPath = scope && scope.kind !== SyntaxKind.SourceFile ? getNodeFullPath(scope) : "global";
 
-                moduleFullPath += ":" + (<Identifier>node.name).text;
+                moduleFullPath += `:${getNodeName(node)}`;
 
                 return modulesToGeneratedName[moduleFullPath] || (modulesToGeneratedName[moduleFullPath] = {
                     generated: false,
@@ -3393,8 +3413,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         forceWriteLine();
                     }
 
-                    if (decl.kind !== SyntaxKind.Parameter) {
+                    if (decl.kind !== SyntaxKind.Parameter && !isNodeAlreadyDeclared(decl)) {
                         emitVariableTypeAnnotation(decl);
+                        trySetVariableDeclarationInModule(decl);
                     }
                     emit(decl);
                 }
@@ -4230,8 +4251,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         if (initializer.kind === SyntaxKind.ObjectLiteralExpression && !isNodeDeclaredWithinScope(node)) {
                             forceWriteLine();
                         }
-                        if (ts.isFunctionLike(initializer)) {
-                            emitFunctionAnnotation(<ArrowFunction>initializer);
+                        if (ts.isFunctionLike(initializer) && initializer.kind !== SyntaxKind.ArrowFunction) {
+                            emitFunctionAnnotation(<FunctionExpression>initializer);
                         }
                     }
 
@@ -4585,13 +4606,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             }
                         }
                         else {
-                            if (node.kind === SyntaxKind.FunctionDeclaration && (symbolScope.kind === SyntaxKind.SourceFile || isDeclaredWithinFunction)) {
-                                shouldEmitSemicolon = true;
-                            }
                             emitFunctionName = false;
-                            write("var ");
-                            emitDeclarationName(node);
-                            write(" = ");
+
+                            if (node.kind !== SyntaxKind.FunctionDeclaration) {
+                                if (symbolScope.kind === SyntaxKind.SourceFile || isDeclaredWithinFunction) {
+                                    shouldEmitSemicolon = true;
+                                    write("var ");
+                                    emitDeclarationName(node);
+                                    write(" = ");
+                                }
+                            }
+                            else {
+                                emitFunctionName = true;
+                            }
                         }
                     }
 
