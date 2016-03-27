@@ -446,7 +446,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             /** Sourcemap data that will get encoded */
             let sourceMapData: SourceMapData;
-
+            let mergedProps: Array<string> = ["pos", "text", "flags", "type", "name", "typeName", "typeParameters", "types", "symbol", "decalarations", "parameters", "elementType", "initializer"];
             /** If removeComments is true, no leading-comments needed to be emitted **/
             let emitLeadingCommentsOfPosition = compilerOptions.removeComments ? function (pos: number) { } : emitLeadingCommentsOfPositionWorker;
 
@@ -5446,20 +5446,32 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return getGeneratedPathForModule(type.nodeType);
             }
 
-            function getSymbolName(type: Type): string {
-                var name = type.symbol ? type.symbol.name : (<IntrinsicType>type).intrinsicName;
+            function getSymbolName(rootNode: any, type: Type | TypeNode): string {
+                let name = type.symbol ? type.symbol.name : (<IntrinsicType>type).intrinsicName;
 
                 if ((<TypeReference>type).typeArguments) {
-                    name = name + "<" + (<TypeReference>type).typeArguments.map(getSymbolName).join(", ") + ">";
+                    let typeArguments: Array<Type | TypeNode>;
+                    let func: (rootNode: Node, type: TypeNode) => string;
+
+                    if ((<any>rootNode).initializer.typeArguments) {
+                        func = getParameterOrUnionTypeAnnotation;
+                        typeArguments = <Array<Type>>rootNode.initializer.typeArguments;
+                    }
+                    else {
+                        func = getSymbolName;
+                        typeArguments = (<TypeReference>type).typeArguments;
+                    }
+
+                    name += `<${typeArguments.map((typeArgument: TypeNode) => func(rootNode, typeArgument)).join(", ")}>`;
                 }
 
                 return name === "any" ? "?" : name;
             }
 
-            function getExpression(node: Node): string {
+            function getExpression(rootNode: Node, node: Node): string {
                 var type = typeChecker.getTypeAtLocation(node);
 
-                return getSymbolName(type);
+                return getSymbolName(rootNode, type);
             }
 
             function getParameterOrUnionTypeAnnotation(rootNode: Node, node: Node, isParameterPropertyAssignment?: boolean): string {
@@ -5500,7 +5512,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let declaration = symbol.valueDeclaration || symbol.declarations[0];
 
                         if (declaration.kind === SyntaxKind.TypeAliasDeclaration) {
-                            let typeAlias = getMergedTypeAliasDeclaration(getNodeName(typeRef.typeName), typeRef, <TypeAliasDeclaration>declaration);
+                            let typeAlias = getMergedTypeAliasDeclaration(typeRef, <TypeAliasDeclaration>declaration);
                             return getParameterOrUnionTypeAnnotation(rootNode, typeAlias, false);
                         }
 
@@ -5557,7 +5569,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return getThis(rootNode, node);
                     case SyntaxKind.CallExpression:
                     case SyntaxKind.PropertyAccessExpression:
-                        return addOptionalIfNeeded(node.parent, getExpression(node), isParameterPropertyAssignment);
+                        return addOptionalIfNeeded(node.parent, getExpression(rootNode, node), isParameterPropertyAssignment);
+                    case SyntaxKind.TypeParameter:
+                        return getNodeName(node);
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
@@ -5955,15 +5969,43 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 setModuleGenerated(node);
             }
-            function emitTypeAliasDeclaration(node: TypeAliasDeclaration) {
-                var typeAliasName = ts.getTextOfNode(node.name);
-                typeAliases[typeAliasName] = node;
+
+            function clone(source: Node, props: Array<string>): Node {
+                var cloned = ts.createSynthesizedNode(source.kind);
+
+                props.forEach(function (prop) {
+                    var val;
+
+                    if (val = source[prop]) {
+                        var ctor = val.constructor;
+                        var isPrimitive = ctor === Boolean || ctor === Number || ctor === String;
+
+                        if (isPrimitive) {
+                            cloned[prop] = val;
+                        }
+                        else {
+                            cloned[prop] = Array.isArray(val) ? val.map(e => clone(e, props)) : clone(val, props);
+                        }
+                    }
+                });
+
+                cloned.parent = source.parent;
+
+                return cloned;
             }
 
-            function getMergedTypeAliasDeclaration(typeAliasName: string, node: TypeReferenceNode, declaration: TypeAliasDeclaration) {
-                let typeAlias = typeAliases[typeAliasName] || declaration;
-                let cloned = (<any>Object).assign({}, typeAlias);
-                let tuples = {};
+            function getMergedTypeAliasDeclaration(node: TypeReferenceNode, declaration: TypeAliasDeclaration) {
+                var tuples = {};
+                var typeAlias = <TypeAliasDeclaration>clone(declaration, mergedProps);
+                var trySetType = function (node: any): void {
+                    if (node.type && node.type.typeName) {
+                        var typeName = node.type.typeName;
+                        var name_8 = getNodeName(typeName);
+                        if (tuples[name_8]) {
+                            node.type = tuples[name_8];
+                        }
+                    }
+                };
                 let recurse = (node: Node): void => {
                     switch (node.kind) {
                         case SyntaxKind.ParenthesizedType:
@@ -5973,8 +6015,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             ts.forEach((<UnionTypeNode>node).types, recurse);
                             break;
                         case SyntaxKind.FunctionType:
-                            if ((<FunctionOrConstructorTypeNode>node).parameters) {
+                            let functionType = <FunctionOrConstructorTypeNode>node;
+                            if (functionType.parameters) {
                                 ts.forEach((<FunctionOrConstructorTypeNode>node).parameters, recurse);
+                            }
+
+                            if (functionType.type.kind === SyntaxKind.ParenthesizedType ||
+                                functionType.type.kind === SyntaxKind.UnionType ||
+                                functionType.type.kind === SyntaxKind.FunctionType ||
+                                functionType.type.kind === SyntaxKind.ArrayType) {
+                                recurse(functionType.type);
+                            }
+                            else {
+                                trySetType(functionType);
                             }
                         case SyntaxKind.ArrayType:
                             if ((<ArrayTypeNode>node).elementType) {
@@ -5982,16 +6035,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                 break;
                             }
                         default:
-                            let anyNode: any = node;
-
-                            if (anyNode.type && anyNode.type.typeName) {
-                                let typeName = anyNode.type.typeName;
-                                let name = getNodeName(typeName);
-
-                                if (tuples[name]) {
-                                    anyNode.type = tuples[name];
-                                }
-                            }
+                            trySetType(node);
                     }
                 };
 
@@ -6001,11 +6045,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     });
                 }
 
-                cloned.kind = typeAlias.kind;
-                recurse(cloned.type);
-                cloned.typeParameters = node.typeArguments;
+                recurse(typeAlias.type);
 
-                return cloned;
+                return typeAlias;
             }
 
             function emitClassExpression(node: ClassExpression) {
@@ -8516,8 +8558,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return emitClassDeclaration(<ClassDeclaration>node);
                     case SyntaxKind.InterfaceDeclaration:
                         return emitInterfaceDeclaration(<InterfaceDeclaration>node);
-                    case SyntaxKind.TypeAliasDeclaration:
-                        return emitTypeAliasDeclaration(<TypeAliasDeclaration>node);
                     case SyntaxKind.EnumDeclaration:
                         return emitEnumDeclaration(<EnumDeclaration>node);
                     case SyntaxKind.EnumMember:
