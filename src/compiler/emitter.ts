@@ -5447,22 +5447,30 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getSymbolName(rootNode: any, type: Type | TypeNode): string {
-                let name = type.symbol ? type.symbol.name : (<IntrinsicType>type).intrinsicName;
+                var name = "";
+                var params = "";
+                var declaration: Declaration;
 
-                if ((<TypeReference>type).typeArguments) {
-                    let typeArguments: Array<Type | TypeNode>;
-                    let func: (rootNode: Node, type: TypeNode) => string;
+                if (type.symbol) {
+                    name = type.symbol.name;
+                    declaration = type.symbol.declarations[0];
+                }
+                else {
+                    name = (<IntrinsicType>type).intrinsicName
+                }
 
-                    if ((<any>rootNode).initializer.typeArguments) {
-                        func = getParameterOrUnionTypeAnnotation;
-                        typeArguments = <Array<Type>>rootNode.initializer.typeArguments;
-                    }
-                    else {
-                        func = getSymbolName;
-                        typeArguments = (<TypeReference>type).typeArguments;
-                    }
+                if (rootNode.initializer && rootNode.initializer.typeArguments) {
+                    params = getParameterizedNode(rootNode, rootNode.initializer.typeArguments, true, function (param) { return param; });
+                }
+                else if ((<TypeReference>type).typeArguments) {
+                    params = (<TypeReference>type).typeArguments.map(typeArgument => getSymbolName(rootNode, typeArgument)).join(", ");
+                }
+                else if (declaration) {
+                    name = getParameterOrUnionTypeAnnotation(rootNode, declaration);
+                }
 
-                    name += `<${typeArguments.map((typeArgument: TypeNode) => func(rootNode, typeArgument)).join(", ")}>`;
+                if (params) {
+                    name += `<${params}>`;
                 }
 
                 return name === "any" ? "?" : name;
@@ -5512,7 +5520,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let declaration = symbol.valueDeclaration || symbol.declarations[0];
 
                         if (declaration.kind === SyntaxKind.TypeAliasDeclaration) {
-                            let typeAlias = getMergedTypeAliasDeclaration(typeRef, <TypeAliasDeclaration>declaration);
+                            var typeAlias = declaration;
+
+                            if (typeRef.typeArguments) {
+                                typeAlias = getMergedTypeAliasDeclaration(typeRef, <TypeAliasDeclaration>declaration);
+                            }
                             return getParameterOrUnionTypeAnnotation(rootNode, typeAlias, false);
                         }
 
@@ -5567,10 +5579,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return buffer.reverse().join(".");
                     case SyntaxKind.ThisKeyword:
                         return getThis(rootNode, node);
-                    case SyntaxKind.CallExpression:
                     case SyntaxKind.PropertyAccessExpression:
+                    case SyntaxKind.ElementAccessExpression:
+                    case SyntaxKind.CallExpression:
                         return addOptionalIfNeeded(node.parent, getExpression(rootNode, node), isParameterPropertyAssignment);
                     case SyntaxKind.TypeParameter:
+                    case SyntaxKind.InterfaceDeclaration:
+                    case SyntaxKind.ClassDeclaration:
+                    case SyntaxKind.EnumDeclaration:
                         return getNodeName(node);
                 }
 
