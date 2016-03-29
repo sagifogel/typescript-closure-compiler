@@ -5714,6 +5714,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let accessModifierKind: SyntaxKind;
                 let hasParameters = node.parameters && node.parameters.length > 0;
                 let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
+                let declaredWithinInterface = node.parent.kind === SyntaxKind.InterfaceDeclaration && !node.type;
 
                 if (node.modifiers) {
                     let accessModifiers = ts.filter(node.modifiers, (modifier) => ts.isAccessibilityModifier(modifier.kind));
@@ -5727,7 +5728,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
-                if (hasReturnType || hasParameters || hasModifiers) {
+                if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers) {
                     emitStartAnnotation();
 
                     if (hasModifiers) {
@@ -5738,8 +5739,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitParametersAnnotations(node, node.parameters);
                     }
 
-                    if (hasReturnType) {
-                        emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, node.type)}}`);
+                    if (hasReturnType || declaredWithinInterface) {
+                        let returnType: Node = hasReturnType ? node.type : ts.createSynthesizedNode(SyntaxKind.AnyKeyword);
+
+                        emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, returnType)}}`);
                     }
 
                     emitGenericTypes(getGenericArguments(node));
