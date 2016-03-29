@@ -5712,9 +5712,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
                 let hasModifiers = false;
                 let accessModifierKind: SyntaxKind;
-                let declaredWithinInterface = node.parent.kind === SyntaxKind.InterfaceDeclaration;
                 let hasParameters = node.parameters && node.parameters.length > 0;
-                let hasReturnType = declaredWithinInterface || (node.type && node.type.kind !== SyntaxKind.VoidKeyword);
+                let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
 
                 if (node.modifiers) {
                     let accessModifiers = ts.filter(node.modifiers, (modifier) => ts.isAccessibilityModifier(modifier.kind));
@@ -5740,17 +5739,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (hasReturnType) {
-                        let returnType = node.type
-
-                        if (!returnType && declaredWithinInterface) {
-                            let anyMock: any = { type: { kind: SyntaxKind.AnyKeyword } };
-
-                            returnType = <TypeNode>anyMock;
-                        }
-
-                        if (returnType) {
-                            emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, returnType)}}`);
-                        }
+                        emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, node.type)}}`);
                     }
 
                     emitGenericTypes(getGenericArguments(node));
