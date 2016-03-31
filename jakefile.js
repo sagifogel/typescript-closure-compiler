@@ -14,19 +14,19 @@ var tsCommand = "jake --directory " + typeScriptRootPath + " --f " + tsResolvedJ
 
 task("copy-files", [], function () {
     jake.cpR(emitterPath, typeScriptEmitterPath);
-    jake.cpR(programPath, typeScriptEmitterPath);
-});
+    jake.cpR(programPath, typeScriptProgramPath);
+}, { async: false });
 
 desc("clean the built/local folder using the clean task and builds back typescript services");
-task("build-typescript", ["clean-typescript", "typescript-local"]);
+task("build-typescript", ["clean-typescript", "typescript-local"], { async: false });
 
 task("clean-typescript", function () {
     jake.createExec([tsCommand + " clean"]).run();
-});
+}, { async: false });
 
-task("build-typescript-local", function () {
-    jake.createExec([tsCommand + " local"]).run();
-});
+task("build-tsc", function () {
+    jake.createExec([tsCommand + " tsc"]).run();
+}, { async: false });
 
 task("copy-to-node", function () {
     var source = path.resolve(typeScriptRootPath, "built/local");
@@ -34,7 +34,7 @@ task("copy-to-node", function () {
     
     jake.rmRf(target);
     jake.cpR(source, target);
-});
+}, { async: false });
 
-desc("patches the emitter.ts and builds typescript services")
-task("build", ["copy-files", "clean-typescript", "build-typescript-local", "copy-to-node"], { async: false });
+desc("patches the emitter/program.ts and builds typescript services")
+task("build", ["copy-files", "clean-typescript", "build-tsc", "copy-to-node"], { async: false });
