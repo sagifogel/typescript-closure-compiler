@@ -1198,7 +1198,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 for (let i = 0; i < count; i++) {
                     var node: Node = nodes[start + i];
 
-                    if (i > 0 && node.kind === SyntaxKind.VariableDeclaration) {
+                    if (i > 0 && node.kind === SyntaxKind.VariableDeclaration && !isNodeDeclaredWithinLoop(node)) {
                         write(";");
                         forceWriteLine();
                         if (node.kind !== SyntaxKind.Parameter) {
@@ -1215,9 +1215,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // "comment1" is not considered leading comment for "y" but rather
                     // considered as trailing comment of the previous node.
                     emitTrailingCommentsOfPosition(node.pos);
-                    if (node.kind !== SyntaxKind.PropertyAccessExpression) {
-                        emitModuleIfNeeded(node);
-                    }
                     emitNode(<TNode>node);
                     leadingComma = true;
                 }
@@ -1978,12 +1975,40 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return null;
             }
 
+            function flattenStatements(node: Node): Array<Statement> {
+                let flattened: Array<Statement> = [];
+                let statements = (<Block>node).statements;
+
+                if (statements) {
+                    for (var i = 0; i < statements.length; i++) {
+                        var statement = statements[i];
+
+                        switch (statement.kind) {
+                            case SyntaxKind.IfStatement:
+                                let ifStatement = <IfStatement>statement;
+
+                                if (ifStatement.thenStatement) {
+                                    flattened = flattened.concat(flattenStatements(ifStatement.thenStatement));
+                                }
+                                if (ifStatement.elseStatement) {
+                                    flattened = flattened.concat(flattenStatements(ifStatement.elseStatement));
+                                }
+                                break;
+                            default:
+                                flattened.push(statement);
+                        }
+                    }
+                }
+
+                return flattened;
+            }
+
             function getSymbolAndScope(node: Node): { scope: Node, node: Node } {
                 let _node = node;
                 let kind = node.kind;
                 let containingNode: Node;
                 let isDefinedInTopLevelClass = false;
-                let statements: NodeArray<Statement | ClassElement>;
+                let statements: Array<Statement | ClassElement>;
                 let declarationList: Array<Declaration | Statement | Expression> = [];
 
                 function filter(d: Declaration | Statement): boolean {
@@ -2026,7 +2051,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             let body = <Block | ModuleBlock>declaration.body;
 
                             if (body) {
-                                statements = body.statements;
+                                statements = flattenStatements(body);
                             }
                             else if (containingNode.kind === SyntaxKind.ClassDeclaration) {
                                 statements = (<ClassDeclaration>containingNode).members;
@@ -2769,11 +2794,25 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
+            function isBindedToThis(node: Node): boolean {
+                while (node) {
+                    if (node.kind !== SyntaxKind.ThisKeyword) {
+                        return true;
+                    }
+
+                    node = (<Decorator>node).expression;
+                }
+
+                return false;
+            }
+
             function emitIndexedAccess(node: ElementAccessExpression) {
                 if (tryEmitConstantValue(node)) {
                     return;
                 }
-                emitModuleIfNeeded(node.expression);
+                if (!isBindedToThis(node)) {
+                    emitModuleIfNeeded(node.expression);
+                }
                 emit(node.expression);
                 write("[");
                 emit(node.argumentExpression);
@@ -3383,8 +3422,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 if (startPos !== undefined) {
-                    emitToken(tokenKind, startPos);
-                    write(" ");
+                    return `${ts.tokenToString(tokenKind)} `;
                 }
                 else {
                     switch (tokenKind) {
@@ -3434,11 +3472,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let startIsEmitted = tryGetStartOfVariableDeclarationList(variableDeclarationList, endPos);
                     if (startIsEmitted) {
                         write(startIsEmitted);
-                        emitCommaList(variableDeclarationList.declarations);
                     }
-                    else {
-                        emitVariableDeclarationListSkippingUninitializedEntries(variableDeclarationList);
-                    }
+
+                    emitCommaList(variableDeclarationList.declarations);
                 }
                 else if (node.initializer) {
                     emit(node.initializer);
@@ -3780,6 +3816,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return node.kind === SyntaxKind.ForStatement ||
                     node.kind === SyntaxKind.ForOfStatement ||
                     node.kind === SyntaxKind.ForInStatement;
+            }
+
+            function isNodeDeclaredWithinLoop(node: Node): boolean {
+                var container = getImmediateContainerNode(node);
+
+                while (node !== container) {
+                    node = node.parent;
+
+                    if (isForLoop(node)) {
+                        return true;
+                    }
+                }
+
+                return false;
             }
 
             function isNodeDeclaredWithinFunction(node: Node): boolean {
