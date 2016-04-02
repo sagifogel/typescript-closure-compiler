@@ -24,8 +24,8 @@ task("clean-typescript", function () {
     jake.createExec([tsCommand + " clean"]).run();
 }, { async: false });
 
-task("build-tsc", function () {
-    jake.createExec([tsCommand + " tsc"]).run();
+task("build-ts", function () {
+    jake.createExec([tsCommand + " release local"]).run();
 }, { async: false });
 
 task("copy-to-node", function () {
@@ -37,4 +37,4 @@ task("copy-to-node", function () {
 }, { async: false });
 
 desc("patches the emitter/program.ts and builds typescript services")
-task("build", ["copy-files", "clean-typescript", "build-tsc", "copy-to-node"], { async: false });
+task("build", ["copy-files", "clean-typescript", "build-ts", "copy-to-node"], { async: false });
