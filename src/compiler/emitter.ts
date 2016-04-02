@@ -4906,10 +4906,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitFunctionBody(node);
                 }
 
-                if (!isES6ExportedDeclaration(node)) {
-                    emitExportMemberAssignment(node);
-                }
-
                 tempFlags = saveTempFlags;
                 tempVariables = saveTempVariables;
                 tempParameters = saveTempParameters;
