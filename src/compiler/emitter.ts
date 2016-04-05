@@ -8676,7 +8676,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return emitClassDeclaration(<ClassDeclaration>node);
                     case SyntaxKind.InterfaceDeclaration:
                         if (shouldEmitInterfaces()) {
-                            return emitInterfaceDeclaration(node);
+                            return emitInterfaceDeclaration(<InterfaceDeclaration>node);
                         }
                         return;
                     case SyntaxKind.EnumDeclaration:
