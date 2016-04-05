@@ -2641,11 +2641,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // "comment1" is not considered to be leading comment for node.initializer
                 // but rather a trailing comment on the previous node.
 
-                if ((<CallExpression>node.initializer).expression && !isBindedToThis((<CallExpression>node.initializer).expression)) {
-                    let declaration = getSymbolAtLocation((<CallExpression>node.initializer).expression);
+                if ((<CallExpression>node.initializer).expression) {
+                    let expression = (<CallExpression>node.initializer).expression;
 
-                    if (declaration) {
-                        emitModuleIfNeeded(declaration);
+                    if (expression && expression.kind === SyntaxKind.Identifier && !isBindedToThis(expression)) {
+                        let symbol = getSymbolAtLocation(expression);
+
+                        if (!ts.isConst(symbol)) {
+                            emitModuleIfNeeded(symbol);
+                        }
                     }
                 }
 
