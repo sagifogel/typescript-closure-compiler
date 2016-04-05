@@ -12,6 +12,11 @@ namespace ts {
     type ModuleGeneration = { declarations: { [name: string]: boolean }, generated: boolean };
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
+    interface CompilerExtendedOptions extends ts.CompilerOptions {
+        emitInterfaces: boolean;
+        emitAnnotations: boolean;
+    }
+
     let entities: Map<number> = {
         "quot": 0x0022,
         "amp": 0x0026,
@@ -321,7 +326,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
     });
 };`;
 
-        let compilerOptions = host.getCompilerOptions();
+        let compilerOptions = <CompilerExtendedOptions>host.getCompilerOptions();
         let languageVersion = compilerOptions.target || ScriptTarget.ES3;
         let modulekind = compilerOptions.module ? compilerOptions.module : languageVersion === ScriptTarget.ES6 ? ModuleKind.ES6 : ModuleKind.None;
         let sourceMapDataList: SourceMapData[] = compilerOptions.sourceMap || compilerOptions.inlineSourceMap ? [] : undefined;
@@ -2635,6 +2640,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 //          }
                 // "comment1" is not considered to be leading comment for node.initializer
                 // but rather a trailing comment on the previous node.
+
+                if ((<CallExpression>node.initializer).expression && !isBindedToThis((<CallExpression>node.initializer).expression)) {
+                    let declaration = getSymbolAtLocation((<CallExpression>node.initializer).expression);
+
+                    if (declaration) {
+                        emitModuleIfNeeded(declaration);
+                    }
+                }
+
                 emitTrailingCommentsOfPosition(node.initializer.pos);
                 emit(node.initializer);
             }
@@ -2796,7 +2810,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function isBindedToThis(node: Node): boolean {
                 while (node) {
-                    if (node.kind !== SyntaxKind.ThisKeyword) {
+                    if (node.kind === SyntaxKind.ThisKeyword) {
                         return true;
                     }
 
@@ -2899,6 +2913,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     superCall = true;
                 }
                 else {
+                    if (node.expression.kind === SyntaxKind.Identifier && !isBindedToThis(node.expression)) {
+                        emitModuleIfNeeded(node.expression);
+                    }
+
                     emit(node.expression);
                     superCall = node.expression.kind === SyntaxKind.PropertyAccessExpression && (<PropertyAccessExpression>node.expression).expression.kind === SyntaxKind.SuperKeyword;
                 }
@@ -3238,7 +3256,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitExponentiationOperator(node);
                     }
                     else {
-                        if (node.left.kind !== SyntaxKind.PropertyAccessExpression) {
+                        if (!isLiteral(node.left) && node.left.kind !== SyntaxKind.PropertyAccessExpression) {
                             emitModuleName(node.left);
                         }
                         emit(node.left);
@@ -4314,7 +4332,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (initializer) {
                         write(" = ");
                         if (!isLiteral(initializer) && initializer.kind !== SyntaxKind.PropertyAccessExpression) {
-                            emitModuleIfNeeded(initializer);
+                            emitModuleName(initializer);
                         }
                         emit(initializer);
                     }
@@ -4607,6 +4625,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let isDeclaredWithinFunction = ts.isFunctionLike(symbolScope);
                 let nodeIsInterfaceFunctionMember = isInterfaceFunctionMember(node);
 
+                if (ts.nodeIsMissing(node.body) && (node.flags & NodeFlags.Export)) {
+                    return;
+                }
                 // TODO (yuisu) : we should not have special cases to condition emitting comments
                 // but have one place to fix check for these conditions.
                 if (node.kind !== SyntaxKind.MethodDeclaration && node.kind !== SyntaxKind.MethodSignature &&
@@ -5529,6 +5550,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return getSymbolName(rootNode, type);
             }
 
+            function getSymbolAtLocation(node: Node): Declaration {
+                var symbol = typeChecker.getSymbolAtLocation(node);
+
+                return symbol.valueDeclaration || symbol.declarations[0];
+            }
+
             function getParameterOrUnionTypeAnnotation(rootNode: Node, node: Node, isParameterPropertyAssignment?: boolean): string {
                 let type: string;
                 let mapped: Array<string>;
@@ -5563,8 +5590,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return addOptionalIfNeeded(node.parent, getUnionType(rootNode, <UnionOrIntersectionTypeNode>node), isParameterPropertyAssignment);
                     case SyntaxKind.TypeReference:
                         let typeRef = <TypeReferenceNode>node;
-                        let symbol = typeChecker.getSymbolAtLocation(typeRef.typeName);
-                        let declaration = symbol.valueDeclaration || symbol.declarations[0];
+                        let declaration = getSymbolAtLocation(typeRef.typeName);
 
                         if (declaration.kind === SyntaxKind.TypeAliasDeclaration) {
                             var typeAlias = declaration;
@@ -5640,19 +5666,34 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
             }
 
+            function emitIf(condition: () => boolean, action: () => void): void {
+                if (condition()) {
+                    action();
+                }
+            }
+
+            function shouldEmitInterfaces(): boolean { return compilerOptions.emitInterfaces; }
+            function shouldEmitAnnotations(): boolean { return compilerOptions.emitAnnotations; }
+
+            function emitAnnotationIf(action: () => void): void {
+                emitIf(shouldEmitAnnotations, action);
+            }
+
             function createGenericsTypeChecker(genericArguments: Array<string>): (param: string) => string {
                 return (param: string) => genericArguments.indexOf(param) > -1 ? "?" : param;
             }
 
             function emitCallSignatures(interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
-                let genericArguments = getGenericArguments(interface);
-                let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
+                emitAnnotationIf(() => {
+                    let genericArguments = getGenericArguments(interface);
+                    let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
 
-                emitCallOrIndexSignatures(interface, members, (indexSignature): string => {
-                    var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)));
-                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
+                    emitCallOrIndexSignatures(interface, members, (indexSignature): string => {
+                        var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)));
+                        var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
 
-                    return `function(${params.join(", ")}): ${returnType}`;
+                        return `function(${params.join(", ")}): ${returnType}`;
+                    });
                 });
             }
 
@@ -5664,10 +5705,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitIndexSignatures(interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
-                let genericArguments = getGenericArguments(interface);
-                let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
+                emitAnnotationIf(() => {
+                    let genericArguments = getGenericArguments(interface);
+                    let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
 
-                emitCallOrIndexSignatures(interface, members, member => getIndexSignature(<IndexSignatureDeclaration>member, genericsTypeChecker));
+                    emitCallOrIndexSignatures(interface, members, member => getIndexSignature(<IndexSignatureDeclaration>member, genericsTypeChecker));
+                });
             }
 
             function emitCallOrIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>, mapFunction: (member: SignatureDeclaration) => string) {
@@ -5693,48 +5736,52 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitEnumAnnotation(node: EnumDeclaration) {
-                var type = "number";
-                var multipleTypes = false;
-                var types = { number: 0, string: 0, other: 0 };
-                var notNumbers = ts.filter(node.members, (member) => member.initializer && member.initializer.kind === SyntaxKind.TypeAssertionExpression)
-                    .map(member => <TypeAssertion>member.initializer);
+                emitAnnotationIf(() => {
+                    let type = "number";
+                    let multipleTypes = false;
+                    let types = { number: 0, string: 0, other: 0 };
+                    let notNumbers = ts.filter(node.members, (member) => member.initializer && member.initializer.kind === SyntaxKind.TypeAssertionExpression)
+                        .map(member => <TypeAssertion>member.initializer);
 
-                if (notNumbers.length) {
-                    types.number = node.members.length - notNumbers.length;
-                    notNumbers.map(function (initializer) { return initializer.expression; })
-                        .forEach(function (type) {
-                            if (type.kind === SyntaxKind.NumericLiteral) {
-                                types.number++;
-                                multipleTypes = types.string + types.other > 0;
-                            }
-                            else if (type.kind === SyntaxKind.StringLiteral) {
-                                types.string++;
-                                multipleTypes = types.number + types.other > 0;
-                            }
-                            else {
-                                types.other++;
-                                multipleTypes = types.string + types.number > 0;
-                            }
-                        });
-                }
-
-                if (!multipleTypes && !types.other) {
-                    if (types.string) {
-                        type = "string";
+                    if (notNumbers.length) {
+                        types.number = node.members.length - notNumbers.length;
+                        notNumbers.map(initializer => initializer.expression)
+                            .forEach(type => {
+                                if (type.kind === SyntaxKind.NumericLiteral) {
+                                    types.number++;
+                                    multipleTypes = types.string + types.other > 0;
+                                }
+                                else if (type.kind === SyntaxKind.StringLiteral) {
+                                    types.string++;
+                                    multipleTypes = types.number + types.other > 0;
+                                }
+                                else {
+                                    types.other++;
+                                    multipleTypes = types.string + types.number > 0;
+                                }
+                            });
                     }
-                    emitStartAnnotation();
-                    emitCommentedAnnotation(`@enum {${type}}`);
-                    emitEndAnnotation();
-                }
+
+                    if (!multipleTypes && !types.other) {
+                        if (types.string) {
+                            type = "string";
+                        }
+                        emitStartAnnotation();
+                        emitCommentedAnnotation(`@enum {${type}}`);
+                        emitEndAnnotation();
+                    }
+                });
             }
 
             function emitArrayTypeAnnotation(node: ParameterDeclaration): void {
-                var cloned = (<any>Object).assign({}, node);
+                emitAnnotationIf(() => {
+                    let cloned = (<any>Object).assign({}, node);
 
-                delete cloned.dotDotDotToken;
-                cloned.type.parent = cloned;
+                    delete cloned.dotDotDotToken;
+                    cloned.type.parent = cloned;
 
-                emitVariableTypeAnnotation(<ParameterDeclaration>cloned);
+                    emitVariableTypeAnnotation(<ParameterDeclaration>cloned);
+                });
             }
 
             function emitVariableTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration): void {
@@ -5742,18 +5789,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitPropertyOrParamterAnnotation(node: PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
-                emitVariableOrPropertyTypeAnnotation(node, isParameterPropertyAssignment);
+                emitAnnotationIf(() => {
+                    emitVariableOrPropertyTypeAnnotation(node, isParameterPropertyAssignment);
+                });
             }
 
             function emitVariableOrPropertyTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
-                var type = "?";
-                var annotation = ts.isConst(node) ? "@const" : "@type";
+                emitAnnotationIf(() => {
+                    let type = "?";
+                    let annotation = ts.isConst(node) ? "@const" : "@type";
 
-                if (node.type || node.initializer) {
-                    type = getParameterOrUnionTypeAnnotation(node, node.type || node.initializer, isParameterPropertyAssignment);
-                }
+                    if (node.type || node.initializer) {
+                        type = getParameterOrUnionTypeAnnotation(node, node.type || node.initializer, isParameterPropertyAssignment);
+                    }
 
-                write(`/** ${annotation} {${type}} */ `);
+                    write(`/** ${annotation} {${type}} */ `);
+                });
             }
 
             function isAccessibilityModifier(kind: SyntaxKind) {
@@ -5768,44 +5819,46 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
-                let hasModifiers = false;
-                let accessModifierKind: SyntaxKind;
-                let hasParameters = node.parameters && node.parameters.length > 0;
-                let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
-                let declaredWithinInterface = node.parent.kind === SyntaxKind.InterfaceDeclaration && !node.type;
+                emitAnnotationIf(() => {
+                    let hasModifiers = false;
+                    let accessModifierKind: SyntaxKind;
+                    let hasParameters = node.parameters && node.parameters.length > 0;
+                    let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
+                    let declaredWithinInterface = node.parent.kind === SyntaxKind.InterfaceDeclaration && !node.type;
 
-                if (node.modifiers) {
-                    let accessModifiers = ts.filter(node.modifiers, modifier => isAccessibilityModifier(modifier.kind));
+                    if (node.modifiers) {
+                        let accessModifiers = ts.filter(node.modifiers, modifier => isAccessibilityModifier(modifier.kind));
 
-                    if (accessModifiers.length) {
-                        accessModifierKind = accessModifiers[0].kind;
+                        if (accessModifiers.length) {
+                            accessModifierKind = accessModifiers[0].kind;
 
-                        if (accessModifierKind !== SyntaxKind.PublicKeyword) {
-                            hasModifiers = true;
+                            if (accessModifierKind !== SyntaxKind.PublicKeyword) {
+                                hasModifiers = true;
+                            }
                         }
                     }
-                }
 
-                if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers) {
-                    emitStartAnnotation();
+                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers) {
+                        emitStartAnnotation();
 
-                    if (hasModifiers) {
-                        emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
+                        if (hasModifiers) {
+                            emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
+                        }
+
+                        if (hasParameters) {
+                            emitParametersAnnotations(node, node.parameters);
+                        }
+
+                        if (hasReturnType || declaredWithinInterface) {
+                            let returnType: Node = hasReturnType ? node.type : ts.createSynthesizedNode(SyntaxKind.AnyKeyword);
+
+                            emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, returnType)}}`);
+                        }
+
+                        emitGenericTypes(getGenericArguments(node));
+                        emitEndAnnotation();
                     }
-
-                    if (hasParameters) {
-                        emitParametersAnnotations(node, node.parameters);
-                    }
-
-                    if (hasReturnType || declaredWithinInterface) {
-                        let returnType: Node = hasReturnType ? node.type : ts.createSynthesizedNode(SyntaxKind.AnyKeyword);
-
-                        emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, returnType)}}`);
-                    }
-
-                    emitGenericTypes(getGenericArguments(node));
-                    emitEndAnnotation();
-                }
+                });
             }
 
             function emitParametersAnnotations(rootNode: Node, parameters: NodeArray<ParameterDeclaration>): void {
@@ -5822,10 +5875,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitExtendsAnnotation(): void {
-                emitStartAnnotation();
-                emitCommentedAnnotation("@param {Function} d");
-                emitCommentedAnnotation("@param {Function} b");
-                write(" */");
+                emitAnnotationIf(() => {
+                    emitStartAnnotation();
+                    emitCommentedAnnotation("@param {Function} d");
+                    emitCommentedAnnotation("@param {Function} b");
+                    write(" */");
+                });
             }
 
             function emitInterfaceDeclarationAnnotation(node: InterfaceDeclaration, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
@@ -5841,35 +5896,37 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitConstructorOrInterfaceAnnotation(node: InterfaceDeclaration | ClassLikeDeclaration, isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments, ctor?: ConstructorDeclaration) {
-                let type: string;
-                let heritageType: string;
+                emitAnnotationIf(() => {
+                    let type: string;
+                    let heritageType: string;
 
-                if (isClass) {
-                    type = "@constructor";
-                    heritageType = "implements";
-                }
-                else {
-                    type = "@interface";
-                    heritageType = "extends";
-                }
+                    if (isClass) {
+                        type = "@constructor";
+                        heritageType = "implements";
+                    }
+                    else {
+                        type = "@interface";
+                        heritageType = "extends";
+                    }
 
-                emitStartAnnotation();
-                emitCommentedAnnotation(type);
+                    emitStartAnnotation();
+                    emitCommentedAnnotation(type);
 
-                if (baseTypeElement) {
-                    emitCommentedAnnotation(`@extends {${getClassOrInterfaceFullPath(baseTypeElement)}}`);
-                }
+                    if (baseTypeElement) {
+                        emitCommentedAnnotation(`@extends {${getClassOrInterfaceFullPath(baseTypeElement)}}`);
+                    }
 
-                ts.forEach(interfacesImpl, (_interface) => {
-                    emitCommentedAnnotation(`@${heritageType} {${getClassOrInterfaceFullPath(_interface)}}`);
+                    ts.forEach(interfacesImpl, (_interface) => {
+                        emitCommentedAnnotation(`@${heritageType} {${getClassOrInterfaceFullPath(_interface)}}`);
+                    });
+
+                    if (ctor) {
+                        emitParametersAnnotations(node, ctor.parameters);
+                    }
+
+                    emitGenericTypes(getGenericArguments(node));
+                    emitEndAnnotation();
                 });
-
-                if (ctor) {
-                    emitParametersAnnotations(node, ctor.parameters);
-                }
-
-                emitGenericTypes(getGenericArguments(node));
-                emitEndAnnotation();
             }
 
             function getGenericArguments(node: ClassLikeDeclaration | InterfaceDeclaration | FunctionLikeDeclaration): Array<string> {
@@ -6918,17 +6975,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 writeLine();
                 write("};");
 
-                if (!isES6ExportedDeclaration(node) && node.flags & NodeFlags.Export && !shouldHoistDeclarationInSystemJsModule(node)) {
-                    // do not emit var if variable was already hoisted
-                    writeLine();
-                    emitStart(node);
-                    write("var ");
-                    emit(node.name);
-                    write(" = ");
-                    emitModuleMemberName(node);
-                    emitEnd(node);
-                    write(";");
-                }
                 if (modulekind !== ModuleKind.ES6 && node.parent === currentSourceFile) {
                     if (modulekind === ModuleKind.System && (node.flags & NodeFlags.Export)) {
                         // write the call to exporter for enum
@@ -8629,7 +8675,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ClassDeclaration:
                         return emitClassDeclaration(<ClassDeclaration>node);
                     case SyntaxKind.InterfaceDeclaration:
-                        return emitInterfaceDeclaration(<InterfaceDeclaration>node);
+                        if (shouldEmitInterfaces()) {
+                            return emitInterfaceDeclaration(node);
+                        }
+                        return;
                     case SyntaxKind.EnumDeclaration:
                         return emitEnumDeclaration(<EnumDeclaration>node);
                     case SyntaxKind.EnumMember:
