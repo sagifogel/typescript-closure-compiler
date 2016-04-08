@@ -3738,7 +3738,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitReturnStatement(node: ReturnStatement) {
                 emitToken(SyntaxKind.ReturnKeyword, node.pos);
-                emitOptional(" ", node.expression);
+               
+                if (node.expression) {
+                    write(" ");
+                    tryEmitModuleForIdentifier(node.expression);
+                    emit(node.expression);
+                }
+
                 write(";");
             }
 
@@ -3911,7 +3917,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitModuleMemberName(node: Declaration) {
                 emitStart(node.name);
-                tryEmitModuleForIdentifier(node.name);
                 emitNodeWithCommentsAndWithoutSourcemap(node.name);
                 emitEnd(node.name);
             }
@@ -8639,6 +8644,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.TaggedTemplateExpression:
                         return emitTaggedTemplateExpression(<TaggedTemplateExpression>node);
                     case SyntaxKind.TypeAssertionExpression:
+                        tryEmitModuleForIdentifier((<TypeAssertion>node).expression);
                         return emit((<TypeAssertion>node).expression);
                     case SyntaxKind.AsExpression:
                         return emit((<AsExpression>node).expression);
