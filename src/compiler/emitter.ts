@@ -1220,6 +1220,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // "comment1" is not considered leading comment for "y" but rather
                     // considered as trailing comment of the previous node.
                     emitTrailingCommentsOfPosition(node.pos);
+                    tryEmitModuleForIdentifier(node);
                     emitNode(<TNode>node);
                     leadingComma = true;
                 }
@@ -2015,6 +2016,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let isDefinedInTopLevelClass = false;
                 let statements: Array<Statement | ClassElement>;
                 let declarationList: Array<Declaration | Statement | Expression> = [];
+                let nodeName = getNodeName(node);
 
                 function filter(d: Declaration | Statement): boolean {
                     let symbolName = d.symbol ? d.symbol.name : "";
@@ -2024,14 +2026,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 if (node.kind === SyntaxKind.VariableStatement) {
                     node = (<VariableStatement>node).declarationList.declarations[0];
+                    nodeName = getNodeName(node);
                 }
                 else if (node.kind === SyntaxKind.PropertyAccessExpression) {
                     isDefinedInTopLevelClass = (<PropertyAccessExpression>node).expression.kind === SyntaxKind.ThisKeyword;
                 }
+                else if (node.kind === SyntaxKind.CallExpression && !isBindedToThis(node)) {
+                    let callExpression = <CallExpression>node;
+
+                    nodeName = getNodeName(callExpression.expression)
+                    _node = getSymbolAtLocation(callExpression.expression);
+
+                    if (!_node) {
+                        return;
+                    }
+                }
 
                 while (containingNode = getImmediateContainerNode(_node)) {
                     if (containingNode.kind === SyntaxKind.SourceFile || containingNode.kind === SyntaxKind.ModuleDeclaration) {
-                        let nodeName = getNodeName(node);
                         let localNode: any = containingNode.locals[nodeName];
 
                         if (containingNode.kind === SyntaxKind.SourceFile || (containingNode.kind === SyntaxKind.ModuleDeclaration && localNode)) {
@@ -2153,6 +2165,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     _node = containingNode;
                 }
                 return null;
+            }
+
+            function tryEmitModuleForIdentifier(node: Node): void {
+                if (node.kind === SyntaxKind.Identifier && !isBindedToThis(node)) {
+                    let symbol = getSymbolAtLocation(node);
+
+                    if (symbol && !(ts.isConstEnumDeclaration(symbol) || isStatic(symbol) || isAmbientContext(symbol))) {
+                        emitModuleIfNeeded(symbol);
+                    }
+                }
             }
 
             function emitIdentifier(node: Identifier) {
@@ -2641,18 +2663,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // "comment1" is not considered to be leading comment for node.initializer
                 // but rather a trailing comment on the previous node.
 
-                if ((<CallExpression>node.initializer).expression) {
-                    let expression = (<CallExpression>node.initializer).expression;
-
-                    if (expression && expression.kind === SyntaxKind.Identifier && !isBindedToThis(expression)) {
-                        let symbol = getSymbolAtLocation(expression);
-
-                        if (!ts.isConst(symbol)) {
-                            emitModuleIfNeeded(symbol);
-                        }
-                    }
-                }
-
                 emitTrailingCommentsOfPosition(node.initializer.pos);
                 emit(node.initializer);
             }
@@ -2737,6 +2747,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (tryEmitConstantValue(node)) {
                     return;
                 }
+
+                tryEmitModuleForIdentifier(node.expression);
                 emit(node.expression);
                 let indentedBeforeDot = indentIfOnDifferentLines(node, node.expression, node.dotToken);
 
@@ -2828,8 +2840,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (tryEmitConstantValue(node)) {
                     return;
                 }
-                if (!isBindedToThis(node)) {
-                    emitModuleIfNeeded(node.expression);
+
+                if (node.expression.kind !== SyntaxKind.PropertyAccessExpression) {
+                    tryEmitModuleForIdentifier(node.expression);
                 }
                 emit(node.expression);
                 write("[");
@@ -2917,10 +2930,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     superCall = true;
                 }
                 else {
-                    if (node.expression.kind === SyntaxKind.Identifier && !isBindedToThis(node.expression)) {
-                        emitModuleIfNeeded(node.expression);
-                    }
-
+                    tryEmitModuleForIdentifier(node.expression);
                     emit(node.expression);
                     superCall = node.expression.kind === SyntaxKind.PropertyAccessExpression && (<PropertyAccessExpression>node.expression).expression.kind === SyntaxKind.SuperKeyword;
                 }
@@ -3068,6 +3078,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return isSourceFileLevelDeclarationInSystemJsModule(targetDeclaration, /*isExported*/ true);
             }
 
+            function isNotPropertyAccessOrCallExpression(node: Node): boolean {
+                return node.kind !== SyntaxKind.PropertyAccessExpression && node.kind !== SyntaxKind.CallExpression;
+            }
+
             function emitPrefixUnaryExpression(node: PrefixUnaryExpression) {
                 const exportChanged = isNameOfExportedSourceLevelDeclarationInSystemExternalModule(node.operand);
 
@@ -3103,7 +3117,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(" ");
                     }
                 }
-                if (node.operand.kind !== SyntaxKind.PropertyAccessExpression) {
+                if (isNotPropertyAccessOrCallExpression(node.operand)) {
                     emitModuleIfNeeded(node.operand);
                 }
                 emit(node.operand);
@@ -3134,7 +3148,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    if (node.operand.kind !== SyntaxKind.PropertyAccessExpression) {
+                    if (isNotPropertyAccessOrCallExpression(node.operand)) {
                         emitModuleIfNeeded(node.operand);
                     }
                     emit(node.operand);
@@ -3260,7 +3274,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitExponentiationOperator(node);
                     }
                     else {
-                        if (!isLiteral(node.left) && node.left.kind !== SyntaxKind.PropertyAccessExpression) {
+                        if (!isLiteral(node.left) && isNotPropertyAccessOrCallExpression(node.left)) {
                             emitModuleName(node.left);
                         }
                         emit(node.left);
@@ -3275,7 +3289,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(tokenToString(node.operatorToken.kind));
                         let indentedAfterOperator = indentIfOnDifferentLines(node, node.operatorToken, node.right, " ");
 
-                        if (node.right.kind !== SyntaxKind.PropertyAccessExpression) {
+                        if (isNotPropertyAccessOrCallExpression(node.right)) {
                             emitModuleName(node.right);
                         }
                         emit(node.right);
@@ -3293,6 +3307,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitConditionalExpression(node: ConditionalExpression) {
+                tryEmitModuleForIdentifier(node.condition);
                 emit(node.condition);
                 let indentedBeforeQuestion = indentIfOnDifferentLines(node, node.condition, node.questionToken, " ");
                 write("?");
@@ -3374,6 +3389,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let endPos = emitToken(SyntaxKind.IfKeyword, node.pos);
                 write(" ");
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
+                tryEmitModuleForIdentifier(node.expression)
                 emit(node.expression);
                 emitToken(SyntaxKind.CloseParenToken, node.expression.end);
                 emitEmbeddedStatement(node.thenStatement);
@@ -3737,6 +3753,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let endPos = emitToken(SyntaxKind.SwitchKeyword, node.pos);
                 write(" ");
                 emitToken(SyntaxKind.OpenParenToken, endPos);
+                tryEmitModuleForIdentifier(node.expression);
                 emit(node.expression);
                 endPos = emitToken(SyntaxKind.CloseParenToken, node.expression.end);
                 write(" ");
@@ -3894,6 +3911,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitModuleMemberName(node: Declaration) {
                 emitStart(node.name);
+                tryEmitModuleForIdentifier(node.name);
                 emitNodeWithCommentsAndWithoutSourcemap(node.name);
                 emitEnd(node.name);
             }
@@ -4281,6 +4299,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
+            function isStatic(node: Node): boolean {
+                return (node.flags & NodeFlags.Static) !== 0;
+            }
+
+            function isAmbientContext(node: Node): boolean {
+                while (node) {
+                    if (node.flags & NodeFlags.Ambient) {
+                        return true;
+                    }
+                    node = node.parent;
+                }
+                return false;
+            }
+
             function emitVariableDeclaration(node: VariableDeclaration) {
                 if (isBindingPattern(node.name)) {
                     if (languageVersion < ScriptTarget.ES6) {
@@ -4335,7 +4367,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (initializer) {
                         write(" = ");
-                        if (!isLiteral(initializer) && initializer.kind !== SyntaxKind.PropertyAccessExpression) {
+                        if (!isLiteral(initializer) && initializer.kind !== SyntaxKind.PropertyAccessExpression && initializer.kind !== SyntaxKind.CallExpression) {
                             emitModuleName(initializer);
                         }
                         emit(initializer);
@@ -5555,7 +5587,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getSymbolAtLocation(node: Node): Declaration {
+                if (!node.parent) {
+                    return null;
+                }
+
                 var symbol = typeChecker.getSymbolAtLocation(node);
+
+                if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
+                    return null;
+                }
 
                 return symbol.valueDeclaration || symbol.declarations[0];
             }
