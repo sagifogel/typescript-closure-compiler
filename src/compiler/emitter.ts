@@ -3523,7 +3523,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     var condition = " ";
 
                     if (isNotPropertyAccessOrCallExpression(node.condition)) {
-                        condition +=  getModuleName(node.condition);
+                        condition += getModuleName(node.condition);
                     }
 
                     write(condition);
@@ -3752,7 +3752,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitReturnStatement(node: ReturnStatement) {
                 emitToken(SyntaxKind.ReturnKeyword, node.pos);
-               
+
                 if (node.expression) {
                     write(" ");
                     emit(node.expression);
@@ -4384,7 +4384,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (initializer) {
                         write(" = ");
-                        if (!isLiteral(initializer) && isNotPropertyAccessOrCallExpression(initializer)) {
+                        if (!isLiteral(initializer) && initializer.parent && !isExpressionIdentifier(initializer)) {
                             emitModuleName(initializer);
                         }
                         emit(initializer);
