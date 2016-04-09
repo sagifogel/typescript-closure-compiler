@@ -1220,7 +1220,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // "comment1" is not considered leading comment for "y" but rather
                     // considered as trailing comment of the previous node.
                     emitTrailingCommentsOfPosition(node.pos);
-                    tryEmitModuleForIdentifier(node);
                     emitNode(<TNode>node);
                     leadingComma = true;
                 }
@@ -1866,6 +1865,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitExpressionIdentifier(node: Identifier) {
+                tryEmitModuleForIdentifier(node)
                 if (resolver.getNodeCheckFlags(node) & NodeCheckFlags.LexicalArguments) {
                     write("_arguments");
                     return;
@@ -2167,11 +2167,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return null;
             }
 
+            function shouldEmitModule(node: Node): boolean {
+                return !ts.isConstEnumDeclaration(node) && !isStatic(node) && !isAmbientContext(node);
+            }
             function tryEmitModuleForIdentifier(node: Node): void {
                 if (node.kind === SyntaxKind.Identifier && !isBindedToThis(node)) {
                     let symbol = getSymbolAtLocation(node);
 
-                    if (symbol && !(ts.isConstEnumDeclaration(symbol) || isStatic(symbol) || isAmbientContext(symbol))) {
+                    if (symbol && shouldEmitModule(symbol)) {
                         emitModuleIfNeeded(symbol);
                     }
                 }
@@ -2748,7 +2751,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return;
                 }
 
-                tryEmitModuleForIdentifier(node.expression);
                 emit(node.expression);
                 let indentedBeforeDot = indentIfOnDifferentLines(node, node.expression, node.dotToken);
 
@@ -2841,11 +2843,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return;
                 }
 
-                if (node.expression.kind !== SyntaxKind.PropertyAccessExpression) {
-                    tryEmitModuleForIdentifier(node.expression);
-                }
                 emit(node.expression);
                 write("[");
+
+                if (!node.parent) {
+                    tryEmitModuleForIdentifier(node.expression);
+                }
+
                 emit(node.argumentExpression);
                 write("]");
             }
@@ -2930,7 +2934,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     superCall = true;
                 }
                 else {
-                    tryEmitModuleForIdentifier(node.expression);
                     emit(node.expression);
                     superCall = node.expression.kind === SyntaxKind.PropertyAccessExpression && (<PropertyAccessExpression>node.expression).expression.kind === SyntaxKind.SuperKeyword;
                 }
@@ -3117,7 +3120,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(" ");
                     }
                 }
-                if (isNotPropertyAccessOrCallExpression(node.operand)) {
+                if (isNotPropertyAccessOrCallExpression(node.operand) && node.operand.kind !== SyntaxKind.Identifier) {
                     emitModuleIfNeeded(node.operand);
                 }
                 emit(node.operand);
@@ -3148,7 +3151,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    if (isNotPropertyAccessOrCallExpression(node.operand)) {
+                    if (isNotPropertyAccessOrCallExpression(node.operand) && node.operand.kind !== SyntaxKind.Identifier) {
                         emitModuleIfNeeded(node.operand);
                     }
                     emit(node.operand);
@@ -3274,7 +3277,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitExponentiationOperator(node);
                     }
                     else {
-                        if (!isLiteral(node.left) && isNotPropertyAccessOrCallExpression(node.left)) {
+                        if (!isLiteral(node.left) && isNotPropertyAccessOrCallExpression(node.left) && !isExpressionIdentifier(node.left)) {
                             emitModuleName(node.left);
                         }
                         emit(node.left);
@@ -3289,7 +3292,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(tokenToString(node.operatorToken.kind));
                         let indentedAfterOperator = indentIfOnDifferentLines(node, node.operatorToken, node.right, " ");
 
-                        if (isNotPropertyAccessOrCallExpression(node.right)) {
+                        if (isNotPropertyAccessOrCallExpression(node.right) && !isExpressionIdentifier(node.right)) {
                             emitModuleName(node.right);
                         }
                         emit(node.right);
@@ -3307,7 +3310,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitConditionalExpression(node: ConditionalExpression) {
-                tryEmitModuleForIdentifier(node.condition);
                 emit(node.condition);
                 let indentedBeforeQuestion = indentIfOnDifferentLines(node, node.condition, node.questionToken, " ");
                 write("?");
@@ -3389,7 +3391,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let endPos = emitToken(SyntaxKind.IfKeyword, node.pos);
                 write(" ");
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
-                tryEmitModuleForIdentifier(node.expression)
                 emit(node.expression);
                 emitToken(SyntaxKind.CloseParenToken, node.expression.end);
                 emitEmbeddedStatement(node.thenStatement);
@@ -3518,7 +3519,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emit(node.initializer);
                 }
                 write(";");
-                emitOptional(" " + getModuleName(node.condition), node.condition);
+                if (node.condition) {
+                    var condition = " ";
+
+                    if (isNotPropertyAccessOrCallExpression(node.condition)) {
+                        condition +=  getModuleName(node.condition);
+                    }
+
+                    write(condition);
+                    emit(node.condition);
+                }
                 write(";");
                 emitOptional(" ", node.incrementor);
                 write(")");
@@ -3646,7 +3656,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 emitNodeWithoutSourceMap(counter);
                 write(" < ");
-                emitModuleIfNeeded(rhsReference)
                 emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
                 write(".length");
                 emitEnd(node.initializer);
@@ -3675,6 +3684,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (!isContainedWithinModule) {
                         write("var ");
                     }
+                    else {
+                        write(moduleName);
+                    }
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length > 0) {
                         let declaration = variableDeclarationList.declarations[0];
@@ -3688,7 +3700,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             // to emit it separately.
                             emitNodeWithCommentsAndWithoutSourcemap(declaration);
                             write(" = ");
-                            emitModuleIfNeeded(rhsIterationValue.expression);
+                            if (!isNotPropertyAccessOrCallExpression(rhsIterationValue.expression)) {
+                                emitModuleIfNeeded(rhsIterationValue.expression);
+                            }
                             emitNodeWithoutSourceMap(rhsIterationValue);
                         }
                     }
@@ -3741,7 +3755,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                
                 if (node.expression) {
                     write(" ");
-                    tryEmitModuleForIdentifier(node.expression);
                     emit(node.expression);
                 }
 
@@ -3759,7 +3772,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let endPos = emitToken(SyntaxKind.SwitchKeyword, node.pos);
                 write(" ");
                 emitToken(SyntaxKind.OpenParenToken, endPos);
-                tryEmitModuleForIdentifier(node.expression);
                 emit(node.expression);
                 endPos = emitToken(SyntaxKind.CloseParenToken, node.expression.end);
                 write(" ");
@@ -4372,7 +4384,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (initializer) {
                         write(" = ");
-                        if (!isLiteral(initializer) && initializer.kind !== SyntaxKind.PropertyAccessExpression && initializer.kind !== SyntaxKind.CallExpression) {
+                        if (!isLiteral(initializer) && isNotPropertyAccessOrCallExpression(initializer)) {
                             emitModuleName(initializer);
                         }
                         emit(initializer);
@@ -8644,7 +8656,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.TaggedTemplateExpression:
                         return emitTaggedTemplateExpression(<TaggedTemplateExpression>node);
                     case SyntaxKind.TypeAssertionExpression:
-                        tryEmitModuleForIdentifier((<TypeAssertion>node).expression);
                         return emit((<TypeAssertion>node).expression);
                     case SyntaxKind.AsExpression:
                         return emit((<AsExpression>node).expression);
