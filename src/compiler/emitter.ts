@@ -2955,7 +2955,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitNewExpression(node: NewExpression) {
                 write("new ");
-                emitModuleIfNeeded(node.expression);
+                if (!isExpressionIdentifier(node.expression)) {
+                    emitModuleIfNeeded(node.expression);
+                }
                 // Spread operator logic is supported in new expressions in ES5 using a combination
                 // of Function.prototype.bind() and Function.prototype.apply().
                 //
@@ -6459,7 +6461,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitModuleIfNeeded(node);
                     emitDeclarationName(node);
                     write(", ");
-                    emitModuleIfNeeded(baseTypeNode.expression);
+                    if (!isExpressionIdentifier(baseTypeNode.expression)) {
+                        emitModuleIfNeeded(baseTypeNode.expression);
+                    }
                     emit(baseTypeNode.expression);
                     write(");");
                     emitEnd(baseTypeNode);
