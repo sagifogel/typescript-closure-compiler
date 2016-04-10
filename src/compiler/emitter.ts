@@ -2003,6 +2003,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                     flattened = flattened.concat(flattenStatements(ifStatement.elseStatement));
                                 }
                                 break;
+                            case SyntaxKind.WhileStatement:
+                                let whileStatement = <WhileStatement>statement;
+                                flattened = flattened.concat(flattenStatements(whileStatement.statement));
                             default:
                                 flattened.push(statement);
                         }
