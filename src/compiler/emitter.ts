@@ -2852,7 +2852,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emit(node.expression);
                 write("[");
 
-                if (!node.parent) {
+                if (!node.parent && node.expression.parent && !isNodeDeclaredWithinFunction(node.expression.parent)) {
                     tryEmitModuleForIdentifier(node.expression);
                 }
 
