@@ -1802,6 +1802,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isExpressionIdentifier(node: Node): boolean {
+                if (!node.parent) {
+                    return false;
+                }
                 let parent = node.parent;
                 switch (parent.kind) {
                     case SyntaxKind.ArrayLiteralExpression:
@@ -3584,8 +3587,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitDownLevelForOfStatement(node: ForOfStatement) {
-                var moduleName = getModuleName(node.expression);
-                var isContainedWithinModule = !!moduleName;
+                let isContainedWithinModule = false;
+                let moduleName = getModuleName(node.expression);
+
+                if (!isNodeDeclaredWithinFunction(node)) {
+                    isContainedWithinModule = !!moduleName;
+                }
 
                 //
                 //    for (let v of expr) { }
@@ -3642,7 +3649,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // , _a = expr
                     write(", ");
                     emitStart(node.expression);
-                    write(moduleName);
+                    if (isContainedWithinModule) {
+                        write(moduleName);
+                    }
                     emitNodeWithoutSourceMap(rhsReference);
                     write(" = ");
                     emitNodeWithoutSourceMap(node.expression);
@@ -3702,7 +3711,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             // to emit it separately.
                             emitNodeWithCommentsAndWithoutSourcemap(declaration);
                             write(" = ");
-                            if (!isNotPropertyAccessOrCallExpression(rhsIterationValue.expression)) {
+                            if (isContainedWithinModule && !isNotPropertyAccessOrCallExpression(rhsIterationValue.expression)) {
                                 emitModuleIfNeeded(rhsIterationValue.expression);
                             }
                             emitNodeWithoutSourceMap(rhsIterationValue);
@@ -3713,7 +3722,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         //     for (let of []) {}
                         emitNodeWithoutSourceMap(createTempVariable(TempFlags.Auto));
                         write(" = ");
-                        emitModuleIfNeeded(rhsIterationValue);
+                        if (isContainedWithinModule) {
+                            emitModuleIfNeeded(rhsIterationValue);
+                        }
                         emitNodeWithoutSourceMap(rhsIterationValue);
                     }
                 }
@@ -4386,7 +4397,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (initializer) {
                         write(" = ");
-                        if (!isLiteral(initializer) && initializer.parent && !isExpressionIdentifier(initializer)) {
+                        if (!isLiteral(initializer) && !isExpressionIdentifier(initializer)) {
                             emitModuleName(initializer);
                         }
                         emit(initializer);
