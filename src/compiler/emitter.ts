@@ -9,7 +9,7 @@ namespace ts {
     }
 
     type NameOrText = { text?: string, name?: Identifier | DeclarationName | TypeParameterDeclaration };
-    type ModuleGeneration = { declarations: { [name: string]: boolean }, generated: boolean };
+    type ModuleGeneration = { declarations: { [name: string]: boolean } };
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
     interface CompilerExtendedOptions extends ts.CompilerOptions {
@@ -596,16 +596,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return "";
             }
 
-            function isNodeAlreadyDeclared(node: Declaration): boolean {
-                var module = ensureModule(node);
-                var declarations = module.declarations;
-                var name = getNodeName(node);
+            function isModuleAlreadyGenerated(node: Declaration, module: ModuleGeneration): boolean {
+                let name: string;
+                let declarations: { [name: string]: boolean };
+
+                module = module || ensureModule(node);
+                name = getNodeNameOrIdentifier(node);
+                declarations = module.declarations;
 
                 return name in declarations;
-            }
-
-            function isModuleAlreadyGenerated(node: ModuleDeclaration): boolean {
-                return ensureModule(node).generated;
             }
 
             function getGeneratedPathForModule(node: Node): string {
@@ -627,17 +626,21 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 return name;
             }
+            function getNodeNameOrIdentifier(node: Declaration): string {
+                let kind = node.name.kind;
+
+                return kind === SyntaxKind.Identifier ? getIdentifier(<Identifier>node.name) : getNodeName(node);
+            }
 
             function trySetVariableDeclarationInModule(node: Declaration): boolean {
                 let module = ensureModule(node);
                 let declarations = module.declarations;
-                let name = (<Identifier>node.name).text;
 
-                if (name in declarations) {
+                if (isModuleAlreadyGenerated(node, module)) {
                     return false;
                 }
 
-                declarations[name] = true;
+                declarations[getNodeNameOrIdentifier(node)] = true;
                 return true;
             }
 
@@ -654,21 +657,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function ensureModule(node: Declaration): ModuleGeneration {
+                let moduleFullPath: string;
                 let scope = getSymbolScope(node);
-                let moduleFullPath = scope && scope.kind !== SyntaxKind.SourceFile ? getNodeFullPath(scope) : "global";
 
-                moduleFullPath += `:${getNodeName(node)}`;
+                if (scope.kind === SyntaxKind.SourceFile) {
+                    moduleFullPath = "global";
+                }
+                else {
+                    if (scope.kind !== SyntaxKind.ModuleDeclaration && !ts.isFunctionLike(scope)) {
+                        scope = getImmediateContainerNode(scope);
+                    }
+                    moduleFullPath = getNodeFullPath(scope);
+                }
 
                 return modulesToGeneratedName[moduleFullPath] || (modulesToGeneratedName[moduleFullPath] = {
-                    generated: false,
                     declarations: {}
                 });
-            }
-
-            function setModuleGenerated(node: Declaration): void {
-                let module = ensureModule(node);
-
-                module.generated = true;
             }
 
             function getNodeParentPath(node: Node): string {
@@ -1984,13 +1988,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return null;
             }
 
-            function flattenStatements(node: Node): Array<Statement> {
-                let flattened: Array<Statement> = [];
+            function flattenStatements(node: Node): Array<Node> {
+                let flattened: Array<Node> = [];
                 let statements = (<Block>node).statements;
 
                 if (statements) {
                     for (var i = 0; i < statements.length; i++) {
-                        var statement = statements[i];
+                        var statement: Node = statements[i];
 
                         switch (statement.kind) {
                             case SyntaxKind.IfStatement:
@@ -2003,9 +2007,27 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                     flattened = flattened.concat(flattenStatements(ifStatement.elseStatement));
                                 }
                                 break;
+                            case SyntaxKind.DoStatement:
+                            case SyntaxKind.ForStatement:
                             case SyntaxKind.WhileStatement:
-                                let whileStatement = <WhileStatement>statement;
-                                flattened = flattened.concat(flattenStatements(whileStatement.statement));
+                            case SyntaxKind.ForInStatement:
+                            case SyntaxKind.ForOfStatement:
+                                let iterationStatement = <IterationStatement>statement;
+                                let initializer = (<ForStatement>iterationStatement).initializer;
+
+                                flattened = flattened.concat(flattenStatements(iterationStatement.statement));
+
+                                if (initializer) {
+                                    if (initializer.kind === SyntaxKind.VariableDeclarationList) {
+                                        flattened = flattened.concat((<VariableDeclarationList>initializer).declarations);
+                                    }
+                                    else {
+                                        flattened = flattened.concat(flattenStatements(initializer));
+                                    }
+                                }
+                                break;
+                            case SyntaxKind.BinaryExpression:
+                                flattened.push((<BinaryExpression>statement).left);
                             default:
                                 flattened.push(statement);
                         }
@@ -2020,8 +2042,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let kind = node.kind;
                 let containingNode: Node;
                 let isDefinedInTopLevelClass = false;
-                let statements: Array<Statement | ClassElement>;
-                let declarationList: Array<Declaration | Statement | Expression> = [];
+                let statements: Array<Statement | ClassElement | Node>;
+                let declarationList: Array<Declaration | Statement | Expression | Node> = [];
                 let nodeName = getNodeName(node);
 
                 function filter(d: Declaration | Statement): boolean {
@@ -2080,27 +2102,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                 statements = (<ClassDeclaration>containingNode).members;
                             }
 
-                            statements = statements || <NodeArray<Statement | ClassElement>>[];
+                            statements = statements || <NodeArray<Statement | ClassElement | Node>>[];
 
                             for (let j = 0; j < statements.length; j++) {
                                 let statement = statements[j];
 
                                 if (statement.kind === SyntaxKind.VariableStatement) {
                                     declarationList = (<VariableStatement>statement).declarationList.declarations;
-                                }
-                                else if (isForLoop(statement)) {
-                                    let loop = <ForInStatement | ForStatement | ForOfStatement>statement;
-                                    let initializer: VariableDeclarationList | Expression = loop.initializer;
-
-                                    if (initializer && initializer.kind !== SyntaxKind.Identifier) {
-                                        if (initializer.kind === SyntaxKind.BinaryExpression) {
-                                            let binaryExpression = <BinaryExpression>initializer;
-                                            declarationList = [binaryExpression.left];
-                                        }
-                                        else {
-                                            declarationList = (<VariableDeclarationList>initializer).declarations;
-                                        }
-                                    }
                                 }
                                 else {
                                     declarationList = [statement];
@@ -2184,6 +2192,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitModuleIfNeeded(symbol);
                     }
                 }
+            }
+
+            function getIdentifier(node: Identifier) {
+                if (!node.parent) {
+                    return node.text;
+                }
+
+                if (isNameOfNestedRedeclaration(node)) {
+                    return getGeneratedNameForNode(node);
+                }
+
+                if (nodeIsSynthesized(node)) {
+                    return node.text;
+                }
+
+                return ts.getSourceTextOfNodeFromSourceFile(currentSourceFile, node);
             }
 
             function emitIdentifier(node: Identifier) {
@@ -3500,9 +3524,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         forceWriteLine();
                     }
 
-                    if (decl.kind !== SyntaxKind.Parameter && !isNodeAlreadyDeclared(decl)) {
+                    if (decl.kind !== SyntaxKind.Parameter && trySetVariableDeclarationInModule(decl)) {
                         emitVariableTypeAnnotation(decl);
-                        trySetVariableDeclarationInModule(decl);
                     }
                     emit(decl);
                 }
@@ -3695,15 +3718,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let rhsIterationValue = createElementAccessExpression(rhsReference, counter);
                 emitStart(node.initializer);
                 if (node.initializer.kind === SyntaxKind.VariableDeclarationList) {
-                    if (!isContainedWithinModule) {
-                        write("var ");
-                    }
-                    else {
-                        write(moduleName);
-                    }
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length > 0) {
                         let declaration = variableDeclarationList.declarations[0];
+
+                        if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
+                            write("var ");
+                        }
+                        else {
+                            write(moduleName);
+                        }
+
                         if (isBindingPattern(declaration.name)) {
                             // This works whether the declaration is a var, let, or const.
                             // It will use rhsIterationValue _a[_i] as the initializer.
@@ -6166,8 +6191,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (shouldEmitSemicolon) {
                     write(";");
                 }
-
-                setModuleGenerated(node);
             }
 
             type Primitive = number | string | boolean;
@@ -7193,8 +7216,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return emitCommentsOnNotEmittedNode(node);
                 }
                 let containingModule = getContainingModule(node);
-                let moduleAlreadyGenerated = isModuleAlreadyGenerated(node);
-                let hoistedInDeclarationScope = !containingModule && !moduleAlreadyGenerated;
+                let moduleisNotDeclared = trySetVariableDeclarationInModule(node);
+                let hoistedInDeclarationScope = !containingModule && moduleisNotDeclared;
                 let name = getGeneratedNameForNode(node)
 
                 forceWriteLine();
@@ -7205,7 +7228,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(" = {};");
                     writeLine();
                 }
-                else if (!moduleAlreadyGenerated) {
+                else if (moduleisNotDeclared) {
                     emitModuleIfNeeded(node);
                     write(name);
                     write(" = {};");
@@ -7235,8 +7258,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                     emitExportMemberAssignments(<Identifier>node.name);
                 }
-
-                setModuleGenerated(node);
             }
 
             /*

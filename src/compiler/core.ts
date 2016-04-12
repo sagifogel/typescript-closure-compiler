@@ -26,10 +26,12 @@
     export declare function normalizeSlashes(path: string): string;
     export declare function contains<T>(array: T[], value: T): boolean;
     export declare function combinePaths(path1: string, path2: string);
+    export declare function copyListRemovingItem<T>(item: T, list: T[]);
     export declare function getProperty<T>(map: Map<T>, key: string): T;
     export declare function copyMap<T>(source: Map<T>, target: Map<T>): void;
     export declare function filter<T>(array: T[], f: (x: T) => boolean): T[];
     export declare function hasProperty<T>(map: Map<T>, key: string): boolean;
+    export declare function fileExtensionIs(path: string, extension: string): boolean;
     export declare function getNormalizedPathFromPathComponents(pathComponents: string[]);
     export declare function createCompilerDiagnostic(message: DiagnosticMessage): Diagnostic;
     export declare function getNormalizedPathComponents(path: string, currentDirectory: string);
