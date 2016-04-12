@@ -16,11 +16,13 @@
     export declare function isDeclaration(node: Node): boolean;
     export declare let fullTripleSlashReferencePathRegEx: RegExp;
     export declare function nodeIsDecorated(node: Node): boolean;
+    export declare function isKeyword(token: SyntaxKind): boolean;
     export declare function getIndentString(level: number): string;
     export declare function convertToBase64(input: string): string;
     export declare function nodeIsSynthesized(node: Node): boolean;
     export declare let fullTripleSlashAMDReferencePathRegEx: RegExp;
     export declare function nodeCanBeDecorated(node: Node): boolean;
+    export declare function isInAmbientContext(node: Node): boolean;
     export declare function isAsyncFunctionLike(node: Node): boolean;
     export declare function isPrologueDirective(node: Node): boolean;
     export declare function nodeOrChildIsDecorated(node: Node): boolean;
@@ -39,7 +41,6 @@
     export declare function getEnclosingBlockScopeContainer(node: Node): Node;
     export declare function createTextWriter(newLine: String): EmitTextWriter;
     export declare function createDiagnosticCollection(): DiagnosticCollection;
-    export declare function isAccessibilityModifier(kind: SyntaxKind): boolean;
     export declare function hasRestParameter(s: SignatureDeclaration): boolean;
     export declare function isLeftHandSideExpression(expr: Expression): boolean;
     export declare function isExternalModuleImportEqualsDeclaration(node: Node);
@@ -48,6 +49,7 @@
     export declare function isBindingPattern(node: Node): node is BindingPattern;
     export declare function isClassLike(node: Node): node is ClassLikeDeclaration;
     export declare function getNewLineCharacter(options: CompilerOptions): string;
+    export declare function getLocalSymbolForExportDefault(symbol: Symbol): Symbol;
     export declare function getDefaultLibFileName(options: CompilerOptions): string;
     export declare function isNodeDescendentOf(node: Node, ancestor: Node): boolean;
     export declare function makeIdentifierFromModuleName(moduleName: string): string;

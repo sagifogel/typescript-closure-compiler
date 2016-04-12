@@ -25,4 +25,11 @@
         getColumn(): number;
         getIndent(): number;
     }
+
+    export interface SourceFile {
+        getLineAndCharacterOfPosition(pos: number): LineAndCharacter;
+        getLineStarts(): number[];
+        getPositionOfLineAndCharacter(line: number, character: number): number;
+        update(newText: string, textChangeRange: TextChangeRange): SourceFile;
+    }
 }

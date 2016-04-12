@@ -4,17 +4,21 @@ var path = require("path");
 var child_process = require("child_process");
 var emitterPartialPath = "src/compiler/emitter.ts";
 var programPartialPath = "src/compiler/program.ts";
+var utilitiesPartialPath = "src/services/utilities.ts";
 var emitterPath = path.resolve(__dirname, emitterPartialPath);
 var programPath = path.resolve(__dirname, programPartialPath);
+var utilitiesPath = path.resolve(__dirname, utilitiesPartialPath);
 var typeScriptRootPath = path.resolve(__dirname, "TypeScript/");
 var typeScriptEmitterPath = path.resolve(typeScriptRootPath, emitterPartialPath);
 var typeScriptProgramPath = path.resolve(typeScriptRootPath, programPartialPath);
+var typeScriptUtilitiesPath = path.resolve(typeScriptRootPath, utilitiesPartialPath);
 var tsResolvedJakefile = path.resolve(typeScriptRootPath, "jakefile.js");
 var tsCommand = "jake --directory " + typeScriptRootPath + " --f " + tsResolvedJakefile;
 
 task("copy-files", [], function () {
     jake.cpR(emitterPath, typeScriptEmitterPath);
     jake.cpR(programPath, typeScriptProgramPath);
+    jake.cpR(utilitiesPath, typeScriptUtilitiesPath);
 }, { async: false });
 
 desc("clean the built/local folder using the clean task and builds back typescript services");

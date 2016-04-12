@@ -24,6 +24,7 @@
     export declare function normalizePath(path: string): string;
     export declare function addRange<T>(to: T[], from: T[]): void;
     export declare function normalizeSlashes(path: string): string;
+    export declare function indexOf<T>(array: T[], value: T): number;
     export declare function contains<T>(array: T[], value: T): boolean;
     export declare function combinePaths(path1: string, path2: string);
     export declare function copyListRemovingItem<T>(item: T, list: T[]);

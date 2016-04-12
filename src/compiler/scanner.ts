@@ -3,6 +3,7 @@
     export declare function isLineBreak(ch: number): boolean;
     export declare function isWhiteSpace(ch: number): boolean;
     export declare function tokenToString(t: SyntaxKind): string;
+    export declare function stringToToken(s: string): SyntaxKind;
     export declare function getLeadingCommentRanges(text: string, pos: number): CommentRange[];
     export declare function getTrailingCommentRanges(text: string, pos: number): CommentRange[];
     export declare function skipTrivia(text: string, pos: number, stopAfterLineBreak?: boolean): number;
