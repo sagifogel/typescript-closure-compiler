@@ -12,7 +12,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>288eed18-d71e-490d-8e86-eb28ce20b70d</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>compiler.ts</StartupFile>
+    <StartupFile>tscc</StartupFile>
     <StartWebBrowser>False</StartWebBrowser>
     <SearchPath>
     </SearchPath>
@@ -35,6 +35,7 @@
   <ItemGroup>
     <Content Include="package.json" />
     <Content Include="README.md" />
+    <Content Include="tscc" />
     <TypeScriptCompile Include="compiler.ts" />
     <TypeScriptCompile Include="Scripts\typings\node\node.d.ts" />
     <TypeScriptCompile Include="src\compiler\binder.ts" />
@@ -49,7 +50,8 @@
     <TypeScriptCompile Include="src\compiler\types.ts" />
     <TypeScriptCompile Include="src\compiler\utilities.ts" />
     <TypeScriptCompile Include="src\services\services.ts" />
-    <TypeScriptCompile Include="tests\Greeter.ts" />
+    <TypeScriptCompile Include="src\services\shims.ts" />
+    <TypeScriptCompile Include="src\services\utilities.ts" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="build\" />
@@ -78,6 +80,7 @@
     <TypeScriptMapRoot />
     <TypeScriptSourceRoot />
     <TypeScriptSourceMap>False</TypeScriptSourceMap>
+    <TypeScriptModuleKind>CommonJS</TypeScriptModuleKind>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\TypeScript\Microsoft.TypeScript.targets" Condition="False" />
   <Import Project="$(VSToolsPath)\Node.js Tools\Microsoft.NodejsTools.targets" />
