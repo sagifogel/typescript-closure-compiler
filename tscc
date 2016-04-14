@@ -1,3 +1,4 @@
+var fs_1 = require("fs");
 var path = require("path");
 var ts = require("typescript");
 var pkg = require(__dirname + "/package.json");
@@ -8,8 +9,8 @@ function reportDiagnostic(diagnostic) {
         var loc = ts.getLineAndCharacterOfPosition(diagnostic.file, diagnostic.start);
         output += diagnostic.file.fileName + "(" + (loc.line + 1) + "," + (loc.character + 1) + "): ";
     }
-    var category = ts.DiagnosticCategory[diagnostic.category].toLowerCase();
-    output += category + " TS" + diagnostic.code + ": " + flattenDiagnosticMessageText(diagnostic.messageText, ts.sys.newLine) + ts.sys.newLine;
+	var category = Object.keys(ts.DiagnosticCategory).filter(function(key) { return ts.DiagnosticCategory[key] === diagnostic.category; })[0];
+	output += category.toLowerCase() + " TS" + diagnostic.code + ": " + flattenDiagnosticMessageText(diagnostic.messageText, ts.sys.newLine) + ts.sys.newLine;
     ts.sys.write(output);
 }
 
@@ -59,27 +60,7 @@ function sortFiles(fileNames) {
     });
 }
 
-function readFiles(fileOrDir) {
-    var fileNames = [];
-    var files = readdirSync(fileOrDir);
-    
-    files.forEach(function (file) {
-        var filePath = path.join(fileOrDir, file);
-        var stat = statSync(filePath);
-        
-        if (stat.isDirectory()) {
-            fileNames = fileNames.concat(readFiles(filePath));
-        }
-        else if (stat.isFile()) {
-            fileNames.push(filePath);
-        }
-    });
-    
-    return fileNames;
-}
-
 function executeCommandLine(args) {
-    debugger;
     var configFileName;
     var commandLine = ts.parseCommandLine(args);
     
@@ -110,9 +91,9 @@ function executeCommandLine(args) {
     
     performCompilation();
     
-    function parseConfigFile(configFileName) {
+    function parseConfigFile() {
         try {
-            cachedConfigFileText = ts.sys.readFile(configFileName);
+            var cachedConfigFileText = ts.sys.readFile(configFileName);
         }
         catch (e) {
             var error = ts.createCompilerDiagnostic(ts.Diagnostics.Cannot_read_file_0_Colon_1, configFileName, e.message);
@@ -120,7 +101,7 @@ function executeCommandLine(args) {
             return;
         }
         
-        var result = ts.parseConfigFileTextToJson(configFileName);
+        var result = ts.parseConfigFileTextToJson(configFileName, cachedConfigFileText);
         var configObject = result.config;
         var configParseResult = ts.parseJsonConfigFileContent(configObject, ts.sys, ts.getDirectoryPath(configFileName));
         if (configParseResult.errors.length > 0) {
@@ -130,12 +111,13 @@ function executeCommandLine(args) {
         return configParseResult;
     }
     
-    function performCompilation(configFileName) {
-        var now,
+    function performCompilation() {
+		var now,
             program,
             exitCode,
-            fileNames,
-            emitResult, 
+            emitResult,
+			rootFileNames, 
+            fileNames = [],
             configParseResult;
         
         if (configFileName) {
@@ -148,18 +130,23 @@ function executeCommandLine(args) {
             compilerOptions = commandLine.options;
         }
         
-        compilerOptions = ts.extend({
+		compilerOptions = ts.extend({
             target: "es5",
             emitAnnotations: true
         }, compilerOptions);
-        
         
         if (!ts.hasOwnProperty(compilerOptions, "emitInterfaces")) {
             compilerOptions.emitInterfaces = true;
         }
         
-        fileNames = sortFiles(readFiles(options.filesNames));
-        program = ts.createProgram(fileNames, options);
+		if (!configFileName && commandLine.options.rootDir) {
+			rootFileNames = rootFileNames.map(function(file) { 
+				return ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, file));
+			});
+		}
+
+		fileNames = sortFiles(rootFileNames);
+        program = ts.createProgram(fileNames, compilerOptions);
         now = Date.now();
         emitResult = program.emit();
         ts.getPreEmitDiagnostics(program).concat(emitResult.diagnostics).forEach(reportDiagnostic);
@@ -169,4 +156,4 @@ function executeCommandLine(args) {
     }
 }
 
-executeCommandLine(ts.sys.args);
+executeCommandLine();
