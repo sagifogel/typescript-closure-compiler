@@ -4,12 +4,12 @@ var ts = require("typescript");
 var pkg = require(__dirname + "/package.json");
 
 function reportDiagnostic(diagnostic) {
-    var output = "";
+	var output = "";
     if (diagnostic.file) {
         var loc = ts.getLineAndCharacterOfPosition(diagnostic.file, diagnostic.start);
         output += diagnostic.file.fileName + "(" + (loc.line + 1) + "," + (loc.character + 1) + "): ";
     }
-	var category = Object.keys(ts.DiagnosticCategory).filter(function(key) { return ts.DiagnosticCategory[key] === diagnostic.category; })[0];
+	var category = ts.DiagnosticCategory[diagnostic.category].toLowerCase();
 	output += category.toLowerCase() + " TS" + diagnostic.code + ": " + flattenDiagnosticMessageText(diagnostic.messageText, ts.sys.newLine) + ts.sys.newLine;
     ts.sys.write(output);
 }
@@ -131,11 +131,12 @@ function executeCommandLine(args) {
         }
         
 		compilerOptions = ts.extend({
-            target: "es5",
-            emitAnnotations: true
+            emitAnnotations: true,
+			emitOneSideEnum: true,
+            target: ts.ScriptTarget.ES5
         }, compilerOptions);
         
-        if (!ts.hasOwnProperty(compilerOptions, "emitInterfaces")) {
+        if (!compilerOptions.hasOwnProperty("emitInterfaces")) {
             compilerOptions.emitInterfaces = true;
         }
         
@@ -156,4 +157,4 @@ function executeCommandLine(args) {
     }
 }
 
-executeCommandLine();
+executeCommandLine(ts.sys.args);

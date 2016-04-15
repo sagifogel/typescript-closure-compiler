@@ -15,6 +15,7 @@ namespace ts {
     interface CompilerExtendedOptions extends ts.CompilerOptions {
         emitInterfaces: boolean;
         emitAnnotations: boolean;
+        emitOneSideEnum: boolean;
     }
 
     let entities: Map<number> = {
@@ -7072,7 +7073,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(",");
                     }
                 });
-
+                if (!compilerOptions.emitOneSideEnum) {
+                    write(",");
+                    ts.forEach(node.members, (member, i) => {
+                        writeLine();
+                        write("\"");
+                        writeEnumMemberDeclarationValue(member);
+                        write("\"");
+                        write(": ");
+                        write("\"");
+                        emitExpressionForPropertyName(member.name);
+                        write("\"");
+                        if (i < membersLength) {
+                            write(",");
+                        }
+                    });
+                }
                 decreaseIndent();
                 writeLine();
                 write("};");

@@ -1,15 +1,15 @@
 {
   "name": "typescript-closure-compiler",
   "version": "0.0.0",
-  "description": "typescript-closure-compiler",
+  "description": "Patches the TypeScript compiler to generate JSDoc annotations",
+  "repository": "https://github.com/sagifogel/typescript-closure-compiler.git",
   "author": {
-    "name": "sagi",
-    "email": "sagifogel@hotmail.com"
+    "name": "Sagi Fogel"
   },
   "dependencies": {
-    "jake": "^8.0.12"
+    "typescript": "1.7.5"
   },
   "devDependencies": {
-    "typescript": "^1.7.5"
+    "jake": "8.0.12"
   }
 }
