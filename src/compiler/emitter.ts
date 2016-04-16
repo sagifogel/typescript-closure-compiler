@@ -13,6 +13,8 @@ namespace ts {
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
     interface CompilerExtendedOptions extends ts.CompilerOptions {
+        entry: string;
+        exportAs: string;
         emitInterfaces: boolean;
         emitAnnotations: boolean;
         emitOneSideEnum: boolean;
@@ -326,7 +328,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         step("next", void 0);
     });
 };`;
-
+        let entryFile: SourceFile;
+        let resolvedExportedTypes: Array<Declaration>;
         let compilerOptions = <CompilerExtendedOptions>host.getCompilerOptions();
         let languageVersion = compilerOptions.target || ScriptTarget.ES3;
         let modulekind = compilerOptions.module ? compilerOptions.module : languageVersion === ScriptTarget.ES6 ? ModuleKind.ES6 : ModuleKind.None;
@@ -335,6 +338,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         let newLine = host.getNewLine();
         let jsxDesugaring = host.getCompilerOptions().jsx !== JsxEmit.Preserve;
         let shouldEmitJsx = (s: SourceFile) => (s.languageVariant === LanguageVariant.JSX && !jsxDesugaring);
+
+        if (compilerOptions.entry && compilerOptions.exportAs) {
+            entryFile = host.getSourceFile(compilerOptions.entry);
+            resolvedExportedTypes = resolveExportedEntryTypes(entryFile);
+        }
 
         if (targetSourceFile === undefined) {
             forEach(host.getSourceFiles(), sourceFile => {
@@ -378,6 +386,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
             return true;
+        }
+
+        function resolveExportedEntryTypes(entryFile: SourceFile): Array<Declaration> {
+            if (compilerOptions.entry) {
+                let statements = entryFile.statements;
+
+                return statements.filter(statement => statement.kind === SyntaxKind.ExportDeclaration)
+                    .reduce((arr: Array<Declaration>, statement: ExportDeclaration) => {
+                        let declartions = statement.exportClause.elements.map(el => {
+                            return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
+                        });
+
+                        return arr.concat(declartions);
+                    }, []);
+            }
+
+            return []
         }
 
         function emitJavaScript(jsFilePath: string, root?: SourceFile) {
@@ -477,6 +502,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             else {
                 forEach(host.getSourceFiles(), sourceFile => {
                     if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                        if (sourceFile === entryFile) {
+                            emitExportedTypes();
+                        }
                         emitSourceFile(sourceFile);
                     }
                 });
@@ -490,6 +518,56 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 currentSourceFile = sourceFile;
                 exportFunctionForFile = undefined;
                 emit(sourceFile);
+            }
+
+            function emitExportedTypes(): void {
+                let cahce: Map<boolean> = {};
+                let exportedTypes: Map<string> = {};
+                let exportedMembers: Array<string> = [];
+
+                forceWriteLine();
+                ts.forEach(resolvedExportedTypes, resolvedExportedType => {
+                    let exportedType = <ClassLikeDeclaration | EnumDeclaration>resolvedExportedType;
+                    let moduleName = getModuleName(exportedType);
+                    let nodeName = getNodeName(exportedType);
+                    let containerName = moduleName + nodeName;
+
+                    exportedTypes[nodeName] = containerName;
+
+                    ts.forEach(exportedType.members, (member: Declaration) => {
+                        let isEnumMember = member.kind === SyntaxKind.EnumMember;
+
+                        if (isEnumMember || (member.kind !== SyntaxKind.ComputedPropertyName && isPublicMember(member))) {
+                            let result: string;
+                            let buffer: Array<string> = [];
+                            let memberName = getNodeName(member);
+                            let nodeName = containerName;
+
+                            if (!isEnumMember && (member.flags & NodeFlags.Static) === 0) {
+                                nodeName += ".prototype";
+                            }
+
+                            buffer.push(nodeName);
+                            buffer.push(`["${memberName}"]`);
+                            buffer.push(` = ${nodeName}.${memberName};`);
+                            result = buffer.join("");
+
+                            if (!cahce[result]) {
+                                cahce[result] = true;
+                                exportedMembers.push(result);
+                            }
+                        }
+                    });
+                });
+                exportedMembers
+                    .sort((t1, t2) => {
+                        if (t1.length === t2.length) { return 0; }
+                        if (t1.length < t2.length) { return -1; }
+                        return 1;
+                    })
+                    .forEach(writeValueAndNewLine);
+
+                write(`self["${compilerOptions.exportAs}"] = { ${Object.keys(exportedTypes).map(key => `"${key}": ${exportedTypes[key]}`).join(", ")} };`);
             }
 
             function isUniqueName(name: string): boolean {
@@ -5910,6 +5988,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 });
             }
 
+            function isPublicMember(node: Node): boolean {
+                var accessModifier = getAccessModifier(node);
+
+                return accessModifier === SyntaxKind.PublicKeyword;
+            }
+
+            function getAccessModifier(member: Node): SyntaxKind {
+                if (member.modifiers) {
+                    var accessModifiers = ts.filter(member.modifiers, modifier => isAccessibilityModifier(modifier.kind));
+
+                    if (accessModifiers.length) {
+                        return accessModifiers[0].kind;
+                    }
+                }
+
+                return null;
+            }
+
             function isAccessibilityModifier(kind: SyntaxKind) {
                 switch (kind) {
                     case SyntaxKind.PublicKeyword:
@@ -5924,21 +6020,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
                 emitAnnotationIf(() => {
                     let hasModifiers = false;
-                    let accessModifierKind: SyntaxKind;
+                    let accessModifierKind = getAccessModifier(node);
                     let hasParameters = node.parameters && node.parameters.length > 0;
                     let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
                     let declaredWithinInterface = node.parent.kind === SyntaxKind.InterfaceDeclaration && !node.type;
 
-                    if (node.modifiers) {
-                        let accessModifiers = ts.filter(node.modifiers, modifier => isAccessibilityModifier(modifier.kind));
-
-                        if (accessModifiers.length) {
-                            accessModifierKind = accessModifiers[0].kind;
-
-                            if (accessModifierKind !== SyntaxKind.PublicKeyword) {
-                                hasModifiers = true;
-                            }
-                        }
+                    if (accessModifierKind && accessModifierKind !== SyntaxKind.PublicKeyword) {
+                        hasModifiers = true;
                     }
 
                     if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers) {
