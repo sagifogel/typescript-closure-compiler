@@ -1,0 +1,74 @@
+<style>
+    body {
+        margin: 30px;
+        font: 12px sans-serif;
+    }
+
+    textarea {
+        font: 14px Monaco, Consolas, monospace;
+    }
+</style>
+
+<h1>TypeScript Closure Compiler Demo</h1>
+
+<h2>Input</h2>
+<textarea id="input" rows="20" cols="120" autofocus>
+class Greeter {
+    greeting: string;
+    constructor(message: string) {
+        this.greeting = message;
+    }
+    greet() {
+        return "Hello, " + this.greeting;
+    }
+}
+
+let greeter = new Greeter("world");
+
+let button = document.createElement('button');
+button.textContent = "Say Hello";
+button.onclick = function() {
+    alert(greeter.greet());
+}
+
+document.body.appendChild(button);
+</textarea>
+
+<h2>Output</h2>
+<textarea id="output" rows="20" cols="120" readonly></textarea>
+
+<script src="tscc.browser.js"></script>
+<script>
+    var useAsync = window.URL && window.Worker && window.Blob;
+    var timeout = 0;
+
+    if (useAsync) {
+        var source = compileTypeScript + 'onmessage = function(e) { postMessage(compileTypeScript(e.data)); };';
+        var worker = new Worker(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
+        worker.onmessage = function (e) { process(e.data); };
+    }
+
+    function process(data) {
+        output.value = data.result || data.diagnostics;
+    }
+
+    function compile() {
+        var options = {
+            source: input.value
+        };
+        if (useAsync) {
+            output.value = 'Compiling...';
+            worker.postMessage(options);
+        } else {
+            process(compileTypeScript(options));
+        }
+    }
+
+    function compileSoon() {
+        clearTimeout(timeout);
+        timeout = setTimeout(compile, 500);
+    }
+
+    input.oninput = compileSoon;
+    compile();
+</script>
