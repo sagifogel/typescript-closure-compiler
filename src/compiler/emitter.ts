@@ -6033,7 +6033,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (!hasReturnType && !declaredWithinInterface) {
                         let type = typeChecker.getSignatureFromDeclaration(node);
 
-                        if (type.resolvedReturnType.flags !== TypeFlags.Void) {
+                        if (type.resolvedReturnType && type.resolvedReturnType.flags !== TypeFlags.Void) {
                             hasReturnType = true;
                             returnTypeInference = typeChecker.typeToString(type.resolvedReturnType);
                         }
