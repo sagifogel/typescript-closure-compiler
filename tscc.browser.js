@@ -1,18 +1,18 @@
 function compileTypeScript(options) {
-    /*! *****************************************************************************
-Copyright (c) Microsoft Corporation. All rights reserved. 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use
-this file except in compliance with the License. You may obtain a copy of the
-License at http://www.apache.org/licenses/LICENSE-2.0  
- 
-THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
-WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, 
-MERCHANTABLITY OR NON-INFRINGEMENT. 
- 
-See the Apache Version 2.0 License for specific language governing permissions
-and limitations under the License.
-***************************************************************************** */
+/*! *****************************************************************************
+ Copyright (c) Microsoft Corporation. All rights reserved. 
+ Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+ this file except in compliance with the License. You may obtain a copy of the
+ License at http://www.apache.org/licenses/LICENSE-2.0  
+  
+ THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+ WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, 
+ MERCHANTABLITY OR NON-INFRINGEMENT. 
+  
+ See the Apache Version 2.0 License for specific language governing permissions
+ and limitations under the License.
+ ***************************************************************************** */
 
 
     var ts = {};
@@ -35700,7 +35700,6 @@ and limitations under the License.
                 }
                 return false;
             }
-
             function emitFunctionAnnotation(node) {
                 emitAnnotationIf(function () {
                     var hasModifiers = false;
@@ -35709,20 +35708,16 @@ and limitations under the License.
                     var hasParameters = node.parameters && node.parameters.length > 0;
                     var hasReturnType = node.type && node.type.kind !== 103 /* VoidKeyword */;
                     var declaredWithinInterface = node.parent.kind === 215 /* InterfaceDeclaration */ && !node.type;
-
                     if (accessModifierKind && accessModifierKind !== 112 /* PublicKeyword */) {
                         hasModifiers = true;
                     }
-
                     if (!hasReturnType && !declaredWithinInterface) {
                         var type = typeChecker.getSignatureFromDeclaration(node);
-
-                        if (type.resolvedReturnType.flags !== 16 /* Void */) {
+                        if (type.resolvedReturnType && type.resolvedReturnType.flags !== 16 /* Void */) {
                             hasReturnType = true;
                             returnTypeInference = typeChecker.typeToString(type.resolvedReturnType);
                         }
                     }
-
                     if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters) {
                         emitStartAnnotation();
                         if (hasModifiers) {
@@ -35731,7 +35726,6 @@ and limitations under the License.
                         if (hasParameters) {
                             emitParametersAnnotations(node, node.parameters);
                         }
-
                         if (hasReturnType || declaredWithinInterface) {
                             if (!returnTypeInference) {
                                 var returnType = hasReturnType ? node.type : ts.createSynthesizedNode(117 /* AnyKeyword */);
@@ -36208,7 +36202,6 @@ and limitations under the License.
                 var saveTempVariables = tempVariables;
                 var saveTempParameters = tempParameters;
                 var saveComputedPropertyNamesToGeneratedNames = computedPropertyNamesToGeneratedNames;
-
                 if (baseTypeNode) {
                     emitEmitHelpers(currentSourceFile);
                 }
@@ -42299,7 +42292,7 @@ and limitations under the License.
             return predicate ?
                 ts.forEach(commentRanges, function (c) {
                     return c.pos < position &&
-                            (c.kind == 2 /* SingleLineCommentTrivia */ ? position <= c.end : position < c.end) &&
+                        (c.kind == 2 /* SingleLineCommentTrivia */ ? position <= c.end : position < c.end) &&
                         predicate(c);
                 }) :
                 ts.forEach(commentRanges, function (c) {
