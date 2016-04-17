@@ -6587,6 +6587,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let saveTempParameters = tempParameters;
                 let saveComputedPropertyNamesToGeneratedNames = computedPropertyNamesToGeneratedNames;
 
+                if (baseTypeNode) {
+                    emitEmitHelpers(currentSourceFile);
+                }
                 tempFlags = 0;
                 tempVariables = undefined;
                 tempParameters = undefined;
@@ -8653,7 +8656,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     exportSpecifiers = undefined;
                     exportEquals = undefined;
                     hasExportStars = false;
-                    emitEmitHelpers(node);
                     emitCaptureThisForNodeIfNecessary(node);
                     emitLinesStartingAt(node.statements, startIndex);
                     emitTempDeclarations(/*newLine*/ true);
