@@ -6016,10 +6016,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 return false;
             }
-
+            
             function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
                 emitAnnotationIf(() => {
                     let hasModifiers = false;
+                    let returnTypeInference: string;
                     let accessModifierKind = getAccessModifier(node);
                     let hasParameters = node.parameters && node.parameters.length > 0;
                     let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
@@ -6029,7 +6030,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         hasModifiers = true;
                     }
 
-                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers) {
+                    if (!hasReturnType && !declaredWithinInterface) {
+                        let type = typeChecker.getSignatureFromDeclaration(node);
+
+                        if (type.resolvedReturnType.flags !== TypeFlags.Void) {
+                            hasReturnType = true;
+                            returnTypeInference = typeChecker.typeToString(type.resolvedReturnType);
+                        }
+                    }
+
+                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters) {
                         emitStartAnnotation();
 
                         if (hasModifiers) {
@@ -6041,9 +6051,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
 
                         if (hasReturnType || declaredWithinInterface) {
-                            let returnType: Node = hasReturnType ? node.type : ts.createSynthesizedNode(SyntaxKind.AnyKeyword);
+                            if (!returnTypeInference) {
+                                let returnType: Node = hasReturnType ? node.type : ts.createSynthesizedNode(SyntaxKind.AnyKeyword);
 
-                            emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, returnType)}}`);
+                                emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, returnType)}}`);
+                            }
+                            else {
+                                emitCommentedAnnotation(`@return {${returnTypeInference}}`);
+                            }
                         }
 
                         emitGenericTypes(getGenericArguments(node));
