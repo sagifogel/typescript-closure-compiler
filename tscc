@@ -1,4 +1,3 @@
-var fs_1 = require("fs");
 var path = require("path");
 var ts = require("typescript");
 var pkg = require(__dirname + "/package.json");
