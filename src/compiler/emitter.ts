@@ -5373,19 +5373,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let accessors = getAllAccessorDeclarations(node.members, <AccessorDeclaration>member);
                         if (member === accessors.firstAccessor) {
                             forceWriteLine();
+                            forceWriteLine();
                             emitStart(member);
                             write("Object.defineProperty(");
                             emitStart((<AccessorDeclaration>member).name);
                             emitClassMemberPrefix(node, member);
-                            write(", ");
+                            write(`, "`);
                             emitExpressionForPropertyName((<AccessorDeclaration>member).name);
                             emitEnd((<AccessorDeclaration>member).name);
-                            write(", {");
+                            write(`", {`);
                             increaseIndent();
                             if (accessors.getAccessor) {
                                 writeLine();
                                 emitLeadingComments(accessors.getAccessor);
-                                emitFunctionAnnotation(<AccessorDeclaration>member);
+                                emitFunctionAnnotation(accessors.getAccessor, node);
                                 write("get: ");
                                 emitStart(accessors.getAccessor);
                                 write("function ");
@@ -5397,7 +5398,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             if (accessors.setAccessor) {
                                 writeLine();
                                 emitLeadingComments(accessors.setAccessor);
-                                emitFunctionAnnotation(<AccessorDeclaration>member);
+                                emitFunctionAnnotation(accessors.setAccessor, node);
                                 write("set: ");
                                 emitStart(accessors.setAccessor);
                                 write("function ");
@@ -6016,8 +6017,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 return false;
             }
-            
-            function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
+
+            function emitFunctionAnnotation(node: FunctionLikeDeclaration, parentContext?: ClassLikeDeclaration): void {
                 emitAnnotationIf(() => {
                     let hasModifiers = false;
                     let returnTypeInference: string;
@@ -6039,8 +6040,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                     }
 
-                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters) {
+                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters || parentContext) {
                         emitStartAnnotation();
+
+                        if (parentContext) {
+                            let parentName = `${getModuleName(parentContext)}${getNodeNameOrIdentifier(parentContext)}`;
+
+                            emitCommentedAnnotation(`@this {${parentName}}`);
+                        }
 
                         if (hasModifiers) {
                             emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
