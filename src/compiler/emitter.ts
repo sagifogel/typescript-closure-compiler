@@ -6044,7 +6044,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitStartAnnotation();
 
                         if (parentContext) {
-                            let parentName = `${getModuleName(parentContext)}${getNodeNameOrIdentifier(parentContext)}`;
+                            let parentName = getModuleName(parentContext) + getNodeNameOrIdentifier(parentContext);
 
                             emitCommentedAnnotation(`@this {${parentName}}`);
                         }
