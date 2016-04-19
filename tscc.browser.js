@@ -1,18 +1,18 @@
 function compileTypeScript(options) {
-/*! *****************************************************************************
- Copyright (c) Microsoft Corporation. All rights reserved. 
- Licensed under the Apache License, Version 2.0 (the "License"); you may not use
- this file except in compliance with the License. You may obtain a copy of the
- License at http://www.apache.org/licenses/LICENSE-2.0  
-  
- THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
- WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, 
- MERCHANTABLITY OR NON-INFRINGEMENT. 
-  
- See the Apache Version 2.0 License for specific language governing permissions
- and limitations under the License.
- ***************************************************************************** */
+    /*! *****************************************************************************
+    Copyright (c) Microsoft Corporation. All rights reserved. 
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+    this file except in compliance with the License. You may obtain a copy of the
+    License at http://www.apache.org/licenses/LICENSE-2.0  
+     
+    THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+    WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, 
+    MERCHANTABLITY OR NON-INFRINGEMENT. 
+     
+    See the Apache Version 2.0 License for specific language governing permissions
+    and limitations under the License.
+    ***************************************************************************** */
 
 
     var ts = {};
@@ -35151,19 +35151,20 @@ function compileTypeScript(options) {
                         accessors = ts.getAllAccessorDeclarations(node.members, member);
                         if (member === accessors.firstAccessor) {
                             forceWriteLine();
+                            forceWriteLine();
                             emitStart(member);
                             write("Object.defineProperty(");
                             emitStart(member.name);
                             emitClassMemberPrefix(node, member);
-                            write(", ");
+                            write(", \"");
                             emitExpressionForPropertyName(member.name);
                             emitEnd(member.name);
-                            write(", {");
+                            write("\", {");
                             increaseIndent();
                             if (accessors.getAccessor) {
                                 writeLine();
                                 emitLeadingComments(accessors.getAccessor);
-                                emitFunctionAnnotation(member);
+                                emitFunctionAnnotation(accessors.getAccessor, node);
                                 write("get: ");
                                 emitStart(accessors.getAccessor);
                                 write("function ");
@@ -35175,7 +35176,7 @@ function compileTypeScript(options) {
                             if (accessors.setAccessor) {
                                 writeLine();
                                 emitLeadingComments(accessors.setAccessor);
-                                emitFunctionAnnotation(member);
+                                emitFunctionAnnotation(accessors.setAccessor, node);
                                 write("set: ");
                                 emitStart(accessors.setAccessor);
                                 write("function ");
@@ -35700,7 +35701,7 @@ function compileTypeScript(options) {
                 }
                 return false;
             }
-            function emitFunctionAnnotation(node) {
+            function emitFunctionAnnotation(node, parentContext) {
                 emitAnnotationIf(function () {
                     var hasModifiers = false;
                     var returnTypeInference;
@@ -35718,8 +35719,12 @@ function compileTypeScript(options) {
                             returnTypeInference = typeChecker.typeToString(type.resolvedReturnType);
                         }
                     }
-                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters) {
+                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters || parentContext) {
                         emitStartAnnotation();
+                        if (parentContext) {
+                            var parentName = getModuleName(parentContext) + getNodeNameOrIdentifier(parentContext);
+                            emitCommentedAnnotation("@this {" + parentName + "}");
+                        }
                         if (hasModifiers) {
                             emitCommentedAnnotation("@" + ts.tokenToString(accessModifierKind));
                         }
