@@ -567,7 +567,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     })
                     .forEach(writeValueAndNewLine);
 
-                write(`self["${compilerOptions.exportAs}"] = { ${Object.keys(exportedTypes).map(key => `"${key}": ${exportedTypes[key]}`).join(", ")} };`);
+                writeValueAndNewLine(`var ${compilerOptions.exportAs} = { ${Object.keys(exportedTypes).map(key => `"${key}": ${exportedTypes[key]}`).join(", ")} };`);
+                writeValueAndNewLine(`typeof module === "object" && typeof module["exports"] === "object" ? module["exports"] = ${compilerOptions.exportAs}: self["${compilerOptions.exportAs}"] = ${compilerOptions.exportAs};`);
             }
 
             function isUniqueName(name: string): boolean {
