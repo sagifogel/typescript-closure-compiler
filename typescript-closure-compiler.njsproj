@@ -14,7 +14,8 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>288eed18-d71e-490d-8e86-eb28ce20b70d</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>tscc</StartupFile>
+    <StartupFile>
+    </StartupFile>
     <StartWebBrowser>False</StartWebBrowser>
     <SearchPath>
     </SearchPath>
@@ -41,6 +42,7 @@
     <TypeScriptCompile Include="Scripts\typings\node\node.d.ts" />
     <TypeScriptCompile Include="src\compiler\binder.ts" />
     <TypeScriptCompile Include="src\compiler\checker.ts" />
+    <TypeScriptCompile Include="src\compiler\commandLineParser.ts" />
     <TypeScriptCompile Include="src\compiler\core.ts" />
     <TypeScriptCompile Include="src\compiler\declarationEmitter.ts" />
     <TypeScriptCompile Include="src\compiler\emitter.ts" />

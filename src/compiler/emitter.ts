@@ -389,7 +389,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         }
 
         function resolveExportedEntryTypes(entryFile: SourceFile): Array<Declaration> {
-            if (compilerOptions.entry) {
+            if (compilerOptions.entry && entryFile) {
                 let statements = entryFile.statements;
 
                 return statements.filter(statement => statement.kind === SyntaxKind.ExportDeclaration)
@@ -498,14 +498,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             if (root) {
                 // Do not call emit directly. It does not set the currentSourceFile.
                 emitSourceFile(root);
+
+                if (root === entryFile) {
+                    emitExportedTypes();
+                }
             }
             else {
                 forEach(host.getSourceFiles(), sourceFile => {
                     if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                        emitSourceFile(sourceFile);
+
                         if (sourceFile === entryFile) {
                             emitExportedTypes();
                         }
-                        emitSourceFile(sourceFile);
                     }
                 });
             }
@@ -526,6 +531,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let exportedMembers: Array<string> = [];
 
                 forceWriteLine();
+
                 ts.forEach(resolvedExportedTypes, resolvedExportedType => {
                     let exportedType = <ClassLikeDeclaration | EnumDeclaration>resolvedExportedType;
                     let moduleName = getModuleName(exportedType);
@@ -537,7 +543,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     ts.forEach(exportedType.members, (member: Declaration) => {
                         let isEnumMember = member.kind === SyntaxKind.EnumMember;
 
-                        if (isEnumMember || (member.kind !== SyntaxKind.ComputedPropertyName && isPublicMember(member))) {
+                        if (isEnumMember || (member.kind !== SyntaxKind.ComputedPropertyName && member.kind !== SyntaxKind.Constructor && isPublicMember(member))) {
                             let result: string;
                             let buffer: Array<string> = [];
                             let memberName = getNodeName(member);
@@ -5993,7 +5999,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function isPublicMember(node: Node): boolean {
                 var accessModifier = getAccessModifier(node);
 
-                return accessModifier === SyntaxKind.PublicKeyword;
+                return !accessModifier || accessModifier === SyntaxKind.PublicKeyword;
             }
 
             function getAccessModifier(member: Node): SyntaxKind {

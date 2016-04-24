@@ -1,5 +1,5 @@
 var path = require("path");
-var ts = require("typescript");
+var ts = require(__dirname + "/typescript.js");
 var pkg = require(__dirname + "/package.json");
 
 function reportDiagnostic(diagnostic) {
@@ -67,6 +67,12 @@ function executeCommandLine(args) {
         reportDiagnostics(commandLine.errors);
         return ts.sys.exit(ts.ExitStatus.DiagnosticsPresent_OutputsSkipped);
     }
+
+	if (commandLine.options.version) {
+		printVersion();
+        return sys.exit(ExitStatus.Success);
+    }
+
     if (commandLine.options.project) {
         if (!isJSONSupported()) {
             reportDiagnostic(ts.createCompilerDiagnostic(ts.Diagnostics.The_current_host_does_not_support_the_0_option, "--project"));
@@ -130,19 +136,20 @@ function executeCommandLine(args) {
         }
         
 		compilerOptions = ts.extend({
+			emitInterfaces : true,
             emitAnnotations: true,
 			emitOneSideEnum: true,
             target: ts.ScriptTarget.ES5
         }, compilerOptions);
         
-        if (!compilerOptions.hasOwnProperty("emitInterfaces")) {
-            compilerOptions.emitInterfaces = true;
-        }
-        
 		if (!configFileName && commandLine.options.rootDir) {
 			rootFileNames = rootFileNames.map(function(file) { 
 				return ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, file));
 			});
+
+			if (compilerOptions.entry) {
+				compilerOptions.entry = ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, compilerOptions.entry))
+			}
 		}
 
 		fileNames = sortFiles(rootFileNames);

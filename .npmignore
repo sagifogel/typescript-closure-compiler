@@ -1,0 +1,14 @@
+.git/
+.vs/
+bin/
+node_modules/
+obj/
+Scripts/
+src/
+TypeScript/
+tests/
+*.dat
+.gitignore
+.gitmodules
+*.sln
+*.njsproj
