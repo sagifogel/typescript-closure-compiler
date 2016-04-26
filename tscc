@@ -70,7 +70,7 @@ function executeCommandLine(args) {
 
 	if (commandLine.options.version) {
 		printVersion();
-        return sys.exit(ExitStatus.Success);
+        return ts.sys.exit(ts.ExitStatus.Success);
     }
 
     if (commandLine.options.project) {
