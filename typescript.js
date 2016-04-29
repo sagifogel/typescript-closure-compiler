@@ -30867,11 +30867,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             ts.forEach(host.getSourceFiles(), function (sourceFile) {
                 if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
                     emitSourceFile(sourceFile);
-                    if (sourceFile === entryFile) {
-                        emitExportedTypes();
-                    }
                 }
             });
+            if (entryFile) {
+                emitExportedTypes();
+            }
         }
         writeLine();
         writeEmittedFiles(writer.getText(), /*writeByteOrderMark*/ compilerOptions.emitBOM);

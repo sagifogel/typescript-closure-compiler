@@ -507,12 +507,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 forEach(host.getSourceFiles(), sourceFile => {
                     if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
                         emitSourceFile(sourceFile);
-
-                        if (sourceFile === entryFile) {
-                            emitExportedTypes();
-                        }
                     }
                 });
+
+                if (entryFile) {
+                    emitExportedTypes();
+                }
             }
 
             writeLine();
