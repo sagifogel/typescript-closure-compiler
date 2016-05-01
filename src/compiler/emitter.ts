@@ -5629,7 +5629,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, symbol.initializer));
                     }
                     else if (hasReturnType = type.kind !== SyntaxKind.VoidKeyword) {
-                        returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                        if (type.kind === SyntaxKind.Block) {
+                            returnType = getReturnType(rootNode, func);
+                        }
+                        else {
+                            returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                        }
                     }
                 }
 
@@ -6025,6 +6030,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return false;
             }
 
+            function getReturnType(rootNode: Node, node: SignatureDeclaration): string {
+                let type = typeChecker.getSignatureFromDeclaration(node);
+
+                if (type.resolvedReturnType && type.resolvedReturnType.flags !== TypeFlags.Void) {
+                    let declarartion = type.resolvedReturnType.symbol.declarations;
+
+                    if (declarartion && declarartion.length) {
+                        return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+                    }
+
+                    return typeChecker.typeToString(type.resolvedReturnType);
+                }
+
+                return null;
+            }
+
             function emitFunctionAnnotation(node: FunctionLikeDeclaration, parentContext?: ClassLikeDeclaration): void {
                 emitAnnotationIf(() => {
                     let hasModifiers = false;
@@ -6039,11 +6060,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (!hasReturnType && !declaredWithinInterface) {
-                        let type = typeChecker.getSignatureFromDeclaration(node);
-
-                        if (type.resolvedReturnType && type.resolvedReturnType.flags !== TypeFlags.Void) {
+                        if (returnTypeInference = getReturnType(node, node)) {
                             hasReturnType = true;
-                            returnTypeInference = typeChecker.typeToString(type.resolvedReturnType);
                         }
                     }
 

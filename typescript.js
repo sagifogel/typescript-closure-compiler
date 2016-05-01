@@ -35367,7 +35367,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, symbol.initializer));
                 }
                 else if (hasReturnType = type.kind !== 103 /* VoidKeyword */) {
-                    returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                    if (type.kind === 192 /* Block */) {
+                        returnType = getReturnType(rootNode, func);
+                    }
+                    else {
+                        returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                    }
                 }
             }
             if (func.parameters.length || hasReturnType) {
@@ -35704,6 +35709,17 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             return false;
         }
+        function getReturnType(rootNode, node) {
+            var type = typeChecker.getSignatureFromDeclaration(node);
+            if (type.resolvedReturnType && type.resolvedReturnType.flags !== 16 /* Void */) {
+                var declarartion = type.resolvedReturnType.symbol.declarations;
+                if (declarartion && declarartion.length) {
+                    return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+                }
+                return typeChecker.typeToString(type.resolvedReturnType);
+            }
+            return null;
+        }
         function emitFunctionAnnotation(node, parentContext) {
             emitAnnotationIf(function () {
                 var hasModifiers = false;
@@ -35716,10 +35732,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     hasModifiers = true;
                 }
                 if (!hasReturnType && !declaredWithinInterface) {
-                    var type = typeChecker.getSignatureFromDeclaration(node);
-                    if (type.resolvedReturnType && type.resolvedReturnType.flags !== 16 /* Void */) {
+                    if (returnTypeInference = getReturnType(node, node)) {
                         hasReturnType = true;
-                        returnTypeInference = typeChecker.typeToString(type.resolvedReturnType);
                     }
                 }
                 if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters || parentContext) {
