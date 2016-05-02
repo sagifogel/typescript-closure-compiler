@@ -35712,9 +35712,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         function getReturnType(rootNode, node) {
             var type = typeChecker.getSignatureFromDeclaration(node);
             if (type.resolvedReturnType && type.resolvedReturnType.flags !== 16 /* Void */) {
-                var declarartion = type.resolvedReturnType.symbol.declarations;
-                if (declarartion && declarartion.length) {
-                    return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+
+                if (type.resolvedReturnType.symbol) {
+                    var declarartion = type.resolvedReturnType.symbol.declarations;
+
+                    if (declarartion && declarartion.length) {
+                        return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+                    }
                 }
                 return typeChecker.typeToString(type.resolvedReturnType);
             }

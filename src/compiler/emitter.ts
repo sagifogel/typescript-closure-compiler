@@ -6034,10 +6034,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let type = typeChecker.getSignatureFromDeclaration(node);
 
                 if (type.resolvedReturnType && type.resolvedReturnType.flags !== TypeFlags.Void) {
-                    let declarartion = type.resolvedReturnType.symbol.declarations;
+                    if (type.resolvedReturnType.symbol) {
+                        let declarartion = type.resolvedReturnType.symbol.declarations;
 
-                    if (declarartion && declarartion.length) {
-                        return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+                        if (declarartion && declarartion.length) {
+                            return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+                        }
                     }
 
                     return typeChecker.typeToString(type.resolvedReturnType);
