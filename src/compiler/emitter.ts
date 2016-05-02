@@ -5750,6 +5750,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return symbol.valueDeclaration || symbol.declarations[0];
             }
 
+            function getTypeOfSymbolAtLocation(node: Node): string {
+                var symbol = node.symbol;
+
+                if (symbol) {
+                    var type = typeChecker.getTypeOfSymbolAtLocation(symbol, node);
+
+                    if (type) {
+                        return getSymbolName(node, type);
+                    }
+                }
+
+                return null;
+            }
+
             function getParameterOrUnionTypeAnnotation(rootNode: Node, node: Node, isParameterPropertyAssignment?: boolean): string {
                 let type: string;
                 let mapped: Array<string>;
@@ -5857,6 +5871,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ClassDeclaration:
                     case SyntaxKind.EnumDeclaration:
                         return getNodeName(node);
+                    case SyntaxKind.BinaryExpression:
+                        return getTypeOfSymbolAtLocation(rootNode);
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");

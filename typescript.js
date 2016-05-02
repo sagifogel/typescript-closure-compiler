@@ -35466,6 +35466,16 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             return symbol.valueDeclaration || symbol.declarations[0];
         }
+        function getTypeOfSymbolAtLocation(node) {
+            var symbol = node.symbol;
+            if (symbol) {
+                var type = typeChecker.getTypeOfSymbolAtLocation(symbol, node);
+                if (type) {
+                    return getSymbolName(node, type);
+                }
+            }
+            return null;
+        }
         function getParameterOrUnionTypeAnnotation(rootNode, node, isParameterPropertyAssignment) {
             var type;
             var mapped;
@@ -35566,6 +35576,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 214 /* ClassDeclaration */:
                 case 217 /* EnumDeclaration */:
                     return getNodeName(node);
+                case 181 /* BinaryExpression */:
+                    return getTypeOfSymbolAtLocation(rootNode);
             }
             return addVarArgsIfNeeded(node, "?");
         }
