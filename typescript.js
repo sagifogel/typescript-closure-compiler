@@ -35478,6 +35478,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 245 /* PropertyAssignment */:
                 case 211 /* VariableDeclaration */:
                 case 216 /* TypeAliasDeclaration */:
+                case 171 /* TypeAssertionExpression */:
                     if (typeNode.type) {
                         return getParameterOrUnionTypeAnnotation(rootNode, typeNode.type, isParameterPropertyAssignment);
                     }
@@ -35523,6 +35524,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 144 /* Constructor */:
                 case 152 /* FunctionType */:
                 case 174 /* ArrowFunction */:
+                case 142 /* MethodSignature */:
                 case 153 /* ConstructorType */:
                 case 173 /* FunctionExpression */:
                     return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, node), isParameterPropertyAssignment);
@@ -35712,10 +35714,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         function getReturnType(rootNode, node) {
             var type = typeChecker.getSignatureFromDeclaration(node);
             if (type.resolvedReturnType && type.resolvedReturnType.flags !== 16 /* Void */) {
-
                 if (type.resolvedReturnType.symbol) {
                     var declarartion = type.resolvedReturnType.symbol.declarations;
-
                     if (declarartion && declarartion.length) {
                         return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
                     }

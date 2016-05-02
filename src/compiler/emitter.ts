@@ -5763,6 +5763,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.PropertyAssignment:
                     case SyntaxKind.VariableDeclaration:
                     case SyntaxKind.TypeAliasDeclaration:
+                    case SyntaxKind.TypeAssertionExpression:
                         if (typeNode.type) {
                             return getParameterOrUnionTypeAnnotation(rootNode, typeNode.type, isParameterPropertyAssignment);
                         }
@@ -5812,6 +5813,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.Constructor:
                     case SyntaxKind.FunctionType:
                     case SyntaxKind.ArrowFunction:
+                    case SyntaxKind.MethodSignature:
                     case SyntaxKind.ConstructorType:
                     case SyntaxKind.FunctionExpression:
                         return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
