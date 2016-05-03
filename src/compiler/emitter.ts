@@ -5865,6 +5865,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.PropertyAccessExpression:
                     case SyntaxKind.ElementAccessExpression:
                     case SyntaxKind.CallExpression:
+                    case SyntaxKind.ConditionalExpression:
                         return addOptionalIfNeeded(node.parent, getExpression(rootNode, node), isParameterPropertyAssignment);
                     case SyntaxKind.TypeParameter:
                     case SyntaxKind.InterfaceDeclaration:
@@ -5873,6 +5874,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return getNodeName(node);
                     case SyntaxKind.BinaryExpression:
                         return getTypeOfSymbolAtLocation(rootNode);
+                    case SyntaxKind.TemplateExpression:
+                        return "string";
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");

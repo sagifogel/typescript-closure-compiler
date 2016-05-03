@@ -35570,6 +35570,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 166 /* PropertyAccessExpression */:
                 case 167 /* ElementAccessExpression */:
                 case 168 /* CallExpression */:
+                case 182 /* ConditionalExpression */:
                     return addOptionalIfNeeded(node.parent, getExpression(rootNode, node), isParameterPropertyAssignment);
                 case 137 /* TypeParameter */:
                 case 215 /* InterfaceDeclaration */:
@@ -35578,6 +35579,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     return getNodeName(node);
                 case 181 /* BinaryExpression */:
                     return getTypeOfSymbolAtLocation(rootNode);
+                case 183 /* TemplateExpression */:
+                    return "string";
             }
             return addVarArgsIfNeeded(node, "?");
         }
