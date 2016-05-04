@@ -5,13 +5,13 @@ node_modules/
 obj/
 Scripts/
 src/
-TypeScript/
 tests/
-*.dat
+TypeScript/
 .gitignore
+.gitmodules
+*.dat
+compiler.js
 gulpfile.js
 tscc.browser.js
-compiler.js
-.gitmodules
 *.sln
 *.njsproj
