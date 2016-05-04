@@ -4803,7 +4803,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let shouldEmitSemicolon = false;
                 let symbolScope = getSymbolScope(node);
                 let isDeclaredWithinFunction = ts.isFunctionLike(symbolScope);
-                let nodeIsInterfaceFunctionMember = isInterfaceFunctionMember(node);
+                let isInterfaceFunctionMemberOrAmbient = isInterfaceFunctionMember(node) || isAmbientContext(node);
 
                 if (ts.nodeIsMissing(node.body) && (node.flags & NodeFlags.Export)) {
                     return;
@@ -4840,8 +4840,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                     }
 
-                    if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration || nodeIsInterfaceFunctionMember) {
-                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isScopeLike(symbolScope) || nodeIsInterfaceFunctionMember;
+                    if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration || isInterfaceFunctionMemberOrAmbient) {
+                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isScopeLike(symbolScope) || isInterfaceFunctionMemberOrAmbient;
 
                         if (node.kind === SyntaxKind.FunctionDeclaration) {
                             if (!isDeclaredWithinFunction) {
@@ -4886,7 +4886,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitDeclarationName(node);
                 }
 
-                if (nodeIsInterfaceFunctionMember) {
+                if (isInterfaceFunctionMemberOrAmbient) {
                     if (node.kind === 140) {
                         emittedNode = node.type;
                     }

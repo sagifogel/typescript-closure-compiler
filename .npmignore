@@ -9,6 +9,9 @@ TypeScript/
 tests/
 *.dat
 .gitignore
+gulpfile.js
+tscc.browser.js
+compiler.js
 .gitmodules
 *.sln
 *.njsproj

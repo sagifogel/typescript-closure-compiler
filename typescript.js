@@ -34637,7 +34637,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var shouldEmitSemicolon = false;
             var symbolScope = getSymbolScope(node);
             var isDeclaredWithinFunction = ts.isFunctionLike(symbolScope);
-            var nodeIsInterfaceFunctionMember = isInterfaceFunctionMember(node);
+            var isInterfaceFunctionMemberOrAmbient = isInterfaceFunctionMember(node) || isAmbientContext(node);
             if (ts.nodeIsMissing(node.body) && (node.flags & 1 /* Export */)) {
                 return;
             }
@@ -34669,8 +34669,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         write("default ");
                     }
                 }
-                if (node.kind === 143 /* MethodDeclaration */ || node.kind === 213 /* FunctionDeclaration */ || nodeIsInterfaceFunctionMember) {
-                    var tryEmitModule = node.kind === 143 /* MethodDeclaration */ || !isScopeLike(symbolScope) || nodeIsInterfaceFunctionMember;
+                if (node.kind === 143 /* MethodDeclaration */ || node.kind === 213 /* FunctionDeclaration */ || isInterfaceFunctionMemberOrAmbient) {
+                    var tryEmitModule = node.kind === 143 /* MethodDeclaration */ || !isScopeLike(symbolScope) || isInterfaceFunctionMemberOrAmbient;
                     if (node.kind === 213 /* FunctionDeclaration */) {
                         if (!isDeclaredWithinFunction) {
                             forceWriteLine();
@@ -34708,7 +34708,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (emitFunctionName && shouldEmitFunctionName(node)) {
                 emitDeclarationName(node);
             }
-            if (nodeIsInterfaceFunctionMember) {
+            if (isInterfaceFunctionMemberOrAmbient) {
                 if (node.kind === 140) {
                     emittedNode = node.type;
                 }
