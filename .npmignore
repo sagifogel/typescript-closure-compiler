@@ -13,5 +13,5 @@ TypeScript/
 compiler.js
 gulpfile.js
 tscc.browser.js
-*.sln
 *.njsproj
+*.sln
