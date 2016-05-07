@@ -12,8 +12,13 @@ namespace ts {
     type ModuleGeneration = { declarations: { [name: string]: boolean } };
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
-    interface CompilerExtendedOptions extends ts.CompilerOptions {
+    export interface ExtendedEmitHost extends EmitHost {
+        getExternSourceFiles(): SourceFile[];
+    }
+
+    export interface ExtendedCompilerOptions extends ts.CompilerOptions {
         entry: string;
+        externs?: any;
         exportAs: string;
         emitInterfaces: boolean;
         emitAnnotations: boolean;
@@ -329,8 +334,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
     });
 };`;
         let entryFile: SourceFile;
+        let emitHost = <ExtendedEmitHost>host;
         let resolvedExportedTypes: Array<Declaration>;
-        let compilerOptions = <CompilerExtendedOptions>host.getCompilerOptions();
+        let compilerOptions = <ExtendedCompilerOptions>host.getCompilerOptions();
         let languageVersion = compilerOptions.target || ScriptTarget.ES3;
         let modulekind = compilerOptions.module ? compilerOptions.module : languageVersion === ScriptTarget.ES6 ? ModuleKind.ES6 : ModuleKind.None;
         let sourceMapDataList: SourceMapData[] = compilerOptions.sourceMap || compilerOptions.inlineSourceMap ? [] : undefined;
@@ -338,6 +344,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         let newLine = host.getNewLine();
         let jsxDesugaring = host.getCompilerOptions().jsx !== JsxEmit.Preserve;
         let shouldEmitJsx = (s: SourceFile) => (s.languageVariant === LanguageVariant.JSX && !jsxDesugaring);
+        let emitOutFile = compilerOptions.outFile || compilerOptions.out;
+        let shouldEmitExternsOutFile = compilerOptions.externsOutFile;
 
         if (compilerOptions.entry && compilerOptions.exportAs) {
             entryFile = host.getSourceFile(compilerOptions.entry);
@@ -345,15 +353,28 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         }
 
         if (targetSourceFile === undefined) {
-            forEach(host.getSourceFiles(), sourceFile => {
-                if (shouldEmitToOwnFile(sourceFile, compilerOptions)) {
-                    let jsFilePath = getOwnEmitOutputFilePath(sourceFile, host, shouldEmitJsx(sourceFile) ? ".jsx" : ".js");
-                    emitFile(jsFilePath, sourceFile);
-                }
-            });
+            if (!emitOutFile) {
+                forEach(host.getSourceFiles(), sourceFile => {
+                    if (shouldEmitToOwnFile(sourceFile, compilerOptions)) {
+                        let jsFilePath = getOwnEmitOutputFilePath(sourceFile, host, shouldEmitJsx(sourceFile) ? ".jsx" : ".js");
+                        emitFile(jsFilePath, sourceFile);
+                    }
+                });
+            }
+            else {
+                emitFile(emitOutFile);
+            }
 
-            if (compilerOptions.outFile || compilerOptions.out) {
-                emitFile(compilerOptions.outFile || compilerOptions.out);
+            if (compilerOptions.externs) {
+                if (!shouldEmitExternsOutFile) {
+                    ts.forEach(emitHost.getExternSourceFiles(), function (externFile) {
+                        var jsFilePath = ts.getOwnEmitOutputFilePath(externFile, host, shouldEmitJsx(externFile) ? ".jsx" : ".js");
+                        emitExternFile(jsFilePath, externFile);
+                    });
+                }
+                else {
+                    emitExternFile(shouldEmitExternsOutFile);
+                }
             }
         }
         else {
@@ -405,7 +426,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             return []
         }
 
-        function emitJavaScript(jsFilePath: string, root?: SourceFile) {
+        function emitJavaScript(jsFilePath: string, fileEmitter: (emitSourceFile: (sourceFile: SourceFile) => void, emitExportedTypes: () => void) => void, root?: SourceFile) {
             let writer = createTextWriter(newLine);
             var rawWrite = writer.rawWrite, write = writer.write, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent, getIndent = writer.getIndent, getColumn = writer.getColumn;
             var forceWriteLine = function (idnetation?: number) {
@@ -495,26 +516,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 initializeEmitterWithSourceMaps();
             }
 
-            if (root) {
-                // Do not call emit directly. It does not set the currentSourceFile.
-                emitSourceFile(root);
-
-                if (root === entryFile) {
-                    emitExportedTypes();
-                }
-            }
-            else {
-                forEach(host.getSourceFiles(), sourceFile => {
-                    if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
-                        emitSourceFile(sourceFile);
-                    }
-                });
-
-                if (entryFile) {
-                    emitExportedTypes();
-                }
-            }
-
+            fileEmitter(emitSourceFile, emitExportedTypes);
             writeLine();
             writeEmittedFiles(writer.getText(), /*writeByteOrderMark*/ compilerOptions.emitBOM);
             return;
@@ -9199,10 +9201,53 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         }
 
         function emitFile(jsFilePath: string, sourceFile?: SourceFile) {
-            emitJavaScript(jsFilePath, sourceFile);
+            emitJavaScript(jsFilePath, getEmitSourceFile(sourceFile), sourceFile);
 
             if (compilerOptions.declaration) {
                 writeDeclarationFile(jsFilePath, sourceFile, host, resolver, diagnostics);
+            }
+        }
+
+        function emitExternFile(jsFilePath: string, sourceFile?: SourceFile) {
+            emitJavaScript(jsFilePath, getEmitExternSourceFile(sourceFile), sourceFile);
+        }
+
+        function getEmitSourceFile(sourceFile: SourceFile) {
+            return (emitSourceFile: (root: SourceFile) => void, emitExportedTypes: () => void) => {
+                if (sourceFile) {
+                    // Do not call emit directly. It does not set the currentSourceFile.
+                    emitSourceFile(sourceFile);
+
+                    if (sourceFile === entryFile) {
+                        emitExportedTypes();
+                    }
+                }
+                else {
+                    forEach(host.getSourceFiles(), sourceFile => {
+                        if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                            emitSourceFile(sourceFile);
+                        }
+                    });
+
+                    if (entryFile) {
+                        emitExportedTypes();
+                    }
+                }
+            }
+        }
+
+        function getEmitExternSourceFile(sourceFile: SourceFile) {
+            return (emitSourceFile: (root: SourceFile) => void, emitExportedTypes: () => void) => {
+                if (sourceFile) {
+                    emitSourceFile(sourceFile);
+                }
+                else {
+                    forEach(emitHost.getExternSourceFiles(), sourceFile => {
+                        if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                            emitSourceFile(sourceFile);
+                        }
+                    });
+                }
             }
         }
     }

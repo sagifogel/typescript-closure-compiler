@@ -4,15 +4,18 @@ var path = require("path");
 var child_process = require("child_process");
 var emitterPartialPath = "src/compiler/emitter.ts";
 var programPartialPath = "src/compiler/program.ts";
+var checkerPartialPath = "src/compiler/checker.ts";
 var utilitiesPartialPath = "src/services/utilities.ts";
 var commandLineParserPartialPath = "src/compiler/commandLineParser.ts";
 var emitterPath = path.resolve(__dirname, emitterPartialPath);
 var programPath = path.resolve(__dirname, programPartialPath);
+var checkerPath = path.resolve(__dirname, checkerPartialPath);
 var utilitiesPath = path.resolve(__dirname, utilitiesPartialPath);
 var commandLineParserPath = path.resolve(__dirname, commandLineParserPartialPath);
 var typeScriptRootPath = path.resolve(__dirname, "TypeScript/");
 var typeScriptEmitterPath = path.resolve(typeScriptRootPath, emitterPartialPath);
 var typeScriptProgramPath = path.resolve(typeScriptRootPath, programPartialPath);
+var typeScriptCheckerPath = path.resolve(typeScriptRootPath, checkerPartialPath);
 var typeScriptUtilitiesPath = path.resolve(typeScriptRootPath, utilitiesPartialPath);
 var typeScriptCommandLineParserPath = path.resolve(typeScriptRootPath, commandLineParserPartialPath);
 var tsResolvedJakefile = path.resolve(typeScriptRootPath, "jakefile.js");
@@ -21,6 +24,7 @@ var tsCommand = "jake --directory " + typeScriptRootPath + " --f " + tsResolvedJ
 task("copy-files", [], function () {
     jake.cpR(emitterPath, typeScriptEmitterPath);
     jake.cpR(programPath, typeScriptProgramPath);
+    jake.cpR(checkerPath, typeScriptCheckerPath);
     jake.cpR(utilitiesPath, typeScriptUtilitiesPath);
     jake.cpR(commandLineParserPath, typeScriptCommandLineParserPath);
 }, { async: false });

@@ -259,6 +259,13 @@ namespace ts {
             name: "exportAs",
             type: "string",
             description: { key: "", category: DiagnosticCategory.Message, code: 0 }
+        },
+        {
+            name: "externsOutFile",
+            type: "string",
+            isFilePath: true,
+            description: { key: "", category: DiagnosticCategory.Message, code: 0 },
+            paramType: Diagnostics.FILE
         }
     ];
 
@@ -291,18 +298,21 @@ namespace ts {
     export function parseCommandLine(commandLine: string[], readFile?: (path: string) => string): ParsedCommandLine {
         let options: CompilerOptions = {};
         let fileNames: string[] = [];
+        let externFileNames: string[] = [];
         let errors: Diagnostic[] = [];
         let { optionNameMap, shortOptionNames } = getOptionNameMap();
 
         parseStrings(commandLine);
         return {
+            errors,
             options,
             fileNames,
-            errors
+            externFileNames
         };
 
         function parseStrings(args: string[]) {
             let i = 0;
+            let isExterns = false;
             while (i < args.length) {
                 let s = args[i++];
                 if (s.charCodeAt(0) === CharacterCodes.at) {
@@ -319,6 +329,7 @@ namespace ts {
                     if (hasProperty(optionNameMap, s)) {
                         let opt = optionNameMap[s];
 
+                        isExterns = false;
                         // Check to see if no argument was provided (e.g. "--locale" is the last command-line argument).
                         if (!args[i] && opt.type !== "boolean") {
                             errors.push(createCompilerDiagnostic(Diagnostics.Compiler_option_0_expects_an_argument, opt.name));
@@ -346,11 +357,18 @@ namespace ts {
                                 }
                         }
                     }
+                    else if (s === "externs") {
+                        isExterns = true;
+                    }
                     else {
                         errors.push(createCompilerDiagnostic(Diagnostics.Unknown_compiler_option_0, s));
                     }
                 }
+                else if (isExterns) {
+                    externFileNames.push(s);
+                }
                 else {
+                    isExterns = false;
                     fileNames.push(s);
                 }
             }
@@ -429,9 +447,10 @@ namespace ts {
         let errors: Diagnostic[] = [];
 
         return {
-            options: getCompilerOptions(),
+            errors,
             fileNames: getFileNames(),
-            errors
+            options: getCompilerOptions(),
+            externFileNames: getExternFileNames()
         };
 
         function getCompilerOptions(): CompilerOptions {
@@ -511,6 +530,21 @@ namespace ts {
                 }
             }
             return fileNames;
+        }
+
+        function getExternFileNames(): string[] {
+            let externFileNames: string[] = [];
+
+            if (hasProperty(json, "externs")) {
+                if (json["externs"] instanceof Array) {
+                    externFileNames = map(<string[]>json["externs"], s => combinePaths(basePath, s));
+                }
+                else {
+                    errors.push(createCompilerDiagnostic(Diagnostics.Compiler_option_0_requires_a_value_of_type_1, "externs", "Array"));
+                }
+            }
+
+            return externFileNames;
         }
     }
 }

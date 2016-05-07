@@ -14342,6 +14342,7 @@ ts.IncrementalParser.InvalidPosition = {
     "-1": "Value"
 };
 /// <reference path="binder.ts"/>
+/// <reference path="core.ts" />
 /* @internal */
 
 
@@ -27207,6 +27208,7 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
             return diagnostics.getDiagnostics(sourceFile.fileName);
         }
         ts.forEach(host.getSourceFiles(), checkSourceFile);
+        ts.forEach(host.getExternSourceFiles(), checkSourceFile);
         return diagnostics.getDiagnostics();
     }
     function getGlobalDiagnostics() {
@@ -27901,6 +27903,15 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
         });
         // Initialize global symbol table
         ts.forEach(host.getSourceFiles(), function (file) {
+            if (!ts.isExternalModule(file)) {
+                mergeSymbolTable(globals, file.locals);
+            }
+        });
+        ts.forEach(host.getExternSourceFiles(), function (file) {
+            ts.bindSourceFile(file);
+        });
+        // Initialize global symbol table
+        ts.forEach(host.getExternSourceFiles(), function (file) {
             if (!ts.isExternalModule(file)) {
                 mergeSymbolTable(globals, file.locals);
             }
@@ -30705,6 +30716,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     var paramHelper = "\nvar __param = (this && this.__param) || function (paramIndex, decorator) {\n    return function (target, key) { decorator(target, key, paramIndex); }\n};";
     var awaiterHelper = "\nvar __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promise, generator) {\n    return new Promise(function (resolve, reject) {\n        generator = generator.call(thisArg, _arguments);\n        function cast(value) { return value instanceof Promise && value.constructor === Promise ? value : new Promise(function (resolve) { resolve(value); }); }\n        function onfulfill(value) { try { step(\"next\", value); } catch (e) { reject(e); } }\n        function onreject(value) { try { step(\"throw\", value); } catch (e) { reject(e); } }\n        function step(verb, value) {\n            var result = generator[verb](value);\n            result.done ? resolve(result.value) : cast(result.value).then(onfulfill, onreject);\n        }\n        step(\"next\", void 0);\n    });\n};";
     var entryFile;
+    var emitHost = host;
     var resolvedExportedTypes;
     var compilerOptions = host.getCompilerOptions();
     var languageVersion = compilerOptions.target || 0 /* ES3 */;
@@ -30714,19 +30726,34 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     var newLine = host.getNewLine();
     var jsxDesugaring = host.getCompilerOptions().jsx !== 1 /* Preserve */;
     var shouldEmitJsx = function (s) { return (s.languageVariant === 1 /* JSX */ && !jsxDesugaring); };
+    var emitOutFile = compilerOptions.outFile || compilerOptions.out;
+    var shouldEmitExternsOutFile = compilerOptions.externsOutFile;
     if (compilerOptions.entry && compilerOptions.exportAs) {
         entryFile = host.getSourceFile(compilerOptions.entry);
         resolvedExportedTypes = resolveExportedEntryTypes(entryFile);
     }
     if (targetSourceFile === undefined) {
-        ts.forEach(host.getSourceFiles(), function (sourceFile) {
-            if (ts.shouldEmitToOwnFile(sourceFile, compilerOptions)) {
-                var jsFilePath = ts.getOwnEmitOutputFilePath(sourceFile, host, shouldEmitJsx(sourceFile) ? ".jsx" : ".js");
-                emitFile(jsFilePath, sourceFile);
+        if (!emitOutFile) {
+            ts.forEach(host.getSourceFiles(), function (sourceFile) {
+                if (ts.shouldEmitToOwnFile(sourceFile, compilerOptions)) {
+                    var jsFilePath = ts.getOwnEmitOutputFilePath(sourceFile, host, shouldEmitJsx(sourceFile) ? ".jsx" : ".js");
+                    emitFile(jsFilePath, sourceFile);
+                }
+            });
+        }
+        else {
+            emitFile(emitOutFile);
+        }
+        if (compilerOptions.externs) {
+            if (!shouldEmitExternsOutFile) {
+                ts.forEach(emitHost.getExternSourceFiles(), function (externFile) {
+                    jsFilePath = ts.getOwnEmitOutputFilePath(externFile, host, shouldEmitJsx(externFile) ? ".jsx" : ".js");
+                    emitExternFile(jsFilePath, externFile);
+                });
             }
-        });
-        if (compilerOptions.outFile || compilerOptions.out) {
-            emitFile(compilerOptions.outFile || compilerOptions.out);
+            else {
+                emitExternFile(shouldEmitExternsOutFile);
+            }
         }
     }
     else {
@@ -30770,7 +30797,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         return [];
     }
-    function emitJavaScript(jsFilePath, root) {
+    function emitJavaScript(jsFilePath, fileEmitter, root) {
         var writer = ts.createTextWriter(newLine);
         var rawWrite = writer.rawWrite;
         var write = writer.write;
@@ -30856,23 +30883,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         if (compilerOptions.sourceMap || compilerOptions.inlineSourceMap) {
             initializeEmitterWithSourceMaps();
         }
-        if (root) {
-            // Do not call emit directly. It does not set the currentSourceFile.
-            emitSourceFile(root);
-            if (root === entryFile) {
-                emitExportedTypes();
-            }
-        }
-        else {
-            ts.forEach(host.getSourceFiles(), function (sourceFile) {
-                if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
-                    emitSourceFile(sourceFile);
-                }
-            });
-            if (entryFile) {
-                emitExportedTypes();
-            }
-        }
+        fileEmitter(emitSourceFile, emitExportedTypes);
         writeLine();
         writeEmittedFiles(writer.getText(), /*writeByteOrderMark*/ compilerOptions.emitBOM);
         return;
@@ -38525,10 +38536,48 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         var _a;
     }
     function emitFile(jsFilePath, sourceFile) {
-        emitJavaScript(jsFilePath, sourceFile);
+        emitJavaScript(jsFilePath, getEmitSourceFile(sourceFile), sourceFile);
         if (compilerOptions.declaration) {
             ts.writeDeclarationFile(jsFilePath, sourceFile, host, resolver, diagnostics);
         }
+    }
+    function emitExternFile(jsFilePath, sourceFile) {
+        emitJavaScript(jsFilePath, getEmitExternSourceFile(sourceFile), sourceFile);
+    }
+    function getEmitSourceFile(sourceFile) {
+        return function (emitSourceFile, emitExportedTypes) {
+            if (sourceFile) {
+                // Do not call emit directly. It does not set the currentSourceFile.
+                emitSourceFile(sourceFile);
+                if (sourceFile === entryFile) {
+                    emitExportedTypes();
+                }
+            }
+            else {
+                ts.forEach(host.getSourceFiles(), function (sourceFile) {
+                    if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                        emitSourceFile(sourceFile);
+                    }
+                });
+                if (entryFile) {
+                    emitExportedTypes();
+                }
+            }
+        };
+    }
+    function getEmitExternSourceFile(sourceFile) {
+        return function (emitSourceFile, emitExportedTypes) {
+            if (sourceFile) {
+                emitSourceFile(sourceFile);
+            }
+            else {
+                ts.forEach(emitHost.getExternSourceFiles(), function (sourceFile) {
+                    if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                        emitSourceFile(sourceFile);
+                    }
+                });
+            }
+        };
     }
 };
 /// <reference path="sys.ts" />
@@ -38830,19 +38879,23 @@ ts.flattenDiagnosticMessageText = function (messageText, newLine) {
 ts.createProgram = function (rootNames, options, host, oldProgram) {
     var program;
     var files = [];
+    var externFiles = [];
     var fileProcessingDiagnostics = ts.createDiagnosticCollection();
     var programDiagnostics = ts.createDiagnosticCollection();
     var commonSourceDirectory;
     var diagnosticsProducingTypeChecker;
     var noDiagnosticsTypeChecker;
     var classifiableNames;
+    var compilerOptions = options;
     var skipDefaultLib = options.noLib;
+    var externs = compilerOptions.externs || [];
     var start = new Date().getTime();
     host = host || ts.createCompilerHost(options);
     var resolveModuleNamesWorker = host.resolveModuleNames
         ? (function (moduleNames, containingFile) { return host.resolveModuleNames(moduleNames, containingFile); })
         : (function (moduleNames, containingFile) { return ts.map(moduleNames, function (moduleName) { return ts.resolveModuleName(moduleName, containingFile, options, host).resolvedModule; }); });
     var filesByName = ts.createFileMap(function (fileName) { return host.getCanonicalFileName(fileName); });
+    var libFilePath = host.getDefaultLibFileName(options);
     if (oldProgram) {
         // check properties that can affect structure of the program or module resolution strategy
         // if any of these properties has changed - structure cannot be reused
@@ -38862,9 +38915,12 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
         //  - A 'no-default-lib' reference comment is encountered in
         //      processing the root files.
         if (!skipDefaultLib) {
-            processRootFile(host.getDefaultLibFileName(options), true);
+            processRootFile(libFilePath, true);
         }
     }
+    externs = externs.map(function (file) { return ts.normalizePath(file); });
+    externFiles = files.filter(function (sourceFile) { return externs.indexOf(sourceFile.fileName) > -1; });
+    files = files.filter(function (sourceFile) { return externFiles.indexOf(sourceFile) === -1 || sourceFile.fileName === libFilePath; });
     verifyCompilerOptions();
     // unconditionally set oldProgram to undefined to prevent it from being captured in closure
     oldProgram = undefined;
@@ -38875,6 +38931,8 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
         getSourceFile: getSourceFile,
 
         getSourceFiles: function () { return files; },
+
+        getExternSourceFiles: function () { return externFiles; },
 
         getCompilerOptions: function () { return options; },
         getSyntacticDiagnostics: getSyntacticDiagnostics,
@@ -39005,6 +39063,7 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
             getNewLine: function () { return host.getNewLine(); },
             getSourceFile: program.getSourceFile,
             getSourceFiles: program.getSourceFiles,
+            getExternSourceFiles: program.getExternSourceFiles,
             writeFile: writeFileCallback || (function (fileName, data, writeByteOrderMark, onError) { return host.writeFile(fileName, data, writeByteOrderMark, onError); })
 
         };
@@ -39741,6 +39800,13 @@ ts.optionDeclarations = [
         name: "exportAs",
         type: "string",
         description: { key: "", category: ts.DiagnosticCategory.Message, code: 0 }
+    },
+    {
+        name: "externsOutFile",
+        type: "string",
+        isFilePath: true,
+        description: { key: "", category: ts.DiagnosticCategory.Message, code: 0 },
+        paramType: ts.Diagnostics.FILE
     }
 ];
 
@@ -39766,16 +39832,19 @@ ts.getOptionNameMap = function () {
 ts.parseCommandLine = function (commandLine, readFile) {
     var options = {};
     var fileNames = [];
+    var externFileNames = [];
     var errors = [];
     _a = ts.getOptionNameMap(), optionNameMap = _a.optionNameMap, shortOptionNames = _a.shortOptionNames;
     parseStrings(commandLine);
     return {
+        errors: errors,
         options: options,
         fileNames: fileNames,
-        errors: errors
+        externFileNames: externFileNames
     };
     function parseStrings(args) {
         var i = 0;
+        var isExterns = false;
         while (i < args.length) {
             var s = args[i++];
             if (s.charCodeAt(0) === 64 /* at */) {
@@ -39790,6 +39859,7 @@ ts.parseCommandLine = function (commandLine, readFile) {
                 if (ts.hasProperty(optionNameMap, s)) {
 
                     var opt = optionNameMap[s];
+                    isExterns = false;
                     // Check to see if no argument was provided (e.g. "--locale" is the last command-line argument).
                     if (!args[i] && opt.type !== "boolean") {
                         errors.push(ts.createCompilerDiagnostic(ts.Diagnostics.Compiler_option_0_expects_an_argument, opt.name));
@@ -39817,11 +39887,18 @@ ts.parseCommandLine = function (commandLine, readFile) {
                             }
                     }
                 }
+                else if (s === "externs") {
+                    isExterns = true;
+                }
                 else {
                     errors.push(ts.createCompilerDiagnostic(ts.Diagnostics.Unknown_compiler_option_0, s));
                 }
             }
+            else if (isExterns) {
+                externFileNames.push(s);
+            }
             else {
+                isExterns = false;
                 fileNames.push(s);
             }
         }
@@ -39900,9 +39977,10 @@ ts.parseConfigFileTextToJson = function (fileName, jsonText) {
 ts.parseJsonConfigFileContent = function (json, host, basePath) {
     var errors = [];
     return {
-        options: getCompilerOptions(),
+        errors: errors,
         fileNames: getFileNames(),
-        errors: errors
+        options: getCompilerOptions(),
+        externFileNames: getExternFileNames()
     };
     function getCompilerOptions() {
         var options = {};
@@ -39980,6 +40058,18 @@ ts.parseJsonConfigFileContent = function (json, host, basePath) {
             }
         }
         return fileNames;
+    }
+    function getExternFileNames() {
+        var externFileNames = [];
+        if (ts.hasProperty(json, "externs")) {
+            if (json["externs"] instanceof Array) {
+                externFileNames = ts.map(json["externs"], function (s) { return ts.combinePaths(basePath, s); });
+            }
+            else {
+                errors.push(ts.createCompilerDiagnostic(ts.Diagnostics.Compiler_option_0_requires_a_value_of_type_1, "externs", "Array"));
+            }
+        }
+        return externFileNames;
     }
 };
 /* @internal */
