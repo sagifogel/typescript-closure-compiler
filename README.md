@@ -29,7 +29,12 @@ Also the output of the `tscc` will transpile into ECMAScript 5
 node tscc app.ts
 ```
 
-The patched compiler provides two additional options that help export symbols to the global scope.<br/>
+## Additional options
+
+The patched compiler provides couple of additional options that help you to control the output of the closure compiler library.<br/>
+
+### Export symbols to the global scope
+Exporting types to the global scope is done using two additional options.<br/>
 `--entry` and `--exportAs`. Both options should be explicitly set in order for this feature to work properly.
 
 **entry** - main file that contains all exported types.<br/>
@@ -38,6 +43,55 @@ The patched compiler provides two additional options that help export symbols to
 ```js
 node tscc app.ts --module commonjs --entry app.ts --exportAs App
 ```
+
+### Declaring Extern symbols
+If you use third party libraries in your code and you don't want Closure Compiler to rename its symbols, you need to declare some externs. Declaring externs is done using additional option `--externs`.<br/>
+All you need to do is specify the list of extern files after the `externs` option.
+
+```js
+node tscc app.ts --module commonjs --externs externs/app-extern.d.ts...
+```
+
+You can also specify the files in a `ts.config` file.<br/>
+use the `project` option to locate the ts.config file:<br/> 
+```js
+node tscc --project [project specific directory]
+```
+and declare the options in the `ts.config` file: 
+```js
+{
+  "compilerOptions": {
+    "module": "commonjs"
+  },
+  "files": [
+    "app.ts"
+  ],
+  "externs": [
+    "externs/app-externs.d.ts"
+  ]
+}
+``` 
+
+you can also use the `externsOutFile` option in order to emit all extern files to a single file.
+
+```js
+node tscc app.ts --module commonjs --externs externs/app-extern.d.ts --externsOutFile externs.js
+```
+or declaring it in the `config.ts` file:
+```js
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "externsOutFile": "externs.js"
+  },
+  "files": [
+    "app.ts"
+  ],
+  "externs": [
+    "externs/app-externs.d.ts"
+  ]
+}
+``` 
 
 ## Building
 
