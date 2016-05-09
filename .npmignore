@@ -12,6 +12,7 @@ TypeScript/
 *.dat
 compiler.js
 gulpfile.js
+lib
 tscc.browser.js
 *.njsproj
 *.sln

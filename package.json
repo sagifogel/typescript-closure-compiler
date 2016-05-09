@@ -6,7 +6,11 @@
   "dependencies": {
   },
   "devDependencies": {
-    "jake": "8.0.12"
+    "jake": "8.0.12",
+    "gulp-file": "^0.3.0",
+    "gulp-order": "^1.1.1",
+    "gulp-concat": "^2.6.0",
+    "gulp-wrapper": "^1.0.0"
   },
   "main": "tscc",
   "repository": {
