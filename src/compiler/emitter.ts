@@ -345,7 +345,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         let jsxDesugaring = host.getCompilerOptions().jsx !== JsxEmit.Preserve;
         let shouldEmitJsx = (s: SourceFile) => (s.languageVariant === LanguageVariant.JSX && !jsxDesugaring);
         let emitOutFile = compilerOptions.outFile || compilerOptions.out;
-        let shouldEmitExternsOutFile = compilerOptions.externsOutFile;
+        let shouldEmitExternsOutFile = !!compilerOptions.externsOutFile;
 
         if (compilerOptions.entry && compilerOptions.exportAs) {
             entryFile = host.getSourceFile(compilerOptions.entry);
@@ -365,7 +365,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitFile(emitOutFile);
             }
 
-            if (compilerOptions.externs) {
+            if (compilerOptions.externs && compilerOptions.externs.length) {
                 if (!shouldEmitExternsOutFile) {
                     ts.forEach(emitHost.getExternSourceFiles(), function (externFile) {
                         var jsFilePath = ts.getOwnEmitOutputFilePath(externFile, host, shouldEmitJsx(externFile) ? ".jsx" : ".js");
@@ -373,7 +373,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     });
                 }
                 else {
-                    emitExternFile(shouldEmitExternsOutFile);
+                    emitExternFile(compilerOptions.externsOutFile);
                 }
             }
         }

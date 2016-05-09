@@ -30727,7 +30727,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     var jsxDesugaring = host.getCompilerOptions().jsx !== 1 /* Preserve */;
     var shouldEmitJsx = function (s) { return (s.languageVariant === 1 /* JSX */ && !jsxDesugaring); };
     var emitOutFile = compilerOptions.outFile || compilerOptions.out;
-    var shouldEmitExternsOutFile = compilerOptions.externsOutFile;
+    var shouldEmitExternsOutFile = !!compilerOptions.externsOutFile;
     if (compilerOptions.entry && compilerOptions.exportAs) {
         entryFile = host.getSourceFile(compilerOptions.entry);
         resolvedExportedTypes = resolveExportedEntryTypes(entryFile);
@@ -30744,7 +30744,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         else {
             emitFile(emitOutFile);
         }
-        if (compilerOptions.externs) {
+        if (compilerOptions.externs && compilerOptions.externs.length) {
             if (!shouldEmitExternsOutFile) {
                 ts.forEach(emitHost.getExternSourceFiles(), function (externFile) {
                     jsFilePath = ts.getOwnEmitOutputFilePath(externFile, host, shouldEmitJsx(externFile) ? ".jsx" : ".js");
@@ -30752,7 +30752,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 });
             }
             else {
-                emitExternFile(shouldEmitExternsOutFile);
+                emitExternFile(compilerOptions.externsOutFile);
             }
         }
     }
