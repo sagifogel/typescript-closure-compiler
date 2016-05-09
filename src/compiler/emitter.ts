@@ -12,8 +12,13 @@ namespace ts {
     type ModuleGeneration = { declarations: { [name: string]: boolean } };
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
-    interface CompilerExtendedOptions extends ts.CompilerOptions {
+    export interface ExtendedEmitHost extends EmitHost {
+        getExternSourceFiles(): SourceFile[];
+    }
+
+    export interface ExtendedCompilerOptions extends ts.CompilerOptions {
         entry: string;
+        externs?: any;
         exportAs: string;
         emitInterfaces: boolean;
         emitAnnotations: boolean;
@@ -329,8 +334,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
     });
 };`;
         let entryFile: SourceFile;
+        let emitHost = <ExtendedEmitHost>host;
         let resolvedExportedTypes: Array<Declaration>;
-        let compilerOptions = <CompilerExtendedOptions>host.getCompilerOptions();
+        let compilerOptions = <ExtendedCompilerOptions>host.getCompilerOptions();
         let languageVersion = compilerOptions.target || ScriptTarget.ES3;
         let modulekind = compilerOptions.module ? compilerOptions.module : languageVersion === ScriptTarget.ES6 ? ModuleKind.ES6 : ModuleKind.None;
         let sourceMapDataList: SourceMapData[] = compilerOptions.sourceMap || compilerOptions.inlineSourceMap ? [] : undefined;
@@ -338,6 +344,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         let newLine = host.getNewLine();
         let jsxDesugaring = host.getCompilerOptions().jsx !== JsxEmit.Preserve;
         let shouldEmitJsx = (s: SourceFile) => (s.languageVariant === LanguageVariant.JSX && !jsxDesugaring);
+        let emitOutFile = compilerOptions.outFile || compilerOptions.out;
+        let shouldEmitExternsOutFile = !!compilerOptions.externsOutFile;
 
         if (compilerOptions.entry && compilerOptions.exportAs) {
             entryFile = host.getSourceFile(compilerOptions.entry);
@@ -345,15 +353,28 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         }
 
         if (targetSourceFile === undefined) {
-            forEach(host.getSourceFiles(), sourceFile => {
-                if (shouldEmitToOwnFile(sourceFile, compilerOptions)) {
-                    let jsFilePath = getOwnEmitOutputFilePath(sourceFile, host, shouldEmitJsx(sourceFile) ? ".jsx" : ".js");
-                    emitFile(jsFilePath, sourceFile);
-                }
-            });
+            if (!emitOutFile) {
+                forEach(host.getSourceFiles(), sourceFile => {
+                    if (shouldEmitToOwnFile(sourceFile, compilerOptions)) {
+                        let jsFilePath = getOwnEmitOutputFilePath(sourceFile, host, shouldEmitJsx(sourceFile) ? ".jsx" : ".js");
+                        emitFile(jsFilePath, sourceFile);
+                    }
+                });
+            }
+            else {
+                emitFile(emitOutFile);
+            }
 
-            if (compilerOptions.outFile || compilerOptions.out) {
-                emitFile(compilerOptions.outFile || compilerOptions.out);
+            if (compilerOptions.externs && compilerOptions.externs.length) {
+                if (!shouldEmitExternsOutFile) {
+                    ts.forEach(emitHost.getExternSourceFiles(), function (externFile) {
+                        var jsFilePath = ts.getOwnEmitOutputFilePath(externFile, host, shouldEmitJsx(externFile) ? ".jsx" : ".js");
+                        emitExternFile(jsFilePath, externFile);
+                    });
+                }
+                else {
+                    emitExternFile(compilerOptions.externsOutFile);
+                }
             }
         }
         else {
@@ -389,7 +410,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         }
 
         function resolveExportedEntryTypes(entryFile: SourceFile): Array<Declaration> {
-            if (compilerOptions.entry) {
+            if (compilerOptions.entry && entryFile) {
                 let statements = entryFile.statements;
 
                 return statements.filter(statement => statement.kind === SyntaxKind.ExportDeclaration)
@@ -405,7 +426,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             return []
         }
 
-        function emitJavaScript(jsFilePath: string, root?: SourceFile) {
+        function emitJavaScript(jsFilePath: string, fileEmitter: (emitSourceFile: (sourceFile: SourceFile) => void, emitExportedTypes: () => void) => void, root?: SourceFile) {
             let writer = createTextWriter(newLine);
             var rawWrite = writer.rawWrite, write = writer.write, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent, getIndent = writer.getIndent, getColumn = writer.getColumn;
             var forceWriteLine = function (idnetation?: number) {
@@ -495,21 +516,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 initializeEmitterWithSourceMaps();
             }
 
-            if (root) {
-                // Do not call emit directly. It does not set the currentSourceFile.
-                emitSourceFile(root);
-            }
-            else {
-                forEach(host.getSourceFiles(), sourceFile => {
-                    if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
-                        if (sourceFile === entryFile) {
-                            emitExportedTypes();
-                        }
-                        emitSourceFile(sourceFile);
-                    }
-                });
-            }
-
+            fileEmitter(emitSourceFile, emitExportedTypes);
             writeLine();
             writeEmittedFiles(writer.getText(), /*writeByteOrderMark*/ compilerOptions.emitBOM);
             return;
@@ -526,6 +533,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let exportedMembers: Array<string> = [];
 
                 forceWriteLine();
+
                 ts.forEach(resolvedExportedTypes, resolvedExportedType => {
                     let exportedType = <ClassLikeDeclaration | EnumDeclaration>resolvedExportedType;
                     let moduleName = getModuleName(exportedType);
@@ -537,7 +545,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     ts.forEach(exportedType.members, (member: Declaration) => {
                         let isEnumMember = member.kind === SyntaxKind.EnumMember;
 
-                        if (isEnumMember || (member.kind !== SyntaxKind.ComputedPropertyName && isPublicMember(member))) {
+                        if (isEnumMember || (member.kind !== SyntaxKind.ComputedPropertyName && member.kind !== SyntaxKind.Constructor && isPublicMember(member))) {
                             let result: string;
                             let buffer: Array<string> = [];
                             let memberName = getNodeName(member);
@@ -567,7 +575,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     })
                     .forEach(writeValueAndNewLine);
 
-                write(`self["${compilerOptions.exportAs}"] = { ${Object.keys(exportedTypes).map(key => `"${key}": ${exportedTypes[key]}`).join(", ")} };`);
+                writeValueAndNewLine(`var ${compilerOptions.exportAs} = { ${Object.keys(exportedTypes).map(key => `"${key}": ${exportedTypes[key]}`).join(", ")} };`);
+                writeValueAndNewLine(`typeof module === "object" && typeof module["exports"] === "object" ? module["exports"] = ${compilerOptions.exportAs}: self["${compilerOptions.exportAs}"] = ${compilerOptions.exportAs};`);
             }
 
             function isUniqueName(name: string): boolean {
@@ -4796,7 +4805,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let shouldEmitSemicolon = false;
                 let symbolScope = getSymbolScope(node);
                 let isDeclaredWithinFunction = ts.isFunctionLike(symbolScope);
-                let nodeIsInterfaceFunctionMember = isInterfaceFunctionMember(node);
+                let isInterfaceFunctionMemberOrAmbient = isInterfaceFunctionMember(node) || isAmbientContext(node);
 
                 if (ts.nodeIsMissing(node.body) && (node.flags & NodeFlags.Export)) {
                     return;
@@ -4833,8 +4842,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                     }
 
-                    if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration || nodeIsInterfaceFunctionMember) {
-                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isScopeLike(symbolScope) || nodeIsInterfaceFunctionMember;
+                    if (node.kind === SyntaxKind.MethodDeclaration || node.kind === SyntaxKind.FunctionDeclaration || isInterfaceFunctionMemberOrAmbient) {
+                        let tryEmitModule = node.kind === SyntaxKind.MethodDeclaration || !isScopeLike(symbolScope) || isInterfaceFunctionMemberOrAmbient;
 
                         if (node.kind === SyntaxKind.FunctionDeclaration) {
                             if (!isDeclaredWithinFunction) {
@@ -4879,7 +4888,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitDeclarationName(node);
                 }
 
-                if (nodeIsInterfaceFunctionMember) {
+                if (isInterfaceFunctionMemberOrAmbient) {
                     if (node.kind === 140) {
                         emittedNode = node.type;
                     }
@@ -5373,19 +5382,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let accessors = getAllAccessorDeclarations(node.members, <AccessorDeclaration>member);
                         if (member === accessors.firstAccessor) {
                             forceWriteLine();
+                            forceWriteLine();
                             emitStart(member);
                             write("Object.defineProperty(");
                             emitStart((<AccessorDeclaration>member).name);
                             emitClassMemberPrefix(node, member);
-                            write(", ");
+                            write(`, "`);
                             emitExpressionForPropertyName((<AccessorDeclaration>member).name);
                             emitEnd((<AccessorDeclaration>member).name);
-                            write(", {");
+                            write(`", {`);
                             increaseIndent();
                             if (accessors.getAccessor) {
                                 writeLine();
                                 emitLeadingComments(accessors.getAccessor);
-                                emitFunctionAnnotation(<AccessorDeclaration>member);
+                                emitFunctionAnnotation(accessors.getAccessor, node);
                                 write("get: ");
                                 emitStart(accessors.getAccessor);
                                 write("function ");
@@ -5397,7 +5407,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             if (accessors.setAccessor) {
                                 writeLine();
                                 emitLeadingComments(accessors.setAccessor);
-                                emitFunctionAnnotation(<AccessorDeclaration>member);
+                                emitFunctionAnnotation(accessors.setAccessor, node);
                                 write("set: ");
                                 emitStart(accessors.setAccessor);
                                 write("function ");
@@ -5621,7 +5631,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, symbol.initializer));
                     }
                     else if (hasReturnType = type.kind !== SyntaxKind.VoidKeyword) {
-                        returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                        if (type.kind === SyntaxKind.Block) {
+                            returnType = getReturnType(rootNode, func);
+                        }
+                        else {
+                            returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                        }
                     }
                 }
 
@@ -5737,6 +5752,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return symbol.valueDeclaration || symbol.declarations[0];
             }
 
+            function getTypeOfSymbolAtLocation(node: Node): string {
+                var symbol = node.symbol;
+
+                if (symbol) {
+                    var type = typeChecker.getTypeOfSymbolAtLocation(symbol, node);
+
+                    if (type) {
+                        return getSymbolName(node, type);
+                    }
+                }
+
+                return null;
+            }
+
             function getParameterOrUnionTypeAnnotation(rootNode: Node, node: Node, isParameterPropertyAssignment?: boolean): string {
                 let type: string;
                 let mapped: Array<string>;
@@ -5750,6 +5779,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.PropertyAssignment:
                     case SyntaxKind.VariableDeclaration:
                     case SyntaxKind.TypeAliasDeclaration:
+                    case SyntaxKind.TypeAssertionExpression:
                         if (typeNode.type) {
                             return getParameterOrUnionTypeAnnotation(rootNode, typeNode.type, isParameterPropertyAssignment);
                         }
@@ -5799,6 +5829,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.Constructor:
                     case SyntaxKind.FunctionType:
                     case SyntaxKind.ArrowFunction:
+                    case SyntaxKind.MethodSignature:
                     case SyntaxKind.ConstructorType:
                     case SyntaxKind.FunctionExpression:
                         return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
@@ -5836,12 +5867,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.PropertyAccessExpression:
                     case SyntaxKind.ElementAccessExpression:
                     case SyntaxKind.CallExpression:
+                    case SyntaxKind.ConditionalExpression:
                         return addOptionalIfNeeded(node.parent, getExpression(rootNode, node), isParameterPropertyAssignment);
                     case SyntaxKind.TypeParameter:
                     case SyntaxKind.InterfaceDeclaration:
                     case SyntaxKind.ClassDeclaration:
                     case SyntaxKind.EnumDeclaration:
                         return getNodeName(node);
+                    case SyntaxKind.BinaryExpression:
+                        return getTypeOfSymbolAtLocation(rootNode);
+                    case SyntaxKind.TemplateExpression:
+                        return "string";
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
@@ -5991,7 +6027,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function isPublicMember(node: Node): boolean {
                 var accessModifier = getAccessModifier(node);
 
-                return accessModifier === SyntaxKind.PublicKeyword;
+                return !accessModifier || accessModifier === SyntaxKind.PublicKeyword;
             }
 
             function getAccessModifier(member: Node): SyntaxKind {
@@ -6016,8 +6052,26 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 return false;
             }
-            
-            function emitFunctionAnnotation(node: FunctionLikeDeclaration): void {
+
+            function getReturnType(rootNode: Node, node: SignatureDeclaration): string {
+                let type = typeChecker.getSignatureFromDeclaration(node);
+
+                if (type.resolvedReturnType && type.resolvedReturnType.flags !== TypeFlags.Void) {
+                    if (type.resolvedReturnType.symbol) {
+                        let declarartion = type.resolvedReturnType.symbol.declarations;
+
+                        if (declarartion && declarartion.length) {
+                            return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+                        }
+                    }
+
+                    return typeChecker.typeToString(type.resolvedReturnType);
+                }
+
+                return null;
+            }
+
+            function emitFunctionAnnotation(node: FunctionLikeDeclaration, parentContext?: ClassLikeDeclaration): void {
                 emitAnnotationIf(() => {
                     let hasModifiers = false;
                     let returnTypeInference: string;
@@ -6031,16 +6085,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (!hasReturnType && !declaredWithinInterface) {
-                        let type = typeChecker.getSignatureFromDeclaration(node);
-
-                        if (type.resolvedReturnType && type.resolvedReturnType.flags !== TypeFlags.Void) {
+                        if (returnTypeInference = getReturnType(node, node)) {
                             hasReturnType = true;
-                            returnTypeInference = typeChecker.typeToString(type.resolvedReturnType);
                         }
                     }
 
-                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters) {
+                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters || parentContext) {
                         emitStartAnnotation();
+
+                        if (parentContext) {
+                            let parentName = getModuleName(parentContext) + getNodeNameOrIdentifier(parentContext);
+
+                            emitCommentedAnnotation(`@this {${parentName}}`);
+                        }
 
                         if (hasModifiers) {
                             emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
@@ -9144,10 +9201,53 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
         }
 
         function emitFile(jsFilePath: string, sourceFile?: SourceFile) {
-            emitJavaScript(jsFilePath, sourceFile);
+            emitJavaScript(jsFilePath, getEmitSourceFile(sourceFile), sourceFile);
 
             if (compilerOptions.declaration) {
                 writeDeclarationFile(jsFilePath, sourceFile, host, resolver, diagnostics);
+            }
+        }
+
+        function emitExternFile(jsFilePath: string, sourceFile?: SourceFile) {
+            emitJavaScript(jsFilePath, getEmitExternSourceFile(sourceFile), sourceFile);
+        }
+
+        function getEmitSourceFile(sourceFile: SourceFile) {
+            return (emitSourceFile: (root: SourceFile) => void, emitExportedTypes: () => void) => {
+                if (sourceFile) {
+                    // Do not call emit directly. It does not set the currentSourceFile.
+                    emitSourceFile(sourceFile);
+
+                    if (sourceFile === entryFile) {
+                        emitExportedTypes();
+                    }
+                }
+                else {
+                    forEach(host.getSourceFiles(), sourceFile => {
+                        if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                            emitSourceFile(sourceFile);
+                        }
+                    });
+
+                    if (entryFile) {
+                        emitExportedTypes();
+                    }
+                }
+            }
+        }
+
+        function getEmitExternSourceFile(sourceFile: SourceFile) {
+            return (emitSourceFile: (root: SourceFile) => void, emitExportedTypes: () => void) => {
+                if (sourceFile) {
+                    emitSourceFile(sourceFile);
+                }
+                else {
+                    forEach(emitHost.getExternSourceFiles(), sourceFile => {
+                        if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                            emitSourceFile(sourceFile);
+                        }
+                    });
+                }
             }
         }
     }

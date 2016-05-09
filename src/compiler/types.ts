@@ -4,11 +4,11 @@
     }
 
     export interface EmitHost extends ScriptReferenceHost {
+        getNewLine(): string;
+        writeFile: WriteFileCallback;
         getSourceFiles(): SourceFile[];
         getCommonSourceDirectory(): string;
         getCanonicalFileName(fileName: string): string;
-        getNewLine(): string;
-        writeFile: WriteFileCallback;
     }
 
     export interface EmitTextWriter {

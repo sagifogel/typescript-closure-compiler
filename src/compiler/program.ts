@@ -14,6 +14,10 @@ namespace ts {
 
     export const version = "1.7.5";
 
+    interface ExtendedProgram extends Program {
+        getExternSourceFiles(): SourceFile[];
+    }
+
     export function findConfigFile(searchPath: string): string {
         let fileName = "tsconfig.json";
         while (true) {
@@ -192,7 +196,7 @@ namespace ts {
         }
 
         return referencedSourceFile
-            ? { resolvedModule: { resolvedFileName: referencedSourceFile  }, failedLookupLocations }
+            ? { resolvedModule: { resolvedFileName: referencedSourceFile }, failedLookupLocations }
             : { resolvedModule: undefined, failedLookupLocations };
     }
 
@@ -288,9 +292,9 @@ namespace ts {
 
     export function getPreEmitDiagnostics(program: Program, sourceFile?: SourceFile, cancellationToken?: CancellationToken): Diagnostic[] {
         let diagnostics = program.getOptionsDiagnostics(cancellationToken).concat(
-                          program.getSyntacticDiagnostics(sourceFile, cancellationToken),
-                          program.getGlobalDiagnostics(cancellationToken),
-                          program.getSemanticDiagnostics(sourceFile, cancellationToken));
+            program.getSyntacticDiagnostics(sourceFile, cancellationToken),
+            program.getGlobalDiagnostics(cancellationToken),
+            program.getSemanticDiagnostics(sourceFile, cancellationToken));
 
         if (program.getCompilerOptions().declaration) {
             diagnostics.concat(program.getDeclarationDiagnostics(sourceFile, cancellationToken));
@@ -326,18 +330,18 @@ namespace ts {
     }
 
     export function createProgram(rootNames: string[], options: CompilerOptions, host?: CompilerHost, oldProgram?: Program): Program {
-        let program: Program;
+        let program: ExtendedProgram;
         let files: SourceFile[] = [];
+        let externFiles: SourceFile[] = [];
         let fileProcessingDiagnostics = createDiagnosticCollection();
         let programDiagnostics = createDiagnosticCollection();
-
         let commonSourceDirectory: string;
         let diagnosticsProducingTypeChecker: TypeChecker;
         let noDiagnosticsTypeChecker: TypeChecker;
         let classifiableNames: Map<string>;
-
+        let compilerOptions = <ExtendedCompilerOptions>options;
         let skipDefaultLib = options.noLib;
-
+        let externs = <string[]>compilerOptions.externs || [];
         let start = new Date().getTime();
 
         host = host || createCompilerHost(options);
@@ -347,6 +351,7 @@ namespace ts {
             : ((moduleNames: string[], containingFile: string) => map(moduleNames, moduleName => resolveModuleName(moduleName, containingFile, options, host).resolvedModule));
 
         let filesByName = createFileMap<SourceFile>(fileName => host.getCanonicalFileName(fileName));
+        let libFilePath = host.getDefaultLibFileName(options);
 
         if (oldProgram) {
             // check properties that can affect structure of the program or module resolution strategy
@@ -368,10 +373,13 @@ namespace ts {
             //  - A 'no-default-lib' reference comment is encountered in
             //      processing the root files.
             if (!skipDefaultLib) {
-                processRootFile(host.getDefaultLibFileName(options), true);
+                processRootFile(libFilePath, true);
             }
         }
 
+        externs = externs.map(file => normalizePath(file));
+        externFiles = files.filter(sourceFile => externs.indexOf(sourceFile.fileName) > -1);
+        files = files.filter(sourceFile => externFiles.indexOf(sourceFile) === -1 || sourceFile.fileName === libFilePath);
         verifyCompilerOptions();
 
         // unconditionally set oldProgram to undefined to prevent it from being captured in closure
@@ -383,6 +391,7 @@ namespace ts {
             getRootFileNames: () => rootNames,
             getSourceFile: getSourceFile,
             getSourceFiles: () => files,
+            getExternSourceFiles: () => externFiles,
             getCompilerOptions: () => options,
             getSyntacticDiagnostics,
             getOptionsDiagnostics,
@@ -468,8 +477,8 @@ namespace ts {
                             let oldResolution = getResolvedModule(oldSourceFile, moduleNames[i]);
                             let resolutionChanged = oldResolution
                                 ? !newResolution ||
-                                  oldResolution.resolvedFileName !== newResolution.resolvedFileName ||
-                                  !!oldResolution.isExternalLibraryImport !== !!newResolution.isExternalLibraryImport
+                                oldResolution.resolvedFileName !== newResolution.resolvedFileName ||
+                                !!oldResolution.isExternalLibraryImport !== !!newResolution.isExternalLibraryImport
                                 : newResolution;
 
                             if (resolutionChanged) {
@@ -506,7 +515,7 @@ namespace ts {
             return true;
         }
 
-        function getEmitHost(writeFileCallback?: WriteFileCallback): EmitHost {
+        function getEmitHost(writeFileCallback?: WriteFileCallback): ExtendedEmitHost {
             return {
                 getCanonicalFileName: fileName => host.getCanonicalFileName(fileName),
                 getCommonSourceDirectory: program.getCommonSourceDirectory,
@@ -515,6 +524,7 @@ namespace ts {
                 getNewLine: () => host.getNewLine(),
                 getSourceFile: program.getSourceFile,
                 getSourceFiles: program.getSourceFiles,
+                getExternSourceFiles: program.getExternSourceFiles,
                 writeFile: writeFileCallback || (
                     (fileName, data, writeByteOrderMark, onError) => host.writeFile(fileName, data, writeByteOrderMark, onError)),
             };
@@ -569,9 +579,9 @@ namespace ts {
         }
 
         function getDiagnosticsHelper(
-                sourceFile: SourceFile,
-                getDiagnostics: (sourceFile: SourceFile, cancellationToken: CancellationToken) => Diagnostic[],
-                cancellationToken: CancellationToken): Diagnostic[] {
+            sourceFile: SourceFile,
+            getDiagnostics: (sourceFile: SourceFile, cancellationToken: CancellationToken) => Diagnostic[],
+            cancellationToken: CancellationToken): Diagnostic[] {
             if (sourceFile) {
                 return getDiagnostics(sourceFile, cancellationToken);
             }

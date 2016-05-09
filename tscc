@@ -1,15 +1,15 @@
 var path = require("path");
-var ts = require("typescript");
+var ts = require(__dirname + "/typescript.js");
 var pkg = require(__dirname + "/package.json");
 
 function reportDiagnostic(diagnostic) {
-	var output = "";
+    var output = "";
     if (diagnostic.file) {
         var loc = ts.getLineAndCharacterOfPosition(diagnostic.file, diagnostic.start);
         output += diagnostic.file.fileName + "(" + (loc.line + 1) + "," + (loc.character + 1) + "): ";
     }
-	var category = ts.DiagnosticCategory[diagnostic.category].toLowerCase();
-	output += category.toLowerCase() + " TS" + diagnostic.code + ": " + flattenDiagnosticMessageText(diagnostic.messageText, ts.sys.newLine) + ts.sys.newLine;
+    var category = ts.DiagnosticCategory[diagnostic.category].toLowerCase();
+    output += category.toLowerCase() + " TS" + diagnostic.code + ": " + flattenDiagnosticMessageText(diagnostic.messageText, ts.sys.newLine) + ts.sys.newLine;
     ts.sys.write(output);
 }
 
@@ -67,6 +67,12 @@ function executeCommandLine(args) {
         reportDiagnostics(commandLine.errors);
         return ts.sys.exit(ts.ExitStatus.DiagnosticsPresent_OutputsSkipped);
     }
+    
+    if (commandLine.options.version) {
+        printVersion();
+        return ts.sys.exit(ts.ExitStatus.Success);
+    }
+    
     if (commandLine.options.project) {
         if (!isJSONSupported()) {
             reportDiagnostic(ts.createCompilerDiagnostic(ts.Diagnostics.The_current_host_does_not_support_the_0_option, "--project"));
@@ -110,42 +116,55 @@ function executeCommandLine(args) {
         return configParseResult;
     }
     
+    function normalizeFilePath(file) {
+        return ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, file));
+    }
+    
     function performCompilation() {
-		var now,
+        var now,
             program,
             exitCode,
             emitResult,
-			rootFileNames, 
+            rootFileNames, 
             fileNames = [],
-            configParseResult;
+            configParseResult,
+            externFileNames = [];
         
         if (configFileName) {
             configParseResult = parseConfigFile();
             rootFileNames = configParseResult.fileNames;
+            externFileNames = configParseResult.externFileNames;
             compilerOptions = ts.extend(commandLine.options, configParseResult.options);
         }
         else {
             rootFileNames = commandLine.fileNames;
             compilerOptions = commandLine.options;
+            externFileNames = commandLine.externFileNames;
         }
         
-		compilerOptions = ts.extend({
+        compilerOptions = ts.extend({
+            emitInterfaces : true,
             emitAnnotations: true,
-			emitOneSideEnum: true,
-            target: ts.ScriptTarget.ES5
+            emitOneSideEnum: true,
+            target: ts.ScriptTarget.ES5,
+            externs: externFileNames || []
         }, compilerOptions);
         
-        if (!compilerOptions.hasOwnProperty("emitInterfaces")) {
-            compilerOptions.emitInterfaces = true;
+        if (!configFileName && commandLine.options.rootDir) {
+            rootFileNames = rootFileNames.map(normalizeFilePath);
+            compilerOptions.externs = externFileNames = commandLine.externFileNames.map(normalizeFilePath);
+            
+            if (compilerOptions.entry) {
+                compilerOptions.entry = ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, compilerOptions.entry))
+            }
+            
+            if (compilerOptions.externsOutFile) {
+                compilerOptions.externsOutFile = ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, compilerOptions.externsOutFile))
+            }
         }
         
-		if (!configFileName && commandLine.options.rootDir) {
-			rootFileNames = rootFileNames.map(function(file) { 
-				return ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, file));
-			});
-		}
-
-		fileNames = sortFiles(rootFileNames);
+        rootFileNames = rootFileNames.concat(externFileNames)
+        fileNames = sortFiles(rootFileNames);
         program = ts.createProgram(fileNames, compilerOptions);
         now = Date.now();
         emitResult = program.emit();
