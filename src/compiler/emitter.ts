@@ -368,7 +368,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             if (compilerOptions.externs && compilerOptions.externs.length) {
                 if (!shouldEmitExternsOutFile) {
                     ts.forEach(emitHost.getExternSourceFiles(), function (externFile) {
-                        var jsFilePath = ts.getOwnEmitOutputFilePath(externFile, host, shouldEmitJsx(externFile) ? ".jsx" : ".js");
+                        let jsFilePath = ts.getOwnEmitOutputFilePath(externFile, host, shouldEmitJsx(externFile) ? ".jsx" : ".js");
                         emitExternFile(jsFilePath, externFile);
                     });
                 }
@@ -428,13 +428,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
         function emitJavaScript(jsFilePath: string, fileEmitter: (emitSourceFile: (sourceFile: SourceFile) => void, emitExportedTypes: () => void) => void, root?: SourceFile) {
             let writer = createTextWriter(newLine);
-            var rawWrite = writer.rawWrite, write = writer.write, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent, getIndent = writer.getIndent, getColumn = writer.getColumn;
-            var forceWriteLine = function (idnetation?: number) {
+            let rawWrite = writer.rawWrite, write = writer.write, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent, getIndent = writer.getIndent, getColumn = writer.getColumn;
+            let forceWriteLine = function (idnetation?: number) {
                 rawWrite(newLine);
                 rawWrite(ts.getIndentString(idnetation || getIndent()));
             };
 
-            var writeValueAndNewLine = function (value: string): void {
+            let writeValueAndNewLine = function (value: string): void {
                 write(value);
                 forceWriteLine();
             };
@@ -733,7 +733,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getNodeFullPath(node: Node): string {
-                var path: Array<string> = [];
+                let path: Array<string> = [];
 
                 do {
                     path.push(getNodeName(node));
@@ -1293,7 +1293,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 for (let i = 0; i < count; i++) {
-                    var node: Node = nodes[start + i];
+                    let node: Node = nodes[start + i];
 
                     if (i > 0 && node.kind === SyntaxKind.VariableDeclaration && !isNodeDeclaredWithinLoop(node)) {
                         write(";");
@@ -1719,7 +1719,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         else {
                             // One object literal with all the attributes in them
                             write("{");
-                            for (var i = 0; i < attrs.length; i++) {
+                            for (let i = 0; i < attrs.length; i++) {
                                 if (i > 0) {
                                     write(", ");
                                 }
@@ -1731,7 +1731,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     // Children
                     if (children) {
-                        for (var i = 0; i < children.length; i++) {
+                        for (let i = 0; i < children.length; i++) {
                             // Don't emit empty expressions
                             if (children[i].kind === SyntaxKind.JsxExpression && !((<JsxExpression>children[i]).expression)) {
                                 continue;
@@ -1825,7 +1825,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 function emitJsxElement(node: JsxElement) {
                     emitJsxOpeningOrSelfClosingElement(node.openingElement);
 
-                    for (var i = 0, n = node.children.length; i < n; i++) {
+                    for (let i = 0, n = node.children.length; i < n; i++) {
                         emit(node.children[i]);
                     }
 
@@ -2057,7 +2057,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getSymbolScope(node: Node): Node {
-                var result = getSymbolAndScope(node);
+                let result = getSymbolAndScope(node);
 
                 if (result) {
                     return result.scope;
@@ -2067,7 +2067,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getSymbolDeclaration(node: Node): Node {
-                var result = getSymbolAndScope(node);
+                let result = getSymbolAndScope(node);
 
                 if (result) {
                     return result.node;
@@ -2081,8 +2081,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let statements = (<Block>node).statements;
 
                 if (statements) {
-                    for (var i = 0; i < statements.length; i++) {
-                        var statement: Node = statements[i];
+                    for (let i = 0; i < statements.length; i++) {
+                        let statement: Node = statements[i];
 
                         switch (statement.kind) {
                             case SyntaxKind.IfStatement:
@@ -2205,7 +2205,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                 let filteredNodes = declarationList.filter(filter);
 
                                 if (filteredNodes.length) {
-                                    var candidate = filteredNodes[0];
+                                    let candidate = filteredNodes[0];
 
                                     if (isDefinedInTopLevelClass && !ts.isClassLike(containingNode)) {
                                         continue;
@@ -2220,7 +2220,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                             if (containingNode.kind !== SyntaxKind.ModuleDeclaration) {
                                 let moduleDeclaration = (<FunctionLikeDeclaration>declaration);
-                                var parameters = moduleDeclaration.parameters || <Array<ParameterDeclaration>>[];
+                                let parameters = moduleDeclaration.parameters || <Array<ParameterDeclaration>>[];
 
                                 parameters = parameters.filter(filter);
 
@@ -3639,7 +3639,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 write(";");
                 if (node.condition) {
-                    var condition = " ";
+                    let condition = " ";
 
                     if (isNotPropertyAccessOrCallExpression(node.condition)) {
                         condition += getModuleName(node.condition);
@@ -4005,7 +4005,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isNodeDeclaredWithinLoop(node: Node): boolean {
-                var container = getImmediateContainerNode(node);
+                let container = getImmediateContainerNode(node);
 
                 while (node !== container) {
                     node = node.parent;
@@ -4019,7 +4019,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isNodeDeclaredWithinFunction(node: Node): boolean {
-                var scope = getSymbolScope(node);
+                let scope = getSymbolScope(node);
                 if (scope && ts.isFunctionLike(scope)) {
                     return true;
                 }
@@ -4556,6 +4556,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let nodeIndex: number;
                 let startIsEmitted: string;
                 let statement: VariableStatement;
+                let shouldEmitVariableAnnotation: boolean;
                 let parentStatements = (<Block>node.parent).statements;
                 let nodeFirstVariable = node.declarationList.declarations[0];
 
@@ -4566,7 +4567,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         statement = <VariableStatement>parentStatements[0];
                     }
                     else {
-                        var prevStatement = parentStatements[nodeIndex - 1];
+                        let prevStatement = parentStatements[nodeIndex - 1];
 
                         if (prevStatement.kind !== SyntaxKind.VariableStatement) {
                             statement = <VariableStatement>parentStatements[nodeIndex];
@@ -4574,7 +4575,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (statement) {
-                        var firstDeclaration = statement.declarationList.declarations[0];
+                        let firstDeclaration = statement.declarationList.declarations[0];
 
                         if (!ts.isFunctionLike(getSymbolScope(firstDeclaration))) {
                             forceWriteLine();
@@ -4588,6 +4589,34 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write("export ");
                         startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                     }
+                    else {
+                        if (nodeFirstVariable.type && nodeFirstVariable.type.kind === SyntaxKind.TypeReference) {
+                            let typeRef = <TypeReferenceNode>nodeFirstVariable.type;
+                            let declaration = getSymbolAtLocation(typeRef.typeName);
+
+                            forceWriteLine();
+
+                            if (declaration.kind === SyntaxKind.InterfaceDeclaration) {
+                                let interfaces: Array<Node>;
+
+                                if (typeRef.typeArguments) {
+                                    let mergedDeclaration = getMergedDeclarationWithTypeParameters(typeRef, <InterfaceDeclaration>declaration);
+                                    interfaces = [mergedDeclaration];
+                                }
+                                else {
+                                    interfaces = [<InterfaceDeclaration>declaration];
+                                }
+
+                                emitConstructorWorker(<ClassLikeDeclaration><any>nodeFirstVariable, null, <Array<ExpressionWithTypeArguments>>interfaces);
+                            }
+                            else {
+                                shouldEmitVariableAnnotation = true;
+                            }
+                        }
+                        else {
+                            shouldEmitVariableAnnotation = true;
+                        }
+                    }
                 }
                 else {
                     if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
@@ -4595,11 +4624,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
-                if (startIsEmitted) {
+                if (startIsEmitted || shouldEmitVariableAnnotation) {
                     if (nodeFirstVariable.kind !== SyntaxKind.Parameter) {
                         emitVariableTypeAnnotation(nodeFirstVariable);
                     }
-                    write(startIsEmitted);
+                    if (startIsEmitted) {
+                        write(startIsEmitted);
+                    }
                     emitCommaList(node.declarationList.declarations);
                     write(";");
                 }
@@ -4807,7 +4838,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let isDeclaredWithinFunction = ts.isFunctionLike(symbolScope);
                 let isInterfaceFunctionMemberOrAmbient = isInterfaceFunctionMember(node) || isAmbientContext(node);
 
-                if (ts.nodeIsMissing(node.body) && (node.flags & NodeFlags.Export)) {
+                if (!isInterfaceFunctionMemberOrAmbient && ts.nodeIsMissing(node.body) && (node.flags & NodeFlags.Export)) {
                     return;
                 }
                 // TODO (yuisu) : we should not have special cases to condition emitting comments
@@ -5486,8 +5517,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function getTypeLiteral(rootNode: Node, members: NodeArray<Declaration | Node>): string {
                 if (members.length) {
-                    var other: Array<string> = [];
-                    var indexSignatures: Array<string> = [];
+                    let other: Array<string> = [];
+                    let indexSignatures: Array<string> = [];
 
                     ts.forEach(members, (member: Declaration | TypeNode): void => {
                         if (member.kind === SyntaxKind.IndexSignature) {
@@ -5569,7 +5600,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function getTypeReference(rootNode: Node, typeRef: TypeReferenceNode): string {
                 let text: string
-                var isVarArgs = ts.isRestParameter(<ParameterDeclaration>typeRef.parent);
+                let isVarArgs = ts.isRestParameter(<ParameterDeclaration>typeRef.parent);
 
                 if (!isVarArgs) {
                     let symbol: { members?: NodeArray<Node> };
@@ -5641,7 +5672,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 if (func.parameters.length || hasReturnType) {
-                    var params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
+                    let params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
 
                     if (isCtor) {
                         return `function(new:${returnType}, ${params})`;
@@ -5673,8 +5704,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getThisType(node: Node): { nodeType: ClassLikeDeclaration, container: Node } {
-                var container = ts.getThisContainer(node, false);
-                var parent = container && container.parent;
+                let container = ts.getThisContainer(node, false);
+                let parent = container && container.parent;
 
                 if (parent && (ts.isClassLike(parent) || parent.kind === SyntaxKind.InterfaceDeclaration)) {
                     if (container.kind !== SyntaxKind.Constructor || ts.isNodeDescendentOf(node, (<FunctionLikeDeclaration>container).body)) {
@@ -5689,7 +5720,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getThis(rootNode: Node, node: Node): string {
-                var type = getThisType(node);
+                let type = getThisType(node);
 
                 if (!type) {
                     return "Window";
@@ -5703,9 +5734,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getSymbolName(rootNode: any, type: Type | TypeNode): string {
-                var name = "";
-                var params = "";
-                var declaration: Declaration;
+                let name = "";
+                let params = "";
+                let declaration: Declaration;
 
                 if (type.symbol) {
                     name = type.symbol.name;
@@ -5733,7 +5764,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getExpression(rootNode: Node, node: Node): string {
-                var type = typeChecker.getTypeAtLocation(node);
+                let type = typeChecker.getTypeAtLocation(node);
 
                 return getSymbolName(rootNode, type);
             }
@@ -5743,7 +5774,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return null;
                 }
 
-                var symbol = typeChecker.getSymbolAtLocation(node);
+                let symbol = typeChecker.getSymbolAtLocation(node);
 
                 if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
                     return null;
@@ -5753,10 +5784,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getTypeOfSymbolAtLocation(node: Node): string {
-                var symbol = node.symbol;
+                let symbol = node.symbol;
 
                 if (symbol) {
-                    var type = typeChecker.getTypeOfSymbolAtLocation(symbol, node);
+                    let type = typeChecker.getTypeOfSymbolAtLocation(symbol, node);
 
                     if (type) {
                         return getSymbolName(node, type);
@@ -5804,7 +5835,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let declaration = getSymbolAtLocation(typeRef.typeName);
 
                         if (declaration.kind === SyntaxKind.TypeAliasDeclaration) {
-                            var typeAlias = declaration;
+                            let typeAlias = declaration;
 
                             if (typeRef.typeArguments) {
                                 typeAlias = getMergedTypeAliasDeclaration(typeRef, <TypeAliasDeclaration>declaration);
@@ -5845,7 +5876,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.VoidExpression:
                         return "undefined";
                     case SyntaxKind.Identifier:
-                        let symbolDeclaration = getSymbolDeclaration(node);
+                        let symbolDeclaration = getSymbolAtLocation(node);
 
                         if (symbolDeclaration) {
                             return getParameterOrUnionTypeAnnotation(rootNode, symbolDeclaration, isParameterPropertyAssignment)
@@ -5875,9 +5906,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.EnumDeclaration:
                         return getNodeName(node);
                     case SyntaxKind.BinaryExpression:
-                        return getTypeOfSymbolAtLocation(rootNode);
+                        node = rootNode;
+                    case SyntaxKind.ImportSpecifier:
+                        return getTypeOfSymbolAtLocation(node);
                     case SyntaxKind.TemplateExpression:
                         return "string";
+                    case SyntaxKind.ExpressionWithTypeArguments:
+                        let expression = <ExpressionWithTypeArguments>node;
+
+                        type = getParameterOrUnionTypeAnnotation(rootNode, expression.expression);
+
+                        if (expression.typeArguments) {
+                            let args = expression.typeArguments.map(arg => getParameterOrUnionTypeAnnotation(rootNode, arg));
+
+                            type += `<${args.join(", ")}>`;
+                        }
+
+                        return type;
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
@@ -5906,8 +5951,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
 
                     emitCallOrIndexSignatures(interface, members, (indexSignature): string => {
-                        var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)));
-                        var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
+                        let params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)));
+                        let returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
 
                         return `function(${params.join(", ")}): ${returnType}`;
                     });
@@ -5915,8 +5960,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getIndexSignature(indexSignature: IndexSignatureDeclaration, genericsTypeChecker = (param: string) => param): string {
-                var params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, param)));
-                var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, indexSignature.type));
+                let params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, param)));
+                let returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, indexSignature.type));
 
                 return `Object<${params.join(", ")}, ${returnType}>`;
             }
@@ -5931,9 +5976,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitCallOrIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>, mapFunction: (member: SignatureDeclaration) => string) {
-                var rightParenthesis = "", leftParenthesis = "";
-                var indexOrCallSignatureName = ts.getTextOfNode(node.name);
-                var indexOrCallSignatures = ts.map(members, mapFunction);
+                let rightParenthesis = "", leftParenthesis = "";
+                let indexOrCallSignatureName = ts.getTextOfNode(node.name);
+                let indexOrCallSignatures = ts.map(members, mapFunction);
 
                 forceWriteLine();
                 emitStartAnnotation();
@@ -6025,14 +6070,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isPublicMember(node: Node): boolean {
-                var accessModifier = getAccessModifier(node);
+                let accessModifier = getAccessModifier(node);
 
                 return !accessModifier || accessModifier === SyntaxKind.PublicKeyword;
             }
 
             function getAccessModifier(member: Node): SyntaxKind {
                 if (member.modifiers) {
-                    var accessModifiers = ts.filter(member.modifiers, modifier => isAccessibilityModifier(modifier.kind));
+                    let accessModifiers = ts.filter(member.modifiers, modifier => isAccessibilityModifier(modifier.kind));
 
                     if (accessModifiers.length) {
                         return accessModifiers[0].kind;
@@ -6154,11 +6199,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitConstructorOrInterfaceAnnotation(node, true, interfacesImpl, baseTypeElement, ctor);
             }
 
-            function getClassOrInterfaceFullPath(node: ExpressionWithTypeArguments): string {
-                return getModuleName(node.expression) + ts.getTextOfNode(node);
+            function getClassOrInterfaceFullPath(node: ExpressionWithTypeArguments & { name?: Identifier }): string {
+                return getModuleName(node.expression || node.name) + getParameterOrUnionTypeAnnotation(node, node);
             }
 
-            function emitConstructorOrInterfaceAnnotation(node: InterfaceDeclaration | ClassLikeDeclaration, isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments, ctor?: ConstructorDeclaration) {
+            function emitConstructorOrInterfaceAnnotation(node: InterfaceDeclaration | ClassLikeDeclaration, isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments & { name?: Identifier }, ctor?: ConstructorDeclaration) {
                 emitAnnotationIf(() => {
                     let type: string;
                     let heritageType: string;
@@ -6328,7 +6373,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitEnd(baseTypeElement);
                     }
                 }
-                emitPropertyDeclarations(node, getProperties(node, /*static:*/ false));
+                if (node.members) {
+                    emitPropertyDeclarations(node, getProperties(node, /*static:*/ false));
+                }
                 if (ctor) {
                     let statements: Node[] = (<Block>ctor.body).statements;
                     if (superCall) {
@@ -6342,7 +6389,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitLeadingCommentsOfPosition((<Block>ctor.body).statements.end);
                 }
                 decreaseIndent();
-                emitToken(SyntaxKind.CloseBraceToken, ctor ? (<Block>ctor.body).statements.end : node.members.end);
+                emitToken(SyntaxKind.CloseBraceToken, ctor ? (<Block>ctor.body).statements.end : node.members ? node.members.end : node.end);
                 scopeEmitEnd();
                 emitEnd(<Node>ctor || node);
                 if (ctor) {
@@ -6367,8 +6414,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let val: any;
 
                     if (val = source[prop]) {
-                        var ctor = val.constructor;
-                        var isPrimitive = ctor === Boolean || ctor === Number || ctor === String;
+                        let ctor = val.constructor;
+                        let isPrimitive = ctor === Boolean || ctor === Number || ctor === String;
 
                         if (isPrimitive) {
                             cloned[prop] = val;
@@ -6384,15 +6431,26 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return cloned;
             }
 
-            function getMergedTypeAliasDeclaration(node: TypeReferenceNode, declaration: TypeAliasDeclaration) {
-                var tuples: { [name: string]: TypeNode } = {};
-                var typeAlias = <TypeAliasDeclaration><Node>clone(<Cloned><Node>declaration, mergedProps);
-                var trySetType = function (node: any): void {
+            function getMergedDeclarationWithTypeParameters(node: TypeReferenceNode, declaration: InterfaceDeclaration): ExpressionWithTypeArguments {
+                let clonedDeclaration = <ExpressionWithTypeArguments>clone(declaration, mergedProps);
+
+                clonedDeclaration.expression = declaration.name;
+                clonedDeclaration.kind = SyntaxKind.ExpressionWithTypeArguments;
+                clonedDeclaration.typeArguments = <NodeArray<TypeNode>>declaration.typeParameters.map((type, index) => node.typeArguments[index]);
+
+                return clonedDeclaration;
+            }
+
+            function getMergedTypeAliasDeclaration(node: TypeReferenceNode, declaration: TypeAliasDeclaration): TypeAliasDeclaration {
+                let tuples: { [name: string]: TypeNode | TypeParameterDeclaration } = {};
+                let typeAlias = <TypeAliasDeclaration><Node>clone(<Cloned><Node>declaration, mergedProps);
+                let trySetType = function (node: any): void {
                     if (node.type && node.type.typeName) {
-                        var typeName = node.type.typeName;
-                        var name_8 = getNodeName(typeName);
-                        if (tuples[name_8]) {
-                            node.type = tuples[name_8];
+                        let typeName = node.type.typeName;
+                        let name = getNodeName(typeName);
+
+                        if (tuples[name]) {
+                            node.type = tuples[name];
                         }
                     }
                 };
@@ -6436,6 +6494,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 recurse(typeAlias.type);
+                typeAlias.typeParameters = <NodeArray<TypeParameterDeclaration>>Object.keys(tuples).map(key => tuples[key]);
 
                 return typeAlias;
             }
@@ -6638,7 +6697,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitClassLikeDeclarationBelowES6(node: ClassLikeDeclaration) {
                 let baseTypeNode = ts.getClassExtendsHeritageClauseElement(node);
-                var interfacesImpl = ts.getClassImplementsHeritageClauseElements(node);
+                let interfacesImpl = ts.getClassImplementsHeritageClauseElements(node);
                 let saveTempFlags = tempFlags;
                 let saveTempVariables = tempVariables;
                 let saveTempParameters = tempParameters;
@@ -7112,7 +7171,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         const parameters = valueDeclaration.parameters;
                         const parameterCount = parameters.length;
                         if (parameterCount > 0) {
-                            for (var i = 0; i < parameterCount; i++) {
+                            for (let i = 0; i < parameterCount; i++) {
                                 if (i > 0) {
                                     write(", ");
                                 }
