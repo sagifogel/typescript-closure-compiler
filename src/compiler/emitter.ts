@@ -3606,10 +3606,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (!started) {
                         started = true;
+                        forceWriteLine();
                     }
                     else {
                         write(";");
-                        forceWriteLine();
                     }
 
                     if (decl.kind !== SyntaxKind.Parameter && trySetVariableDeclarationInModule(decl)) {
@@ -4595,8 +4595,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                 let typeRef = <TypeReferenceNode>nodeFirstVariable.type;
                                 let declaration = getSymbolAtLocation(typeRef.typeName);
 
-                                forceWriteLine();
-
                                 if (declaration.kind === SyntaxKind.InterfaceDeclaration) {
                                     let interfaces: Array<Node>;
 
@@ -4608,6 +4606,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                         interfaces = [<InterfaceDeclaration>declaration];
                                     }
 
+                                    forceWriteLine();
                                     emitConstructorWorker(<ClassLikeDeclaration><any>nodeFirstVariable, null, <Array<ExpressionWithTypeArguments>>interfaces);
                                 }
                                 else {
