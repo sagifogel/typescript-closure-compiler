@@ -4590,31 +4590,33 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                     }
                     else {
-                        if (nodeFirstVariable.type && nodeFirstVariable.type.kind === SyntaxKind.TypeReference) {
-                            let typeRef = <TypeReferenceNode>nodeFirstVariable.type;
-                            let declaration = getSymbolAtLocation(typeRef.typeName);
+                        if (isAmbientContext(nodeFirstVariable)) {
+                            if (nodeFirstVariable.type && nodeFirstVariable.type.kind === SyntaxKind.TypeReference) {
+                                let typeRef = <TypeReferenceNode>nodeFirstVariable.type;
+                                let declaration = getSymbolAtLocation(typeRef.typeName);
 
-                            forceWriteLine();
+                                forceWriteLine();
 
-                            if (declaration.kind === SyntaxKind.InterfaceDeclaration) {
-                                let interfaces: Array<Node>;
+                                if (declaration.kind === SyntaxKind.InterfaceDeclaration) {
+                                    let interfaces: Array<Node>;
 
-                                if (typeRef.typeArguments) {
-                                    let mergedDeclaration = getMergedDeclarationWithTypeParameters(typeRef, <InterfaceDeclaration>declaration);
-                                    interfaces = [mergedDeclaration];
+                                    if (typeRef.typeArguments) {
+                                        let mergedDeclaration = getMergedDeclarationWithTypeParameters(typeRef, <InterfaceDeclaration>declaration);
+                                        interfaces = [mergedDeclaration];
+                                    }
+                                    else {
+                                        interfaces = [<InterfaceDeclaration>declaration];
+                                    }
+
+                                    emitConstructorWorker(<ClassLikeDeclaration><any>nodeFirstVariable, null, <Array<ExpressionWithTypeArguments>>interfaces);
                                 }
                                 else {
-                                    interfaces = [<InterfaceDeclaration>declaration];
+                                    shouldEmitVariableAnnotation = true;
                                 }
-
-                                emitConstructorWorker(<ClassLikeDeclaration><any>nodeFirstVariable, null, <Array<ExpressionWithTypeArguments>>interfaces);
                             }
                             else {
                                 shouldEmitVariableAnnotation = true;
                             }
-                        }
-                        else {
-                            shouldEmitVariableAnnotation = true;
                         }
                     }
                 }
