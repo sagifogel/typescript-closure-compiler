@@ -8,7 +8,7 @@ For example each version of `typescript-closure-compiler` that is compatible wit
 If you work with a specific version of TypeScript (for instance 1.7.5) and want to get the latest compatible version of <br/>`typescript-closure-compiler` then you need to set the version in the `package.json` to:<br/>
 ```js
 "dependencies": {
-    "typescript-closure-compiler": "^1.7.0-beta.0"
+    "typescript-closure-compiler": "^1.7.1-beta.0"
 }
 ```
 

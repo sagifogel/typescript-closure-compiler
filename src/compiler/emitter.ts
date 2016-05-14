@@ -686,13 +686,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function isModuleAlreadyGenerated(node: Declaration, module: ModuleGeneration): boolean {
                 let name: string;
+                let names: string[];
                 let declarations: { [name: string]: boolean };
 
                 module = module || ensureModule(node);
                 name = getNodeNameOrIdentifier(node);
                 declarations = module.declarations;
+                names = Object.getOwnPropertyNames(declarations);
 
-                return name in declarations;
+                return names.indexOf(name) > -1;
             }
 
             function getGeneratedPathForModule(node: Node): string {
@@ -2079,7 +2081,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function flattenStatements(node: Node): Array<Node> {
                 let flattened: Array<Node> = [];
                 let statements = (<Block>node).statements;
-
+                let reduce = function (stats: Array<Node>): Array<Node> {
+                    return stats.map(flattenStatements).reduce((a, b) => a.concat(b));
+                };
                 if (statements) {
                     for (let i = 0; i < statements.length; i++) {
                         let statement: Node = statements[i];
@@ -2094,6 +2098,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                                 if (ifStatement.elseStatement) {
                                     flattened = flattened.concat(flattenStatements(ifStatement.elseStatement));
                                 }
+                                break;
+                            case SyntaxKind.CaseClause:
+                            case SyntaxKind.DefaultClause:
+                                flattened = flattened.concat(reduce((<CaseClause>statement).statements));
+                                break;
+                            case SyntaxKind.SwitchStatement:
+                                flattened = flattened.concat(reduce((<SwitchStatement>statement).caseBlock.clauses));
                                 break;
                             case SyntaxKind.DoStatement:
                             case SyntaxKind.ForStatement:
@@ -3606,7 +3617,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (!started) {
                         started = true;
-                        forceWriteLine();
+                        if (!ts.isFunctionLike(getSymbolScope(decl))) {
+                            forceWriteLine();
+                        }
                     }
                     else {
                         write(";");
@@ -4555,6 +4568,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitVariableStatement(node: VariableStatement) {
                 let nodeIndex: number;
                 let startIsEmitted: string;
+                let shouldEmitNewLine = false;
                 let statement: VariableStatement;
                 let shouldEmitVariableAnnotation: boolean;
                 let parentStatements = (<Block>node.parent).statements;
@@ -4576,10 +4590,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (statement) {
                         let firstDeclaration = statement.declarationList.declarations[0];
-
-                        if (!ts.isFunctionLike(getSymbolScope(firstDeclaration))) {
-                            forceWriteLine();
-                        }
+                        shouldEmitNewLine = !ts.isFunctionLike(getSymbolScope(firstDeclaration));
                     }
                 }
 
@@ -4626,6 +4637,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 if (startIsEmitted || shouldEmitVariableAnnotation) {
+                    if (shouldEmitNewLine) {
+                        forceWriteLine();
+                    }
                     if (nodeFirstVariable.kind !== SyntaxKind.Parameter) {
                         emitVariableTypeAnnotation(nodeFirstVariable);
                     }
@@ -7455,8 +7469,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return emitCommentsOnNotEmittedNode(node);
                 }
                 let containingModule = getContainingModule(node);
-                let moduleisNotDeclared = trySetVariableDeclarationInModule(node);
-                let hoistedInDeclarationScope = !containingModule && moduleisNotDeclared;
+                let moduleIsNotDeclared = trySetVariableDeclarationInModule(node);
+                let hoistedInDeclarationScope = !containingModule && moduleIsNotDeclared;
                 let name = getGeneratedNameForNode(node)
 
                 forceWriteLine();
@@ -7467,7 +7481,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     write(" = {};");
                     writeLine();
                 }
-                else if (moduleisNotDeclared) {
+                else if (moduleIsNotDeclared) {
                     emitModuleIfNeeded(node);
                     write(name);
                     write(" = {};");
