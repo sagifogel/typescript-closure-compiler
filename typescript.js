@@ -2223,7 +2223,6 @@ ts.Signature = function (checker) {
 
 
 ts.objectAllocator = {
-
     getNodeConstructor: function (kind) {
         function Node() {
         }
@@ -2236,13 +2235,9 @@ ts.objectAllocator = {
         };
         return Node;
     },
-
     getSymbolConstructor: function () { return ts.Symbol; },
-
     getTypeConstructor: function () { return ts.Type; },
-
     getSignatureConstructor: function () { return ts.Signature; }
-
 };
 
 ts.AssertionLevel = {
@@ -2596,7 +2591,6 @@ ts.sys = (function () {
             }
         }
         return {
-            
             args: process.argv.slice(2),
             newLine: _os.EOL,
             useCaseSensitiveFileNames: useCaseSensitiveFileNames,
@@ -2613,7 +2607,6 @@ ts.sys = (function () {
             },
             readFile: readFile,
             writeFile: writeFile,
-
             watchFile: function (fileName, callback) {
                 // Node 4.0 stablized the `fs.watch` function on Windows which avoids polling
                 // and is more efficient than `fs.watchFile` (ref: https://github.com/nodejs/node/pull/2649
@@ -2621,12 +2614,9 @@ ts.sys = (function () {
                 // if the current node.js version is newer than 4, use `fs.watch` instead.
                 var watchedFile = watchedFileSet.addFile(fileName, callback);
                 return {
-
                     close: function () { return watchedFileSet.removeFile(watchedFile); }
-
                 };
             },
-
             watchDirectory: function (path, callback, recursive) {
                 // Node 4.0 `fs.watch` function supports the "recursive" option on both OSX and Windows 
                 // (ref: https://github.com/nodejs/node/pull/2649 and https://github.com/Microsoft/TypeScript/issues/4643)
@@ -2641,7 +2631,6 @@ ts.sys = (function () {
                     ;
                 });
             },
-
             resolvePath: function (path) {
                 return _path.resolve(path);
             },
@@ -2672,7 +2661,6 @@ ts.sys = (function () {
             exit: function (exitCode) {
                 process.exit(exitCode);
             }
-
         };
     }
     if (typeof WScript !== "undefined" && typeof ActiveXObject === "function") {
@@ -3956,27 +3944,16 @@ ts.createScanner = function (languageVersion, skipTrivia, languageVariant, text,
     var tokenIsUnterminated;
     setText(text, start, length);
     return {
-
         getStartPos: function () { return startPos; },
-
         getTextPos: function () { return pos; },
-
         getToken: function () { return token; },
-
         getTokenPos: function () { return tokenPos; },
-
         getTokenText: function () { return text.substring(tokenPos, pos); },
-
         getTokenValue: function () { return tokenValue; },
-
         hasExtendedUnicodeEscape: function () { return hasExtendedUnicodeEscape; },
-
         hasPrecedingLineBreak: function () { return precedingLineBreak; },
-
         isIdentifier: function () { return token === 69 /* Identifier */ || token > 105 /* LastReservedWord */; },
-
         isReservedWord: function () { return token >= 70 /* FirstReservedWord */ && token <= 105 /* LastReservedWord */; },
-
         isUnterminated: function () { return tokenIsUnterminated; },
         reScanGreaterToken: reScanGreaterToken,
         reScanSlashToken: reScanSlashToken,
@@ -3992,7 +3969,6 @@ ts.createScanner = function (languageVersion, skipTrivia, languageVariant, text,
         setTextPos: setTextPos,
         tryScan: tryScan,
         lookAhead: lookAhead
-
     };
     function error(message, length) {
         if (onError) {
@@ -5858,7 +5834,6 @@ ts.getSingleLineStringWriter = function () {
         var str = "";
         var writeText = function (text) { return str += text; };
         return {
-
             string: function () { return str; },
             writeKeyword: writeText,
             writeOperator: writeText,
@@ -5869,23 +5844,16 @@ ts.getSingleLineStringWriter = function () {
             writeSymbol: writeText,
             // Completely ignore indentation for string writers.  And map newlines to
             // a single space.
-
             writeLine: function () { return str += " "; },
-
             increaseIndent: function () {
             },
-
             decreaseIndent: function () {
             },
-
             clear: function () { return str = ""; },
-
             trackSymbol: function () {
             },
-
             reportInaccessibleThisError: function () {
             }
-
         };
     }
     return ts.stringWriters.pop();
@@ -7482,27 +7450,18 @@ ts.createTextWriter = function (newLine) {
         write(ts.getSourceTextOfNodeFromSourceFile(sourceFile, node));
     }
     return {
-        
         write: write,
         rawWrite: rawWrite,
         writeTextOfNode: writeTextOfNode,
         writeLiteral: writeLiteral,
         writeLine: writeLine,
-
         increaseIndent: function () { return indent++; },
-
         decreaseIndent: function () { return indent--; },
-
         getIndent: function () { return indent; },
-
         getTextPos: function () { return output.length; },
-
         getLine: function () { return lineCount + 1; },
-
         getColumn: function () { return lineStart ? indent * ts.getIndentSize() + 1 : output.length - linePos + 1; },
-
         getText: function () { return output; }
-
     };
 };
 
@@ -14385,17 +14344,11 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
     var undefinedSymbol = createSymbol(4 /* Property */ | 67108864 /* Transient */, "undefined");
     var argumentsSymbol = createSymbol(4 /* Property */ | 67108864 /* Transient */, "arguments");
     var checker = {
-
         getNodeCount: function () { return ts.sum(host.getSourceFiles(), "nodeCount"); },
-
         getIdentifierCount: function () { return ts.sum(host.getSourceFiles(), "identifierCount"); },
-
         getSymbolCount: function () { return ts.sum(host.getSourceFiles(), "symbolCount") + symbolCount; },
-
         getTypeCount: function () { return typeCount; },
-
         isUndefinedSymbol: function (symbol) { return symbol === undefinedSymbol; },
-
         isArgumentsSymbol: function (symbol) { return symbol === argumentsSymbol; },
         getDiagnostics: getDiagnostics,
         getGlobalDiagnostics: getGlobalDiagnostics,
@@ -14431,7 +14384,6 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
         getJsxElementAttributesType: getJsxElementAttributesType,
         getJsxIntrinsicTagNames: getJsxIntrinsicTagNames,
         isOptionalParameter: isOptionalParameter
-
     };
     var unknownSymbol = createSymbol(4 /* Property */ | 67108864 /* Transient */, "unknown");
     var resolvingSymbol = createSymbol(67108864 /* Transient */, "__resolving__");
@@ -31472,7 +31424,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             ts.Debug.assert(nodes.length > 0);
             increaseIndent();
             if (nodeStartPositionsAreOnSameLine(parent, nodes[0])) {
-                if (spacesBetweenBraces) {
+                if (ts.isFunctionLike(nodes[0].initializer)) {
+                    forceWriteLine(getIndent());
+                }
+                else if (spacesBetweenBraces) {
                     write(" ");
                 }
             }
@@ -32437,7 +32392,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 var flags = resolver.getNodeCheckFlags(node);
                 var enclosingParent = getClassLikeEnclosingParent(node);
                 var baseTypeNode = ts.getClassExtendsHeritageClauseElement(enclosingParent);
-                emitModuleIfNeeded(baseTypeNode.expression);
                 emit(baseTypeNode.expression);
                 if (flags & 256 /* SuperInstance */) {
                     write(".prototype");
@@ -32592,20 +32546,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             write("{");
             if (numElements > 0) {
-                var index = 0;
-                var firstIsNotFunction;
                 var properties = node.properties;
-                functions = properties.filter(function (prop, index) {
-                    return ts.isFunctionLike(prop.initializer);
-                });
-                firstIsNotFunction = properties.indexOf(functions[0]) > 0;
                 // If we are not doing a downlevel transformation for object literals,
                 // then try to preserve the original shape of the object literal.
                 // Otherwise just try to preserve the formatting.
                 if (numElements === properties.length) {
-                    if (firstIsNotFunction) {
-                        forceWriteLine(getIndent() + 1);
-                    }
                     emitLinePreservingList(node, properties, /* allowTrailingComma */ languageVersion >= 1 /* ES5 */, /* spacesBetweenBraces */ true);
                 }
                 else {
@@ -32816,9 +32761,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             emitSignatureAndBody(node);
         }
         function emitPropertyAssignment(node) {
-            if (ts.isFunctionLike(node.initializer)) {
-                forceWriteLine();
-            }
             emit(node.name);
             write(": ");
             // This is to ensure that we emit comment in the following case:
@@ -33561,12 +33503,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
                 if (!started) {
                     started = true;
-                    if (!ts.isFunctionLike(getSymbolScope(decl))) {
-                        forceWriteLine();
-                    }
                 }
                 else {
                     write(";");
+                }
+                if (!ts.isFunctionLike(getSymbolScope(decl))) {
+                    forceWriteLine();
                 }
                 if (decl.kind !== 138 /* Parameter */ && trySetVariableDeclarationInModule(decl)) {
                     emitVariableTypeAnnotation(decl);
@@ -35757,9 +35699,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var type = typeChecker.getSignatureFromDeclaration(node);
             if (type.resolvedReturnType && type.resolvedReturnType.flags !== 16 /* Void */) {
                 if (type.resolvedReturnType.symbol) {
-                    var declarartion = type.resolvedReturnType.symbol.declarations;
-                    if (declarartion && declarartion.length) {
-                        return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+                    var declarations = type.resolvedReturnType.symbol.declarations;
+                    if (declarations && declarations.length) {
+                        var declaration = declarations[0];
+                        if (declaration === node) {
+                            return getNodeName(node);
+                        }
+                        return getParameterOrUnionTypeAnnotation(rootNode, declaration);
                     }
                 }
                 return typeChecker.typeToString(type.resolvedReturnType);
@@ -38851,23 +38797,15 @@ ts.createCompilerHost = function (options, setParentNodes) {
     }
     var newLine = ts.getNewLineCharacter(options);
     return {
-        
         getSourceFile: getSourceFile,
-
         getDefaultLibFileName: function (options) { return ts.combinePaths(ts.getDirectoryPath(ts.normalizePath(ts.sys.getExecutingFilePath())), ts.getDefaultLibFileName(options)); },
         writeFile: writeFile,
-
         getCurrentDirectory: function () { return currentDirectory || (currentDirectory = ts.sys.getCurrentDirectory()); },
-
         useCaseSensitiveFileNames: function () { return ts.sys.useCaseSensitiveFileNames; },
         getCanonicalFileName: getCanonicalFileName,
-
         getNewLine: function () { return newLine; },
-
         fileExists: function (fileName) { return ts.sys.fileExists(fileName); },
-
         readFile: function (fileName) { return ts.sys.readFile(fileName); }
-
     };
 };
 
@@ -38952,14 +38890,10 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
     oldProgram = undefined;
     ts.programTime += new Date().getTime() - start;
     program = {
-
         getRootFileNames: function () { return rootNames; },
         getSourceFile: getSourceFile,
-
         getSourceFiles: function () { return files; },
-
         getExternSourceFiles: function () { return externFiles; },
-
         getCompilerOptions: function () { return options; },
         getSyntacticDiagnostics: getSyntacticDiagnostics,
         getOptionsDiagnostics: getOptionsDiagnostics,
@@ -38969,22 +38903,14 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
         getTypeChecker: getTypeChecker,
         getClassifiableNames: getClassifiableNames,
         getDiagnosticsProducingTypeChecker: getDiagnosticsProducingTypeChecker,
-
         getCommonSourceDirectory: function () { return commonSourceDirectory; },
         emit: emit,
-
         getCurrentDirectory: function () { return host.getCurrentDirectory(); },
-
         getNodeCount: function () { return getDiagnosticsProducingTypeChecker().getNodeCount(); },
-
         getIdentifierCount: function () { return getDiagnosticsProducingTypeChecker().getIdentifierCount(); },
-
         getSymbolCount: function () { return getDiagnosticsProducingTypeChecker().getSymbolCount(); },
-
         getTypeCount: function () { return getDiagnosticsProducingTypeChecker().getTypeCount(); },
-
         getFileProcessingDiagnostics: function () { return fileProcessingDiagnostics; }
-
     };
     return program;
     function getClassifiableNames() {
@@ -39079,19 +39005,15 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
     }
     function getEmitHost(writeFileCallback) {
         return {
-
             getCanonicalFileName: function (fileName) { return host.getCanonicalFileName(fileName); },
             getCommonSourceDirectory: program.getCommonSourceDirectory,
             getCompilerOptions: program.getCompilerOptions,
-
             getCurrentDirectory: function () { return host.getCurrentDirectory(); },
-
             getNewLine: function () { return host.getNewLine(); },
             getSourceFile: program.getSourceFile,
             getSourceFiles: program.getSourceFiles,
             getExternSourceFiles: program.getExternSourceFiles,
             writeFile: writeFileCallback || (function (fileName, data, writeByteOrderMark, onError) { return host.writeFile(fileName, data, writeByteOrderMark, onError); })
-
         };
     }
     function getDiagnosticsProducingTypeChecker() {
@@ -42607,38 +42529,26 @@ ts.getDisplayPartWriter = function () {
     var indent;
     resetWriter();
     return {
-
         displayParts: function () { return displayParts; },
-
         writeKeyword: function (text) { return writeKind(text, ts.SymbolDisplayPartKind.keyword); },
-
         writeOperator: function (text) { return writeKind(text, ts.SymbolDisplayPartKind.operator); },
-
         writePunctuation: function (text) { return writeKind(text, ts.SymbolDisplayPartKind.punctuation); },
-
         writeSpace: function (text) { return writeKind(text, ts.SymbolDisplayPartKind.space); },
-
         writeStringLiteral: function (text) { return writeKind(text, ts.SymbolDisplayPartKind.stringLiteral); },
-
         writeParameter: function (text) { return writeKind(text, ts.SymbolDisplayPartKind.parameterName); },
         writeSymbol: writeSymbol,
         writeLine: writeLine,
-
         increaseIndent: function () {
             indent++;
         },
-
         decreaseIndent: function () {
             indent--;
         },
         clear: resetWriter,
-
         trackSymbol: function () {
         },
-
         reportInaccessibleThisError: function () {
         }
-
     };
     function writeIndent() {
         if (lineStart) {
@@ -42865,20 +42775,16 @@ ts.formatting.getFormattingScanner = function (sourceFile, startPos, endPos) {
     var lastScanAction;
     var lastTokenInfo;
     return {
-        
         advance: advance,
         readTokenInfo: readTokenInfo,
         isOnToken: isOnToken,
-
         lastTrailingTriviaWasNewLine: function () { return wasNewLine; },
-
         close: function () {
             ts.Debug.assert(ts.formatting.scanner !== undefined);
             lastTokenInfo = undefined;
             ts.formatting.scanner.setText(undefined);
             ts.formatting.scanner = undefined;
         }
-
     };
     function advance() {
         ts.Debug.assert(ts.formatting.scanner !== undefined);
@@ -44758,7 +44664,6 @@ ts.formatting.formatSpan = function (originalRange, sourceFile, options, rulesPr
     }
     function getDynamicIndentation(node, nodeStartLine, indentation, delta) {
         return {
-
             getIndentationForComment: function (kind, tokenIndentation) {
                 switch (kind) {
                     // preceding comment to the token that closes the indentation scope inherits the indentation from the scope
@@ -44772,7 +44677,6 @@ ts.formatting.formatSpan = function (originalRange, sourceFile, options, rulesPr
                 }
                 return tokenIndentation !== -1 /* Unknown */ ? tokenIndentation : indentation;
             },
-
             getIndentationForToken: function (line, kind) {
                 if (nodeStartLine !== line && node.decorators) {
                     if (kind === getFirstNonDecoratorTokenOfNode(node)) {
@@ -44797,11 +44701,8 @@ ts.formatting.formatSpan = function (originalRange, sourceFile, options, rulesPr
                         return nodeStartLine !== line ? indentation + delta : indentation;
                 }
             },
-
             getIndentation: function () { return indentation; },
-
             getDelta: function () { return delta; },
-
             recomputeIndentation: function (lineAdded) {
                 if (node.parent && ts.formatting.SmartIndenter.shouldIndentChildNode(node.parent.kind, node.kind)) {
                     if (lineAdded) {
@@ -44818,7 +44719,6 @@ ts.formatting.formatSpan = function (originalRange, sourceFile, options, rulesPr
                     }
                 }
             }
-
         };
     }
     function processNode(node, contextNode, nodeStartLine, undecoratedNodeStartLine, indentation, delta) {
@@ -47069,9 +46969,7 @@ ts.transpileModule = function (input, transpileOptions) {
     var sourceMapText;
     // Create a compilerHost object to allow the compiler to read and write files
     var compilerHost = {
-
         getSourceFile: function (fileName, target) { return fileName === ts.normalizeSlashes(inputFileName) ? sourceFile : undefined; },
-
         writeFile: function (name, text, writeByteOrderMark) {
             if (ts.fileExtensionIs(name, ".map")) {
                 ts.Debug.assert(sourceMapText === undefined, "Unexpected multiple source map outputs for the file '" + name + "'");
@@ -47082,21 +46980,13 @@ ts.transpileModule = function (input, transpileOptions) {
                 outputText = text;
             }
         },
-
         getDefaultLibFileName: function () { return "lib.d.ts"; },
-
         useCaseSensitiveFileNames: function () { return false; },
-
         getCanonicalFileName: function (fileName) { return fileName; },
-
         getCurrentDirectory: function () { return ""; },
-
         getNewLine: function () { return newLine; },
-
         fileExists: function (fileName) { return fileName === inputFileName; },
-
         readFile: function (fileName) { return ""; }
-
     };
     var program = ts.createProgram([inputFileName], options, compilerHost);
     var diagnostics;
@@ -47792,35 +47682,25 @@ ts.createLanguageService = function (host, documentRegistry) {
                 oldSettings.jsx !== newSettings.jsx);
         // Now create a new compiler
         var compilerHost = {
-            
             getSourceFile: getOrCreateSourceFile,
-
             getCancellationToken: function () { return cancellationToken; },
             getCanonicalFileName: getCanonicalFileName,
-
             useCaseSensitiveFileNames: function () { return useCaseSensitivefileNames; },
-
             getNewLine: function () { return ts.getNewLineOrDefaultFromHost(host); },
-
             getDefaultLibFileName: function (options) { return host.getDefaultLibFileName(options); },
-
             writeFile: function (fileName, data, writeByteOrderMark) {
             },
-
             getCurrentDirectory: function () { return host.getCurrentDirectory(); },
-
             fileExists: function (fileName) {
                 // stub missing host functionality
                 ts.Debug.assert(!host.resolveModuleNames);
                 return hostCache.getOrCreateEntry(fileName) !== undefined;
             },
-
             readFile: function (fileName) {
                 // stub missing host functionality
                 var entry = hostCache.getOrCreateEntry(fileName);
                 return entry && entry.scriptSnapshot.getText(0, entry.scriptSnapshot.getLength());
             }
-
         };
         if (host.resolveModuleNames) {
             compilerHost.resolveModuleNames = function (moduleNames, containingFile) { return host.resolveModuleNames(moduleNames, containingFile); };
@@ -52433,7 +52313,6 @@ ts.getDefaultLibFilePath = function (options) {
 
 ts.initializeServices = function () {
     ts.objectAllocator = {
-
         getNodeConstructor: function (kind) {
             function Node() {
             }
@@ -52446,13 +52325,9 @@ ts.initializeServices = function () {
             Node.prototype = proto;
             return Node;
         },
-
         getSymbolConstructor: function () { return ts.SymbolObject; },
-
         getTypeConstructor: function () { return ts.TypeObject; },
-
         getSignatureConstructor: function () { return ts.SignatureObject; }
-
     };
 };
 ts.initializeServices();
@@ -53173,7 +53048,7 @@ ts.realizeDiagnostic = function (diagnostic, newLine) {
 };
 
 ts.LanguageServiceShimObject = function (factory, host, languageService) {
-    ts.ts.ShimBase.call(this, factory);
+    ts.ShimBase.call(this, factory);
     this.host = host;
     this.languageService = languageService;
     this.logger;
@@ -53203,7 +53078,7 @@ ts.LanguageServiceShimObject.prototype.dispose = function (dummy) {
         this.logger.log("CollectGarbage()");
     }
     this.logger = null;
-    ts.ts.ShimBase.prototype.dispose.call(this, dummy);
+    ts.ShimBase.prototype.dispose.call(this, dummy);
 };
 
 
@@ -53542,7 +53417,7 @@ ts.convertClassifications = function (classifications) {
 };
 
 ts.ClassifierShimObject = function (factory, logger) {
-    ts.ts.ShimBase.call(this, factory);
+    ts.ShimBase.call(this, factory);
     this.logger = logger;
     this.classifier;
     this.logPerformance = false;
@@ -53571,7 +53446,7 @@ ts.ClassifierShimObject.prototype.getClassificationsForLine = function (text, le
 };
 
 ts.CoreServicesShimObject = function (factory, logger, host) {
-    ts.ts.ShimBase.call(this, factory);
+    ts.ShimBase.call(this, factory);
     this.logger = logger;
     this.host = host;
     this.logPerformance = false;

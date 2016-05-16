@@ -1251,7 +1251,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 increaseIndent();
 
                 if (nodeStartPositionsAreOnSameLine(parent, nodes[0])) {
-                    if (spacesBetweenBraces) {
+                    if (ts.isFunctionLike((<any>nodes[0]).initializer)) {
+                        forceWriteLine(getIndent());
+                    }
+                    else if (spacesBetweenBraces) {
                         write(" ");
                     }
                 }
@@ -2352,7 +2355,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let flags = resolver.getNodeCheckFlags(node);
                     let enclosingParent = getClassLikeEnclosingParent(node);
                     let baseTypeNode = ts.getClassExtendsHeritageClauseElement(enclosingParent);
-                    emitModuleIfNeeded(baseTypeNode.expression);
                     emit(baseTypeNode.expression);
                     if (flags & NodeCheckFlags.SuperInstance) {
                         write(".prototype");
@@ -2523,19 +2525,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 write("{");
 
                 if (numElements > 0) {
-                    let index = 0;
-                    let firstIsNotFunction: boolean;
                     let properties = <NodeArray<PropertyAssignment>>node.properties;
-
-                    functions = properties.filter(function (prop, index) { return ts.isFunctionLike(prop.initializer); });
-                    firstIsNotFunction = properties.indexOf(functions[0]) > 0;
                     // If we are not doing a downlevel transformation for object literals,
                     // then try to preserve the original shape of the object literal.
                     // Otherwise just try to preserve the formatting.
                     if (numElements === properties.length) {
-                        if (firstIsNotFunction) {
-                            forceWriteLine(getIndent() + 1);
-                        }
                         emitLinePreservingList(node, properties, /* allowTrailingComma */ languageVersion >= ScriptTarget.ES5, /* spacesBetweenBraces */ true);
                     }
                     else {
@@ -2782,9 +2776,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitPropertyAssignment(node: PropertyDeclaration) {
-                if (ts.isFunctionLike(node.initializer)) {
-                    forceWriteLine();
-                }
                 emit(node.name);
                 write(": ");
                 // This is to ensure that we emit comment in the following case:
@@ -3617,12 +3608,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (!started) {
                         started = true;
-                        if (!ts.isFunctionLike(getSymbolScope(decl))) {
-                            forceWriteLine();
-                        }
                     }
                     else {
                         write(";");
+                    }
+
+                    if (!ts.isFunctionLike(getSymbolScope(decl))) {
+                        forceWriteLine();
                     }
 
                     if (decl.kind !== SyntaxKind.Parameter && trySetVariableDeclarationInModule(decl)) {
@@ -6118,10 +6110,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 if (type.resolvedReturnType && type.resolvedReturnType.flags !== TypeFlags.Void) {
                     if (type.resolvedReturnType.symbol) {
-                        let declarartion = type.resolvedReturnType.symbol.declarations;
+                        let declarations = type.resolvedReturnType.symbol.declarations;
 
-                        if (declarartion && declarartion.length) {
-                            return getParameterOrUnionTypeAnnotation(rootNode, declarartion[0]);
+                        if (declarations && declarations.length) {
+                            let declaration = declarations[0];
+
+                            if (declaration === node) {
+                                return getNodeName(node);
+                            }
+
+                            return getParameterOrUnionTypeAnnotation(rootNode, declaration);
                         }
                     }
 
