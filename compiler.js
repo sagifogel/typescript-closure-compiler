@@ -1,3 +1,4 @@
+
 function reportDiagnostic(diagnostic) {
     var output = "";
     var newLine = ts.getNewLineCharacter({});

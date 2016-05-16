@@ -29,13 +29,6 @@ task("copy-files", [], function () {
     jake.cpR(commandLineParserPath, typeScriptCommandLineParserPath);
 }, { async: false });
 
-desc("clean the built/local folder using the clean task and builds back typescript services");
-task("build-typescript", ["clean-typescript", "typescript-local"], { async: false });
-
-task("clean-typescript", function () {
-    jake.createExec([tsCommand + " clean"]).run();
-}, { async: false });
-
 task("build-ts", function () {
     jake.createExec([tsCommand + " release local"]).run();
 }, { async: false });
@@ -47,4 +40,4 @@ task("copy-to-local", function () {
 }, { async: false });
 
 desc("patches the emitter/program.ts and builds typescript services")
-task("build", ["copy-files", "clean-typescript", "build-ts", "copy-to-local"], { async: false });
+task("build", ["copy-files", "build-ts", "copy-to-local"], { async: false });
