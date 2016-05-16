@@ -32540,7 +32540,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function emitObjectLiteralBody(node, numElements) {
-            var functions = [];
             if (numElements === 0) {
                 write("{}");
                 return;
@@ -32570,9 +32569,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         decreaseIndent();
                     }
                 }
-            }
-            if (functions.length) {
-                forceWriteLine();
             }
             write("}");
         }

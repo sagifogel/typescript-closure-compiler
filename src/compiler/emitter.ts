@@ -2518,8 +2518,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitObjectLiteralBody(node: ObjectLiteralExpression, numElements: number): void {
-                let functions: Array<PropertyAssignment> = [];
-
                 if (numElements === 0) {
                     write("{}");
                     return;
@@ -2555,9 +2553,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
-                if (functions.length) {
-                    forceWriteLine();
-                }
                 write("}");
             }
 
