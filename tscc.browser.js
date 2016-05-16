@@ -35544,6 +35544,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 181 /* BinaryExpression */:
                     node = rootNode;
                 case 226 /* ImportSpecifier */:
+                case 221 /* ImportEqualsDeclaration */:
                     return getTypeOfSymbolAtLocation(node);
                 case 183 /* TemplateExpression */:
                     return "string";

@@ -5925,6 +5925,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.BinaryExpression:
                         node = rootNode;
                     case SyntaxKind.ImportSpecifier:
+                    case SyntaxKind.ImportEqualsDeclaration:
                         return getTypeOfSymbolAtLocation(node);
                     case SyntaxKind.TemplateExpression:
                         return "string";
