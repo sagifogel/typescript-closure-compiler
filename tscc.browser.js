@@ -32251,10 +32251,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         };
                     }
                 }
-                if (containingNode.kind === 214 /* ClassDeclaration */ || ts.isFunctionLike(containingNode)) {
+                if (containingNode.kind === 214 /* ClassDeclaration */ || containingNode.kind === 218 /* ModuleDeclaration */ || ts.isFunctionLike(containingNode)) {
                     var declarations = void 0;
                     if (containingNode.kind === 214 /* ClassDeclaration */) {
                         declarations = containingNode.members;
+                    }
+                    else if (containingNode.kind === 218 /* ModuleDeclaration */) {
+                        declarations = [containingNode];
                     }
                     declarations = declarations || containingNode.symbol.declarations;
                     for (var i = 0; i < declarations.length; i++) {
@@ -32537,7 +32540,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function emitObjectLiteralBody(node, numElements) {
-            var functions = [];
             if (numElements === 0) {
                 write("{}");
                 return;
@@ -32567,9 +32569,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         decreaseIndent();
                     }
                 }
-            }
-            if (functions.length) {
-                forceWriteLine();
             }
             write("}");
         }
@@ -33533,7 +33532,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             write(";");
             if (node.condition) {
                 var condition = " ";
-                if (isNotPropertyAccessOrCallExpression(node.condition)) {
+                if (isNotPropertyAccessOrCallExpression(node.condition) && !isExpressionIdentifier(node.condition)) {
                     condition += getModuleName(node.condition);
                 }
                 write(condition);
@@ -47562,9 +47561,9 @@ ts.BreakContinueSearchType = {
 // A cache of completion entries for keywords, these do not change between sessions
 
 ts.keywordCompletions = [];
-for (i = 70 /* FirstKeyword */; i <= 134 /* LastKeyword */; i++) {
+for (ts.i = 70 /* FirstKeyword */; ts.i <= 134 /* LastKeyword */; ts.i++) {
     ts.keywordCompletions.push({
-        name: ts.tokenToString(i),
+        name: ts.tokenToString(ts.i),
         kind: ts.ScriptElementKind.keyword,
         kindModifiers: ts.ScriptElementKindModifier.none,
         sortText: "0"
