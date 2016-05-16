@@ -2184,11 +2184,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         }
                     }
 
-                    if (containingNode.kind === SyntaxKind.ClassDeclaration || ts.isFunctionLike(containingNode)) {
-                        let declarations: Array<Declaration>;
+                    if (containingNode.kind === SyntaxKind.ClassDeclaration || containingNode.kind === SyntaxKind.ModuleDeclaration || ts.isFunctionLike(containingNode)) {
+                        let declarations: Array<Declaration | ModuleDeclaration>;
 
                         if (containingNode.kind === SyntaxKind.ClassDeclaration) {
                             declarations = (<ClassDeclaration>containingNode).members;
+                        }
+                        else if (containingNode.kind === SyntaxKind.ModuleDeclaration) {
+                            declarations = [<ModuleDeclaration>containingNode];
                         }
 
                         declarations = declarations || containingNode.symbol.declarations;
@@ -3646,7 +3649,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (node.condition) {
                     let condition = " ";
 
-                    if (isNotPropertyAccessOrCallExpression(node.condition)) {
+                    if (isNotPropertyAccessOrCallExpression(node.condition) && !isExpressionIdentifier(node.condition)) {
                         condition += getModuleName(node.condition);
                     }
 
