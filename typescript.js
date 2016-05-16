@@ -2286,9 +2286,6 @@ ts.copyListRemovingItem = function (item, list) {
 
 
 
-ts.Enumerator = function () {
-};
-
 ts.sys = (function () {
     function getWScriptSystem() {
         var fso = new ActiveXObject("Scripting.FileSystemObject");
@@ -34341,6 +34338,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 node.parent.kind === 248 /* SourceFile */;
         }
         function emitVariableStatement(node) {
+            if (isAmbientContextDeclaredWithinSourceFile(node)) {
+                return;
+            }
             var nodeIndex;
             var startIsEmitted;
             var shouldEmitNewLine = false;
@@ -34371,7 +34371,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                 }
                 else {
-                    if (isAmbientContext(nodeFirstVariable)) {
+                    if (isAmbientContextDeclaredWithinDefinitionFile(nodeFirstVariable)) {
                         if (nodeFirstVariable.type && nodeFirstVariable.type.kind === 151 /* TypeReference */) {
                             var typeRef = nodeFirstVariable.type;
                             var declaration = getSymbolAtLocation(typeRef.typeName);
@@ -34601,7 +34601,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var symbolScope = getSymbolScope(node);
             var isDeclaredWithinFunction = ts.isFunctionLike(symbolScope);
             var isInterfaceFunctionMemberOrAmbient = isInterfaceFunctionMember(node) || isAmbientContext(node);
-            if (!isInterfaceFunctionMemberOrAmbient && ts.nodeIsMissing(node.body) && (node.flags & 1 /* Export */)) {
+            if (isAmbientContextDeclaredWithinSourceFile(node) || (!isInterfaceFunctionMemberOrAmbient && ts.nodeIsMissing(node.body) && (node.flags & 1 /* Export */))) {
                 return;
             }
             // TODO (yuisu) : we should not have special cases to condition emitting comments
@@ -35417,6 +35417,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         function getExpression(rootNode, node) {
             var type = typeChecker.getTypeAtLocation(node);
+            if (type.types) {
+                var mapped = type.types.map(function (type) { return getSymbolName(rootNode, type); });
+                return "(" + mapped.join("|") + ")";
+            }
             return getSymbolName(rootNode, type);
         }
         function getSymbolAtLocation(node) {
@@ -36218,7 +36222,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 write(";");
             }
         }
+        function shouldEmitClassLikeDeclaration(node) {
+            return !isAmbientContextDeclaredWithinSourceFile(node);
+        }
         function emitClassLikeDeclarationBelowES6(node) {
+            if (!shouldEmitClassLikeDeclaration(node)) {
+                return;
+            }
             var baseTypeNode = ts.getClassExtendsHeritageClauseElement(node);
             var interfacesImpl = ts.getClassImplementsHeritageClauseElements(node);
             var saveTempFlags = tempFlags;
@@ -36233,6 +36243,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             tempParameters = undefined;
             computedPropertyNamesToGeneratedNames = undefined;
             scopeEmitStart(node);
+            trySetVariableDeclarationInModule(node);
             writeLine();
             emitConstructor(node, baseTypeNode, interfacesImpl);
             if (baseTypeNode) {
@@ -36719,8 +36730,22 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function shouldEmitEnumDeclaration(node) {
-            var isConstEnum = ts.isConst(node);
-            return !isConstEnum || compilerOptions.preserveConstEnums || compilerOptions.isolatedModules;
+            if (isAmbientContextDeclaredWithinSourceFile(node)) {
+                return false;
+            }
+            return !ts.isConst(node) || compilerOptions.preserveConstEnums || compilerOptions.isolatedModules;
+        }
+        function isAmbientContextDeclaredWithinDefinitionFile(node) {
+            if (ts.fileExtensionIs(currentSourceFile.fileName, ".d.ts")) {
+                return isAmbientContext(node);
+            }
+            return false;
+        }
+        function isAmbientContextDeclaredWithinSourceFile(node) {
+            if (ts.fileExtensionIs(currentSourceFile.fileName, ".ts")) {
+                return isAmbientContext(node);
+            }
+            return false;
         }
         function emitEnumDeclaration(node) {
             var membersLength = node.members.length - 1;
@@ -36842,6 +36867,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function shouldEmitModuleDeclaration(node) {
+            if (isAmbientContextDeclaredWithinSourceFile(node)) {
+                return;
+            }
             return isInstantiatedModule(node, compilerOptions.preserveConstEnums || compilerOptions.isolatedModules);
         }
         function isModuleMergedWithES6Class(node) {

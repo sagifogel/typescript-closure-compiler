@@ -4558,6 +4558,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitVariableStatement(node: VariableStatement) {
+                if (isAmbientContextDeclaredWithinSourceFile(node)) {
+                    return;
+                }
+
                 let nodeIndex: number;
                 let startIsEmitted: string;
                 let shouldEmitNewLine = false;
@@ -4593,7 +4597,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                     }
                     else {
-                        if (isAmbientContext(nodeFirstVariable)) {
+                        if (isAmbientContextDeclaredWithinDefinitionFile(nodeFirstVariable)) {
                             if (nodeFirstVariable.type && nodeFirstVariable.type.kind === SyntaxKind.TypeReference) {
                                 let typeRef = <TypeReferenceNode>nodeFirstVariable.type;
                                 let declaration = getSymbolAtLocation(typeRef.typeName);
@@ -4845,7 +4849,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let isDeclaredWithinFunction = ts.isFunctionLike(symbolScope);
                 let isInterfaceFunctionMemberOrAmbient = isInterfaceFunctionMember(node) || isAmbientContext(node);
 
-                if (!isInterfaceFunctionMemberOrAmbient && ts.nodeIsMissing(node.body) && (node.flags & NodeFlags.Export)) {
+                if (isAmbientContextDeclaredWithinSourceFile(node) || (!isInterfaceFunctionMemberOrAmbient && ts.nodeIsMissing(node.body) && (node.flags & NodeFlags.Export))) {
                     return;
                 }
                 // TODO (yuisu) : we should not have special cases to condition emitting comments
@@ -5771,7 +5775,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getExpression(rootNode: Node, node: Node): string {
-                let type = typeChecker.getTypeAtLocation(node);
+                let type = <Type & UnionOrIntersectionType>typeChecker.getTypeAtLocation(node);
+
+                if (type.types) {
+                    var mapped = type.types.map(type => getSymbolName(rootNode, type));
+
+                    return `(${mapped.join("|")})`;
+                }
 
                 return getSymbolName(rootNode, type);
             }
@@ -6708,7 +6718,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
+            function shouldEmitClassLikeDeclaration(node: Node): boolean {
+                return !isAmbientContextDeclaredWithinSourceFile(node);
+            }
+
             function emitClassLikeDeclarationBelowES6(node: ClassLikeDeclaration) {
+                if (!shouldEmitClassLikeDeclaration(node)) {
+                    return;
+                }
+
                 let baseTypeNode = ts.getClassExtendsHeritageClauseElement(node);
                 let interfacesImpl = ts.getClassImplementsHeritageClauseElements(node);
                 let saveTempFlags = tempFlags;
@@ -6724,6 +6742,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 tempParameters = undefined;
                 computedPropertyNamesToGeneratedNames = undefined;
                 scopeEmitStart(node);
+                trySetVariableDeclarationInModule(node);
                 writeLine();
                 emitConstructor(node, baseTypeNode, interfacesImpl);
                 if (baseTypeNode) {
@@ -7281,8 +7300,27 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function shouldEmitEnumDeclaration(node: EnumDeclaration) {
-                let isConstEnum = isConst(node);
-                return !isConstEnum || compilerOptions.preserveConstEnums || compilerOptions.isolatedModules;
+                if (isAmbientContextDeclaredWithinSourceFile(node)) {
+                    return false;
+                }
+
+                return !isConst(node) || compilerOptions.preserveConstEnums || compilerOptions.isolatedModules;
+            }
+
+            function isAmbientContextDeclaredWithinDefinitionFile(node: Node): boolean {
+                if (ts.fileExtensionIs(currentSourceFile.fileName, ".d.ts")) {
+                    return isAmbientContext(node);
+                }
+
+                return false;
+            }
+
+            function isAmbientContextDeclaredWithinSourceFile(node: Node): boolean {
+                if (ts.fileExtensionIs(currentSourceFile.fileName, ".ts")) {
+                    return isAmbientContext(node);
+                }
+
+                return false;
             }
 
             function emitEnumDeclaration(node: EnumDeclaration) {
@@ -7418,6 +7456,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function shouldEmitModuleDeclaration(node: ModuleDeclaration) {
+                if (isAmbientContextDeclaredWithinSourceFile(node)) {
+                    return;
+                }
                 return isInstantiatedModule(node, compilerOptions.preserveConstEnums || compilerOptions.isolatedModules);
             }
 
