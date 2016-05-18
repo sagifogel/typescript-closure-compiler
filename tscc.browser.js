@@ -30813,6 +30813,15 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var cahce = {};
             var exportedTypes = {};
             var exportedMembers = [];
+            var sortByLength = function (t1, t2) {
+                if (t1.length === t2.length) {
+                    return 0;
+                }
+                if (t1.length < t2.length) {
+                    return -1;
+                }
+                return 1;
+            };
             forceWriteLine();
             ts.forEach(resolvedExportedTypes, function (resolvedExportedType) {
                 var exportedType = resolvedExportedType;
@@ -30842,17 +30851,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 });
             });
             exportedMembers
-                .sort(function (t1, t2) {
-                if (t1.length === t2.length) {
-                    return 0;
-                }
-                if (t1.length < t2.length) {
-                    return -1;
-                }
-                return 1;
-            })
+                .sort(sortByLength)
                 .forEach(writeValueAndNewLine);
-            writeValueAndNewLine("var " + compilerOptions.exportAs + " = { " + Object.keys(exportedTypes).map(function (key) { return ("\"" + key + "\": " + exportedTypes[key]); }).join(", ") + " };");
+            writeValueAndNewLine("var " + compilerOptions.exportAs + " = self[\"" + compilerOptions.exportAs + "\"] || {};");
+            Object.keys(exportedTypes).sort(sortByLength).forEach(function (key) {
+                writeValueAndNewLine(compilerOptions.exportAs + "[\"" + key + "\"] = " + exportedTypes[key] + ";");
+            });
             writeValueAndNewLine("typeof module === \"object\" && typeof module[\"exports\"] === \"object\" ? module[\"exports\"] = " + compilerOptions.exportAs + ": self[\"" + compilerOptions.exportAs + "\"] = " + compilerOptions.exportAs + ";");
         }
         function isUniqueName(name) {

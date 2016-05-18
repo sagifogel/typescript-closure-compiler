@@ -531,6 +531,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let cahce: Map<boolean> = {};
                 let exportedTypes: Map<string> = {};
                 let exportedMembers: Array<string> = [];
+                let sortByLength = (t1: string, t2: string) => {
+                    if (t1.length === t2.length) { return 0; }
+                    if (t1.length < t2.length) { return -1; }
+                    return 1;
+                };
 
                 forceWriteLine();
 
@@ -568,14 +573,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     });
                 });
                 exportedMembers
-                    .sort((t1, t2) => {
-                        if (t1.length === t2.length) { return 0; }
-                        if (t1.length < t2.length) { return -1; }
-                        return 1;
-                    })
+                    .sort(sortByLength)
                     .forEach(writeValueAndNewLine);
 
-                writeValueAndNewLine(`var ${compilerOptions.exportAs} = { ${Object.keys(exportedTypes).map(key => `"${key}": ${exportedTypes[key]}`).join(", ")} };`);
+                writeValueAndNewLine(`var ${compilerOptions.exportAs} = self["${compilerOptions.exportAs}"] || {};`);
+                Object.keys(exportedTypes).sort(sortByLength).forEach(key => {
+                    writeValueAndNewLine(`${compilerOptions.exportAs}["${key}"] = ${exportedTypes[key]};`);
+                });
                 writeValueAndNewLine(`typeof module === "object" && typeof module["exports"] === "object" ? module["exports"] = ${compilerOptions.exportAs}: self["${compilerOptions.exportAs}"] = ${compilerOptions.exportAs};`);
             }
 
