@@ -35345,7 +35345,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (func.parameters.length || hasReturnType) {
                 var params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
                 if (isCtor) {
-                    return "function(new:" + returnType + ", " + params + ")";
+                    if (params) {
+                        return "function(new:" + returnType + ", " + params + ")";
+                    }
+                    return "function(new:" + returnType + ")";
                 }
                 else {
                     if (returnType) {
@@ -36747,7 +36750,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             return false;
         }
         function isAmbientContextDeclaredWithinSourceFile(node) {
-            if (ts.fileExtensionIs(currentSourceFile.fileName, ".ts")) {
+            if (!ts.fileExtensionIs(currentSourceFile.fileName, ".d.ts")) {
                 return isAmbientContext(node);
             }
             return false;

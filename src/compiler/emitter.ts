@@ -5688,7 +5688,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
 
                     if (isCtor) {
-                        return `function(new:${returnType}, ${params})`;
+                        if (params) {
+                            return `function(new:${returnType}, ${params})`;
+                        }
+
+                        return `function(new:${returnType})`;
                     }
                     else {
                         if (returnType) {
@@ -7319,7 +7323,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function isAmbientContextDeclaredWithinSourceFile(node: Node): boolean {
-                if (ts.fileExtensionIs(currentSourceFile.fileName, ".ts")) {
+                if (!ts.fileExtensionIs(currentSourceFile.fileName, ".d.ts")) {
                     return isAmbientContext(node);
                 }
 
