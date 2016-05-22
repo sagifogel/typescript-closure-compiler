@@ -266,6 +266,10 @@ namespace ts {
             isFilePath: true,
             description: { key: "", category: DiagnosticCategory.Message, code: 0 },
             paramType: Diagnostics.FILE
+        },
+        {
+            name: "emitOneSideEnums",
+            type: "boolean"
         }
     ];
 
