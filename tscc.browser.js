@@ -35649,14 +35649,20 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         }
                     });
                 }
+                emitStartAnnotation();
                 if (!multipleTypes && !types.other) {
                     if (types.string) {
                         type = "string";
                     }
-                    emitStartAnnotation();
+                    else if (!compilerOptions.emitOneSideEnums) {
+                        type = "(string|number)";
+                    }
                     emitCommentedAnnotation("@enum {" + type + "}");
-                    emitEndAnnotation();
                 }
+                else {
+                    emitCommentedAnnotation("@type {Object<(string|number), *>}");
+                }
+                emitEndAnnotation();
             });
         }
         function emitArrayTypeAnnotation(node) {
@@ -36774,17 +36780,33 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     write(",");
                 }
             });
-            if (!compilerOptions.emitOneSideEnum) {
+            if (!compilerOptions.emitOneSideEnums) {
                 write(",");
                 ts.forEach(node.members, function (member, i) {
+                    var memberIsStringLiteral = false;
+                    var nameIsStringLiteral = member.name.kind === 9 /* StringLiteral */;
+                    if (member.initializer) {
+                        if (member.initializer.kind === 9 /* StringLiteral */ ||
+                            (member.initializer.kind === 171 /* TypeAssertionExpression */ && member.initializer.expression.kind === 9 /* StringLiteral */)) {
+                            memberIsStringLiteral = true;
+                        }
+                    }
                     writeLine();
-                    write("\"");
+                    if (!memberIsStringLiteral) {
+                        write("\"");
+                    }
                     writeEnumMemberDeclarationValue(member);
-                    write("\"");
+                    if (!memberIsStringLiteral) {
+                        write("\"");
+                    }
                     write(": ");
-                    write("\"");
+                    if (!nameIsStringLiteral) {
+                        write("\"");
+                    }
                     emitExpressionForPropertyName(member.name);
-                    write("\"");
+                    if (!nameIsStringLiteral) {
+                        write("\"");
+                    }
                     if (i < membersLength) {
                         write(",");
                     }
@@ -39790,6 +39812,10 @@ ts.optionDeclarations = [
         isFilePath: true,
         description: { key: "", category: ts.DiagnosticCategory.Message, code: 0 },
         paramType: ts.Diagnostics.FILE
+    },
+    {
+        name: "emitOneSideEnums",
+        type: "boolean"
     }
 ];
 /* @internal */

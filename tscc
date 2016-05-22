@@ -145,7 +145,6 @@ function executeCommandLine(args) {
         compilerOptions = ts.extend({
             emitInterfaces : true,
             emitAnnotations: true,
-            emitOneSideEnum: true,
             target: ts.ScriptTarget.ES5,
             externs: externFileNames || []
         }, compilerOptions);

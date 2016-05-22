@@ -22,7 +22,7 @@ namespace ts {
         exportAs: string;
         emitInterfaces: boolean;
         emitAnnotations: boolean;
-        emitOneSideEnum: boolean;
+        emitOneSideEnums: boolean;
     }
 
     let entities: Map<number> = {
@@ -6048,14 +6048,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             });
                     }
 
+                    emitStartAnnotation();
+
                     if (!multipleTypes && !types.other) {
                         if (types.string) {
                             type = "string";
                         }
-                        emitStartAnnotation();
+                        else if (!compilerOptions.emitOneSideEnums) {
+                            type = "(string|number)"
+                        }
                         emitCommentedAnnotation(`@enum {${type}}`);
-                        emitEndAnnotation();
                     }
+                    else {
+                        emitCommentedAnnotation("@type {Object<(string|number), *>}");
+                    }
+
+                    emitEndAnnotation();
                 });
             }
 
@@ -7353,17 +7361,44 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         write(",");
                     }
                 });
-                if (!compilerOptions.emitOneSideEnum) {
+                if (!compilerOptions.emitOneSideEnums) {
                     write(",");
+
                     ts.forEach(node.members, (member, i) => {
+                        let memberIsStringLiteral = false;
+                        let nameIsStringLiteral = member.name.kind === SyntaxKind.StringLiteral;
+
+                        if (member.initializer) {
+                            if (member.initializer.kind === SyntaxKind.StringLiteral ||
+                                (member.initializer.kind === SyntaxKind.TypeAssertionExpression && (<TypeAssertion>member.initializer).expression.kind === SyntaxKind.StringLiteral)) {
+                                memberIsStringLiteral = true;
+                            }
+                        }
+
                         writeLine();
-                        write("\"");
+
+                        if (!memberIsStringLiteral) {
+                            write("\"");
+                        }
+
                         writeEnumMemberDeclarationValue(member);
-                        write("\"");
+
+                        if (!memberIsStringLiteral) {
+                            write("\"");
+                        }
+
                         write(": ");
-                        write("\"");
+
+                        if (!nameIsStringLiteral) {
+                            write("\"");
+                        }
+
                         emitExpressionForPropertyName(member.name);
-                        write("\"");
+
+                        if (!nameIsStringLiteral) {
+                            write("\"");
+                        }
+
                         if (i < membersLength) {
                             write(",");
                         }

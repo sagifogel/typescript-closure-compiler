@@ -93,6 +93,40 @@ or declaring it in the `config.ts` file:
 }
 ``` 
 
+### One side enums
+By default `typescript-closure-compiler` emits bi-directional enums, which means that the key could also be resolved using the value.
+```js
+enum EventType {
+    mouseup = 0,
+    mousedown = 1
+}
+```
+will be translated to:
+```js
+var EventType = {
+    mouseup: 0,
+    mousedown: 1,
+    "0": "mouseup",
+    "1": "mousedown"
+};
+```
+In order to resolve the key from the value you can write:
+```js
+console.log(EventType[0]); 
+```
+"mouseup" will be printed
+
+You can use the `emitOneSideEnums` property to override this behaviour and to just emit one side enums:
+```js
+node tscc app.ts --module commonjs --emitOneSideEnums
+```
+Now for the same enum the emitted code will be:
+```js
+var EventType = {
+    mouseup: 0,
+    mousedown: 1
+};
+```
 ## Building
 
 The build tool that was chosen for this project is [Jake](http://jakejs.com/), for compatibility reasons with TypeScript`s build system.<br/>
