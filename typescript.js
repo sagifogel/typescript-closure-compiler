@@ -7647,9 +7647,10 @@ ts.writeCommentRange = function (currentSourceFile, writer, comment, newLine) {
         // Single line comment of style //....
         writer.write(currentSourceFile.text.substring(comment.pos, comment.end));
     }
-    function writeTrimmedCurrentLine(pos, nextLineStart) {
+    function writeTrimmedCurrentLine(pos, nextLineStart, altWriter) {
         var end = Math.min(comment.end, nextLineStart - 1);
         var currentLineText = currentSourceFile.text.substring(pos, end).replace(/^\s+|\s+$/g, "");
+        writer = altWriter || writer;
         if (currentLineText) {
             // trimmed forward and ending spaces text
             writer.write(currentLineText);
@@ -30731,6 +30732,18 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             write(value);
             forceWriteLine();
         };
+        var annotationWriter = {
+            write: function (comment) {
+                var stripped = comment.replace(/(\/+?)|(\/\*)|(\*\/)/g, '').trim();
+                if (stripped) {
+                    emitCommentedAnnotation(stripped);
+                }
+            },
+            rawWrite: writer.rawWrite,
+            writeLine: function () {
+            },
+            writeLiteral: writer.writeLiteral
+        };
         var currentSourceFile;
         // name of an exporter function if file is a System external module
         // System.register([...], function (<exporter>) {...})
@@ -34610,6 +34623,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             // TODO (yuisu) : we should not have special cases to condition emitting comments
             // but have one place to fix check for these conditions.
             if (node.kind !== 143 /* MethodDeclaration */ && node.kind !== 142 /* MethodSignature */ &&
+                (!compilerOptions.emitAnnotations) &&
                 node.parent && node.parent.kind !== 245 /* PropertyAssignment */ &&
                 node.parent.kind !== 168 /* CallExpression */) {
                 // 1. Methods will emit the comments as part of emitting method declaration
@@ -35027,7 +35041,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var isStaticProperty = property.flags & 128 /* Static */;
             var nodeIsInterface = node.kind === 215 /* InterfaceDeclaration */;
             writeLine();
-            emitLeadingComments(property);
+            if (!compilerOptions.emitAnnotations) {
+                emitLeadingComments(property);
+            }
             emitStart(property);
             emitStart(property.name);
             if (receiver) {
@@ -35102,7 +35118,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     }
                     forceWriteLine();
                     forceWriteLine();
-                    emitLeadingComments(member);
+                    if (!compilerOptions.emitAnnotations) {
+                        emitLeadingComments(member);
+                    }
                     emitStart(member);
                     emitStart(member.name);
                     emitFunctionAnnotation(member);
@@ -35598,13 +35616,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, indexSignature.type));
             return "Object<" + params.join(", ") + ", " + returnType + ">";
         }
-        function emitIndexSignatures(interface, members) {
-            emitAnnotationIf(function () {
-                var genericArguments = getGenericArguments(interface);
-                var genericsTypeChecker = createGenericsTypeChecker(genericArguments);
-                emitCallOrIndexSignatures(interface, members, function (member) { return getIndexSignature(member, genericsTypeChecker); });
-            });
-        }
         function emitCallOrIndexSignatures(node, members, mapFunction) {
             var rightParenthesis = "";
             var leftParenthesis = "";
@@ -35649,6 +35660,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     });
                 }
                 emitStartAnnotation();
+                emitCombinedLeadingComments(node);
                 if (!multipleTypes && !types.other) {
                     if (types.string) {
                         type = "string";
@@ -35663,6 +35675,14 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
                 emitEndAnnotation();
             });
+        }
+        function emitCombinedLeadingComments(node) {
+            if (shouldEmitLeadingComments(node)) {
+                var comments = getLeadingCommentsToEmit(node);
+                if (comments) {
+                    ts.emitComments(currentSourceFile, annotationWriter, comments, false, newLine, ts.writeCommentRange);
+                }
+            }
         }
         function emitArrayTypeAnnotation(node) {
             emitAnnotationIf(function () {
@@ -35683,11 +35703,20 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         function emitVariableOrPropertyTypeAnnotation(node, isParameterPropertyAssignment) {
             emitAnnotationIf(function () {
                 var type = "?";
-                var annotation = ts.isConst(node) ? "@const" : "@type";
+                var annotation;
                 if (node.type || node.initializer) {
                     type = getParameterOrUnionTypeAnnotation(node, node.type || node.initializer, isParameterPropertyAssignment);
                 }
-                write("/** " + annotation + " {" + type + "} */ ");
+                annotation = ts.isConst(node) ? "@const" : "@type";
+                if (shouldEmitLeadingComments(node)) {
+                    emitStartAnnotation();
+                    emitCombinedLeadingComments(node);
+                    emitCommentedAnnotation(annotation);
+                    emitEndAnnotation();
+                }
+                else {
+                    write("/** " + annotation + " {" + type + "} */ ");
+                }
             });
         }
         function isPublicMember(node) {
@@ -35747,6 +35776,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
                 if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters || parentContext) {
                     emitStartAnnotation();
+                    emitCombinedLeadingComments(node);
                     if (parentContext) {
                         var parentName = getModuleName(parentContext) + getNodeNameOrIdentifier(parentContext);
                         emitCommentedAnnotation("@this {" + parentName + "}");
@@ -35811,6 +35841,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     heritageType = "extends";
                 }
                 emitStartAnnotation();
+                emitCombinedLeadingComments(node);
+                if (ctor) {
+                    emitCombinedLeadingComments(ctor);
+                }
                 emitCommentedAnnotation(type);
                 if (baseTypeElement) {
                     emitCommentedAnnotation("@extends {" + getClassOrInterfaceFullPath(baseTypeElement) + "}");
@@ -35878,7 +35912,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (languageVersion >= 2 /* ES6 */ && !ctor && !hasInstancePropertyWithInitializer) {
                 return;
             }
-            if (ctor) {
+            if (!compilerOptions.emitAnnotations && ctor) {
                 emitLeadingComments(ctor);
             }
             emitStart(ctor);
@@ -36931,6 +36965,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             return false;
         }
+        function hasLeadingComments(node) {
+            if (shouldEmitLeadingAndTrailingComments(node)) {
+                var leadingComments = getLeadingCommentsToEmit(node);
+                return leadingComments && !!leadingComments.length;
+            }
+        }
         function emitModuleDeclaration(node) {
             // Emit only if this module is non-ambient.
             var shouldEmit = shouldEmitModuleDeclaration(node);
@@ -36942,6 +36982,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var hoistedInDeclarationScope = !containingModule && moduleIsNotDeclared;
             var name = getGeneratedNameForNode(node);
             forceWriteLine();
+            if (compilerOptions.emitAnnotations && hasLeadingComments(node)) {
+                emitLeadingComments(node);
+            }
             if (hoistedInDeclarationScope) {
                 write("var ");
                 write(name);
@@ -38134,8 +38177,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     // This is the node that will handle its own comments and sourcemap
                     return emitNodeWithoutSourceMap(node);
                 }
+                var leadingComments = !compilerOptions.emitAnnotations || !shouldEmitLeadingComments(node);
                 var emitComments_1 = shouldEmitLeadingAndTrailingComments(node);
-                if (emitComments_1) {
+                if (emitComments_1 && leadingComments) {
                     emitLeadingComments(node);
                 }
                 emitNodeConsideringSourcemap(node);
@@ -38161,6 +38205,25 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 227 /* ExportAssignment */:
                     return true;
             }
+        }
+        function shouldEmitLeadingComments(node) {
+            if (!compilerOptions.removeComments) {
+                switch (node.kind) {
+                    case 140 /* PropertySignature */:
+                    case 141 /* PropertyDeclaration */:
+                    case 142 /* MethodSignature */:
+                    case 143 /* MethodDeclaration */:
+                    case 144 /* Constructor */:
+                    case 145 /* GetAccessor */:
+                    case 146 /* SetAccessor */:
+                    case 213 /* FunctionDeclaration */:
+                    case 214 /* ClassDeclaration */:
+                    case 217 /* EnumDeclaration */:
+                    case 218 /* ModuleDeclaration */:
+                        return true;
+                }
+            }
+            return false;
         }
         function shouldEmitLeadingAndTrailingComments(node) {
             switch (node.kind) {

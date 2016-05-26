@@ -438,7 +438,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 write(value);
                 forceWriteLine();
             };
+            let annotationWriter = <EmitTextWriter>{
+                write: function (comment) {
+                    let stripped = comment.replace(/(\/+?)|(\/\*)|(\*\/)/g, '').trim();
 
+                    if (stripped) {
+                        emitCommentedAnnotation(stripped);
+                    }
+                },
+                rawWrite: writer.rawWrite,
+                writeLine: function () { },
+                writeLiteral: writer.writeLiteral
+            };
             let currentSourceFile: SourceFile;
             // name of an exporter function if file is a System external module
             // System.register([...], function (<exporter>) {...})
@@ -4857,6 +4868,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // TODO (yuisu) : we should not have special cases to condition emitting comments
                 // but have one place to fix check for these conditions.
                 if (node.kind !== SyntaxKind.MethodDeclaration && node.kind !== SyntaxKind.MethodSignature &&
+                    (!compilerOptions.emitAnnotations) &&
                     node.parent && node.parent.kind !== SyntaxKind.PropertyAssignment &&
                     node.parent.kind !== SyntaxKind.CallExpression) {
                     // 1. Methods will emit the comments as part of emitting method declaration
@@ -5324,7 +5336,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let nodeIsInterface = node.kind === SyntaxKind.InterfaceDeclaration;
 
                 writeLine();
-                emitLeadingComments(property);
+
+                if (!compilerOptions.emitAnnotations) {
+                    emitLeadingComments(property);
+                }
+
                 emitStart(property);
                 emitStart(property.name);
                 if (receiver) {
@@ -5409,7 +5425,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         forceWriteLine();
                         forceWriteLine();
-                        emitLeadingComments(member);
+
+                        if (!compilerOptions.emitAnnotations) {
+                            emitLeadingComments(member);
+                        }
+
                         emitStart(member);
                         emitStart((<MethodDeclaration>member).name);
                         emitFunctionAnnotation(<MethodDeclaration>member);
@@ -5990,15 +6010,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return `Object<${params.join(", ")}, ${returnType}>`;
             }
 
-            function emitIndexSignatures(interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
-                emitAnnotationIf(() => {
-                    let genericArguments = getGenericArguments(interface);
-                    let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
-
-                    emitCallOrIndexSignatures(interface, members, member => getIndexSignature(<IndexSignatureDeclaration>member, genericsTypeChecker));
-                });
-            }
-
             function emitCallOrIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>, mapFunction: (member: SignatureDeclaration) => string) {
                 let rightParenthesis = "", leftParenthesis = "";
                 let indexOrCallSignatureName = ts.getTextOfNode(node.name);
@@ -6049,6 +6060,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     emitStartAnnotation();
+                    emitCombinedLeadingComments(node);
 
                     if (!multipleTypes && !types.other) {
                         if (types.string) {
@@ -6065,6 +6077,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     emitEndAnnotation();
                 });
+            }
+
+            function emitCombinedLeadingComments(node: Node): void {
+                if (shouldEmitLeadingComments(node)) {
+                    var comments = getLeadingCommentsToEmit(node);
+                    if (comments) {
+                        emitComments(currentSourceFile, annotationWriter, comments, false, newLine, writeCommentRange);
+                    }
+                }
             }
 
             function emitArrayTypeAnnotation(node: ParameterDeclaration): void {
@@ -6091,13 +6112,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             function emitVariableOrPropertyTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
                 emitAnnotationIf(() => {
                     let type = "?";
-                    let annotation = ts.isConst(node) ? "@const" : "@type";
+                    let annotation: string;
 
                     if (node.type || node.initializer) {
                         type = getParameterOrUnionTypeAnnotation(node, node.type || node.initializer, isParameterPropertyAssignment);
                     }
 
-                    write(`/** ${annotation} {${type}} */ `);
+                    annotation = ts.isConst(node) ? "@const" : "@type";
+                    if (shouldEmitLeadingComments(node)) {
+                        emitStartAnnotation();
+                        emitCombinedLeadingComments(node);
+                        emitCommentedAnnotation(annotation);
+                        emitEndAnnotation();
+                    }
+                    else {
+                        write(`/** ${annotation} {${type}} */ `);
+                    }
                 });
             }
 
@@ -6175,6 +6205,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                     if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters || parentContext) {
                         emitStartAnnotation();
+                        emitCombinedLeadingComments(node);
 
                         if (parentContext) {
                             let parentName = getModuleName(parentContext) + getNodeNameOrIdentifier(parentContext);
@@ -6256,6 +6287,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     emitStartAnnotation();
+                    emitCombinedLeadingComments(node);
+
+                    if (ctor) {
+                        emitCombinedLeadingComments(ctor);
+                    }
+
                     emitCommentedAnnotation(type);
 
                     if (baseTypeElement) {
@@ -6334,7 +6371,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     return;
                 }
 
-                if (ctor) {
+                if (!compilerOptions.emitAnnotations && ctor) {
                     emitLeadingComments(ctor);
                 }
                 emitStart(ctor);
@@ -7543,6 +7580,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return false;
             }
 
+            function hasLeadingComments(node: Node): boolean {
+                if (shouldEmitLeadingAndTrailingComments(<ModuleDeclaration>node)) {
+                    let leadingComments = getLeadingCommentsToEmit(node);
+
+                    return leadingComments && !!leadingComments.length;
+                }
+            }
+
             function emitModuleDeclaration(node: ModuleDeclaration) {
                 // Emit only if this module is non-ambient.
                 let shouldEmit = shouldEmitModuleDeclaration(node);
@@ -7555,6 +7600,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let name = getGeneratedNameForNode(node)
 
                 forceWriteLine();
+
+                if (compilerOptions.emitAnnotations && hasLeadingComments(node)) {
+                    emitLeadingComments(node);
+                }
 
                 if (hoistedInDeclarationScope) {
                     write("var ");
@@ -8887,8 +8936,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return emitNodeWithoutSourceMap(node);
                     }
 
+                    let leadingComments = !compilerOptions.emitAnnotations || !shouldEmitLeadingComments(node);
                     let emitComments = shouldEmitLeadingAndTrailingComments(node);
-                    if (emitComments) {
+
+                    if (emitComments && leadingComments) {
                         emitLeadingComments(node);
                     }
 
@@ -8918,6 +8969,26 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ExportAssignment:
                         return true;
                 }
+            }
+
+            function shouldEmitLeadingComments(node: Node): boolean {
+                if (!compilerOptions.removeComments) {
+                    switch (node.kind) {
+                        case SyntaxKind.PropertySignature:
+                        case SyntaxKind.PropertyDeclaration:
+                        case SyntaxKind.MethodSignature:
+                        case SyntaxKind.MethodDeclaration:
+                        case SyntaxKind.Constructor:
+                        case SyntaxKind.GetAccessor:
+                        case SyntaxKind.SetAccessor:
+                        case SyntaxKind.FunctionDeclaration:
+                        case SyntaxKind.ClassDeclaration:
+                        case SyntaxKind.EnumDeclaration:
+                        case SyntaxKind.ModuleDeclaration:
+                            return true;
+                    }
+                }
+                return false;
             }
 
             function shouldEmitLeadingAndTrailingComments(node: Node) {
