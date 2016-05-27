@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 var path = require("path");
 var ts = require(__dirname + "/typescript.js");
 var pkg = require(__dirname + "/package.json");
@@ -107,7 +109,11 @@ function executeCommandLine(args) {
         }
         
         var result = ts.parseConfigFileTextToJson(configFileName, cachedConfigFileText);
-        var configObject = result.config;
+        if (result.error) {
+		    reportDiagnostics([result.error]);
+            return ts.sys.exit(ts.ExitStatus.DiagnosticsPresent_OutputsSkipped);
+        }
+		var configObject = result.config;
         var configParseResult = ts.parseJsonConfigFileContent(configObject, ts.sys, ts.getDirectoryPath(configFileName));
         if (configParseResult.errors.length > 0) {
             reportDiagnostics(configParseResult.errors);
@@ -115,6 +121,11 @@ function executeCommandLine(args) {
         }
         return configParseResult;
     }
+
+	function emitErrorsAndExit(errors) {
+		reportDiagnostics(configParseResult.errors);
+        return ts.sys.exit(ts.ExitStatus.DiagnosticsPresent_OutputsSkipped);
+	}
     
     function normalizeFilePath(file) {
         return ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, file));
