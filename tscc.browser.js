@@ -1470,6 +1470,28 @@ ts.Ternary = {
     "-1": "True"
 };
 
+ts.assign = function (target, sources$rest) {
+    var sources = [];
+    for (var _i = 1; _i < arguments.length; _i++) {
+        sources[_i - 1] = arguments[_i];
+    }
+    if (target == null) {
+        throw new TypeError("Cannot convert undefined or null to object");
+    }
+    target = Object(target);
+    for (var index = 0; index < sources.length; index++) {
+        var source = sources[index];
+        if (source != null) {
+            for (var key in source) {
+                if (Object.prototype.hasOwnProperty.call(source, key)) {
+                    target[key] = source[key];
+                }
+            }
+        }
+    }
+    return target;
+};
+
 ts.createFileMap = function (getCanonicalFileName) {
     var files = {};
     return {
@@ -30743,6 +30765,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             rawWrite: writer.rawWrite,
             writeLine: function () {
             },
+            getIndent: writer.getIndent,
             writeLiteral: writer.writeLiteral
         };
         var currentSourceFile;
@@ -35687,7 +35710,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         function emitArrayTypeAnnotation(node) {
             emitAnnotationIf(function () {
-                var cloned = Object.assign({}, node);
+                var cloned = ts.assign({}, node);
                 delete cloned.dotDotDotToken;
                 cloned.type.parent = cloned;
                 emitVariableTypeAnnotation(cloned);
@@ -35712,7 +35735,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 if (shouldEmitLeadingComments(node)) {
                     emitStartAnnotation();
                     emitCombinedLeadingComments(node);
-                    emitCommentedAnnotation(annotation);
+                    emitCommentedAnnotation(annotation + " {" + type + "}");
                     emitEndAnnotation();
                 }
                 else {

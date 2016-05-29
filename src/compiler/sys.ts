@@ -1,7 +1,5 @@
 namespace ts {
     export declare var sys: System;
-    export declare const supportedExtensions: Array<string>;
-    export declare function fileExtensionIs(path: string, extension: string): boolean;
 
     export declare interface System {
         args: string[];

@@ -448,6 +448,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 },
                 rawWrite: writer.rawWrite,
                 writeLine: function () { },
+                getIndent: writer.getIndent,
                 writeLiteral: writer.writeLiteral
             };
             let currentSourceFile: SourceFile;
@@ -6090,12 +6091,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitArrayTypeAnnotation(node: ParameterDeclaration): void {
                 emitAnnotationIf(() => {
-                    let cloned = (<any>Object).assign({}, node);
+                    let cloned = ts.assign<ParameterDeclaration>({}, node);
 
                     delete cloned.dotDotDotToken;
                     cloned.type.parent = cloned;
 
-                    emitVariableTypeAnnotation(<ParameterDeclaration>cloned);
+                    emitVariableTypeAnnotation(cloned);
                 });
             }
 
@@ -6122,7 +6123,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (shouldEmitLeadingComments(node)) {
                         emitStartAnnotation();
                         emitCombinedLeadingComments(node);
-                        emitCommentedAnnotation(annotation);
+                        emitCommentedAnnotation(`${annotation} {${type}}`);
                         emitEndAnnotation();
                     }
                     else {
