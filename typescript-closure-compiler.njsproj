@@ -39,7 +39,6 @@
     <Content Include="package.json" />
     <Content Include="README.md" />
     <Content Include="tscc" />
-    <TypeScriptCompile Include="Scripts\typings\node\node.d.ts" />
     <TypeScriptCompile Include="src\compiler\binder.ts" />
     <TypeScriptCompile Include="src\compiler\checker.ts" />
     <TypeScriptCompile Include="src\compiler\commandLineParser.ts" />
@@ -60,9 +59,6 @@
   <ItemGroup>
     <Folder Include="src\services\" />
     <Folder Include="src\" />
-    <Folder Include="Scripts\" />
-    <Folder Include="Scripts\typings\" />
-    <Folder Include="Scripts\typings\node\" />
     <Folder Include="src\compiler\" />
   </ItemGroup>
   <ItemGroup>

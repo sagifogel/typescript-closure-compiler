@@ -7670,10 +7670,9 @@ ts.writeCommentRange = function (currentSourceFile, writer, comment, newLine) {
         // Single line comment of style //....
         writer.write(currentSourceFile.text.substring(comment.pos, comment.end));
     }
-    function writeTrimmedCurrentLine(pos, nextLineStart, altWriter) {
+    function writeTrimmedCurrentLine(pos, nextLineStart) {
         var end = Math.min(comment.end, nextLineStart - 1);
         var currentLineText = currentSourceFile.text.substring(pos, end).replace(/^\s+|\s+$/g, "");
-        writer = altWriter || writer;
         if (currentLineText) {
             // trimmed forward and ending spaces text
             writer.write(currentLineText);
@@ -30889,11 +30888,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             exportedMembers
                 .sort(sortByLength)
                 .forEach(writeValueAndNewLine);
-            writeValueAndNewLine("var " + compilerOptions.exportAs + " = self[\"" + compilerOptions.exportAs + "\"] || {};");
+            writeValueAndNewLine("var hasExports = typeof module === \"object\" && typeof module[\"exports\"] === \"object\";");
+            writeValueAndNewLine("var " + compilerOptions.exportAs + " = (hasExports ? module[\"exports\"][\"" + compilerOptions.exportAs + "\"] : self[\"" + compilerOptions.exportAs + "\"]) || {};");
             Object.keys(exportedTypes).sort(sortByLength).forEach(function (key) {
                 writeValueAndNewLine(compilerOptions.exportAs + "[\"" + key + "\"] = " + exportedTypes[key] + ";");
             });
-            writeValueAndNewLine("typeof module === \"object\" && typeof module[\"exports\"] === \"object\" ? module[\"exports\"] = " + compilerOptions.exportAs + ": self[\"" + compilerOptions.exportAs + "\"] = " + compilerOptions.exportAs + ";");
+            writeValueAndNewLine("hasExports ? module[\"exports\"] = " + compilerOptions.exportAs + ": self[\"" + compilerOptions.exportAs + "\"] = " + compilerOptions.exportAs + ";");
         }
         function isUniqueName(name) {
             return !resolver.hasGlobalName(name) &&

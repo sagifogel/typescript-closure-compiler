@@ -299,7 +299,7 @@ namespace ts {
         return optionNameMapCache;
     }
 
-    export function parseCommandLine(commandLine: string[], readFile?: (path: string) => string): ParsedCommandLine {
+    export function parseCommandLine(commandLine: string[], readFile?: (path: string) => string): ExtendedParsedCommandLine {
         let options: CompilerOptions = {};
         let fileNames: string[] = [];
         let externFileNames: string[] = [];
@@ -447,7 +447,7 @@ namespace ts {
       * @param basePath A root directory to resolve relative path entries in the config
       *    file to. e.g. outDir
       */
-    export function parseJsonConfigFileContent(json: any, host: ParseConfigHost, basePath: string): ParsedCommandLine {
+    export function parseJsonConfigFileContent(json: any, host: ParseConfigHost, basePath: string): ExtendedParsedCommandLine {
         let errors: Diagnostic[] = [];
 
         return {
