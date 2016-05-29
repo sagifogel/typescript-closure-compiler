@@ -16,13 +16,22 @@ namespace ts {
         getExternSourceFiles(): SourceFile[];
     }
 
+    export interface ExtendedTypeCheckerHost extends TypeCheckerHost {
+        getExternSourceFiles(): SourceFile[];
+    }
+
     export interface ExtendedCompilerOptions extends ts.CompilerOptions {
         entry: string;
         externs?: any;
         exportAs: string;
         emitInterfaces: boolean;
+        externsOutFile? : string
         emitAnnotations: boolean;
         emitOneSideEnums: boolean;
+    }
+
+    export interface ExtendedParsedCommandLine extends ParsedCommandLine {
+        externFileNames: string[];
     }
 
     let entities: Map<number> = {
@@ -440,15 +449,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             };
             let annotationWriter = <EmitTextWriter>{
                 write: function (comment) {
-                    let stripped = comment.replace(/(\/+?)|(\/\*)|(\*\/)/g, '').trim();
+                    let stripped = comment.replace(/(\*)|(\/+?)|(\/\*)|(\*\/)/g, '').trim();
 
                     if (stripped) {
                         emitCommentedAnnotation(stripped);
                     }
                 },
+                getIndent: () => -1,
+                writeLine: () => { },
                 rawWrite: writer.rawWrite,
-                writeLine: function () { },
-                getIndent: writer.getIndent,
                 writeLiteral: writer.writeLiteral
             };
             let currentSourceFile: SourceFile;
@@ -588,11 +597,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     .sort(sortByLength)
                     .forEach(writeValueAndNewLine);
 
-                writeValueAndNewLine(`var ${compilerOptions.exportAs} = self["${compilerOptions.exportAs}"] || {};`);
+                writeValueAndNewLine(`var hasExports = typeof module === "object" && typeof module["exports"] === "object";`);
+                writeValueAndNewLine(`var ${compilerOptions.exportAs} = (hasExports ? module["exports"]["${compilerOptions.exportAs}"] : self["${compilerOptions.exportAs}"]) || {};`);
                 Object.keys(exportedTypes).sort(sortByLength).forEach(key => {
                     writeValueAndNewLine(`${compilerOptions.exportAs}["${key}"] = ${exportedTypes[key]};`);
                 });
-                writeValueAndNewLine(`typeof module === "object" && typeof module["exports"] === "object" ? module["exports"] = ${compilerOptions.exportAs}: self["${compilerOptions.exportAs}"] = ${compilerOptions.exportAs};`);
+                writeValueAndNewLine(`hasExports ? module["exports"] = ${compilerOptions.exportAs}: self["${compilerOptions.exportAs}"] = ${compilerOptions.exportAs};`);
             }
 
             function isUniqueName(name: string): boolean {
