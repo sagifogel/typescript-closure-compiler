@@ -1,4 +1,6 @@
-﻿namespace ts {
+﻿/// <reference path="diagnosticInformationMap.generated.ts"/>
+
+namespace ts {
     export declare function getShebang(text: string): string;
     export declare function isLineBreak(ch: number): boolean;
     export declare function isWhiteSpace(ch: number): boolean;
