@@ -440,15 +440,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             };
             let annotationWriter = <EmitTextWriter>{
                 write: function (comment) {
-                    let stripped = comment.replace(/(\/+?)|(\/\*)|(\*\/)/g, '').trim();
+                    let stripped = comment.replace(/(\*)|(\/+?)|(\/\*)|(\*\/)/g, '').trim();
 
                     if (stripped) {
                         emitCommentedAnnotation(stripped);
                     }
                 },
+                getIndent: () => -1,
+                writeLine: () => { },
                 rawWrite: writer.rawWrite,
-                writeLine: function () { },
-                getIndent: writer.getIndent,
                 writeLiteral: writer.writeLiteral
             };
             let currentSourceFile: SourceFile;

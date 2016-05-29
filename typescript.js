@@ -30756,15 +30756,15 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         };
         var annotationWriter = {
             write: function (comment) {
-                var stripped = comment.replace(/(\/+?)|(\/\*)|(\*\/)/g, '').trim();
+                var stripped = comment.replace(/(\*)|(\/+?)|(\/\*)|(\*\/)/g, '').trim();
                 if (stripped) {
                     emitCommentedAnnotation(stripped);
                 }
             },
-            rawWrite: writer.rawWrite,
+            getIndent: function () { return -1; },
             writeLine: function () {
             },
-            getIndent: writer.getIndent,
+            rawWrite: writer.rawWrite,
             writeLiteral: writer.writeLiteral
         };
         var currentSourceFile;
