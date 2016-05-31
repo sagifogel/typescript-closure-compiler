@@ -35848,7 +35848,22 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         function emitConstructorAnnotation(node, ctor, baseTypeElement, interfacesImpl) {
             emitConstructorOrInterfaceAnnotation(node, true, interfacesImpl, baseTypeElement, ctor);
         }
+        function isAmbientVariableDeclaration(node) {
+            return node.kind === 211 /* VariableDeclaration */ && isAmbientContext(node);
+        }
         function getClassOrInterfaceFullPath(node) {
+            if (node.expression) {
+                var expression = node.expression;
+                var symbolDeclaration = getSymbolAtLocation(expression);
+                if (isAmbientVariableDeclaration(symbolDeclaration)) {
+                    var type = getModuleName(expression) + getNodeName(expression);
+                    if (node.typeArguments) {
+                        var args = node.typeArguments.map(function (arg) { return getParameterOrUnionTypeAnnotation(node, arg); });
+                        type += "<" + args.join(", ") + ">";
+                    }
+                    return type;
+                }
+            }
             return getModuleName(node.expression || node.name) + getParameterOrUnionTypeAnnotation(node, node);
         }
         function emitConstructorOrInterfaceAnnotation(node, isClass, interfacesImpl, baseTypeElement, ctor) {

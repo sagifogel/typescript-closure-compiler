@@ -25,7 +25,7 @@ namespace ts {
         externs?: any;
         exportAs: string;
         emitInterfaces: boolean;
-        externsOutFile? : string
+        externsOutFile?: string
         emitAnnotations: boolean;
         emitOneSideEnums: boolean;
     }
@@ -6279,7 +6279,27 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitConstructorOrInterfaceAnnotation(node, true, interfacesImpl, baseTypeElement, ctor);
             }
 
+            function isAmbientVariableDeclaration(node: Node): boolean {
+                return node.kind === SyntaxKind.VariableDeclaration && isAmbientContext(node);
+            }
+
             function getClassOrInterfaceFullPath(node: ExpressionWithTypeArguments & { name?: Identifier }): string {
+                if (node.expression) {
+                    var expression = node.expression;
+                    var symbolDeclaration = getSymbolAtLocation(expression);
+
+                    if (isAmbientVariableDeclaration(symbolDeclaration)) {
+                        var type = getModuleName(expression) + getNodeName(expression);
+
+                        if (node.typeArguments) {
+                            var args = node.typeArguments.map(arg => getParameterOrUnionTypeAnnotation(node, arg));
+                            type += `<${args.join(", ")}>`;
+                        }
+
+                        return type;
+                    }
+                }
+
                 return getModuleName(node.expression || node.name) + getParameterOrUnionTypeAnnotation(node, node);
             }
 
