@@ -26,8 +26,12 @@ The patched version of the TypeScript compiler is available as `tscc` after inst
 Also the output of the `tscc` will transpile into ECMAScript 5
 
 ```js
-node tscc app.ts
+tscc app.ts
 ```
+
+### Using the gulp task  
+
+`tscc` is a command line compiler much like TypeScript\`s `tsc` file. <br/>You can also choose to compile your code using a [gulp plugin for typescript-closure-compiler](https://www.npmjs.com/package/gulp-typescript-closure-compiler) 
 
 ## Additional options
 
@@ -41,7 +45,7 @@ Exporting types to the global scope is done using two additional options.<br/>
 **exportAs** - the name of the main symbol that will be exported to the global scope.<br/>
 
 ```js
-node tscc app.ts --module commonjs --entry app.ts --exportAs App
+tscc app.ts --module commonjs --entry app.ts --exportAs App
 ```
 
 ### Declaring Extern symbols
@@ -49,13 +53,13 @@ If you use third party libraries in your code and you don't want Closure Compile
 All you need to do is specify the list of extern files after the `externs` option.
 
 ```js
-node tscc app.ts --module commonjs --externs externs/app-extern.d.ts...
+tscc app.ts --module commonjs --externs externs/app-extern.d.ts...
 ```
 
 You can also specify the files in a `ts.config` file.<br/>
 use the `project` option to locate the ts.config file:<br/> 
 ```js
-node tscc --project [project specific directory]
+tscc --project [project specific directory]
 ```
 and declare the options in the `ts.config` file: 
 ```js
@@ -75,7 +79,7 @@ and declare the options in the `ts.config` file:
 you can also use the `externsOutFile` option in order to emit all extern files to a single file.
 
 ```js
-node tscc app.ts --module commonjs --externs externs/app-extern.d.ts --externsOutFile externs.js
+tscc app.ts --module commonjs --externs externs/app-extern.d.ts --externsOutFile externs.js
 ```
 or declaring it in the `config.ts` file:
 ```js
@@ -118,7 +122,7 @@ console.log(EventType[0]);
 
 You can use the `emitOneSideEnums` property to override this behaviour and to just emit one side enums:
 ```js
-node tscc app.ts --module commonjs --emitOneSideEnums
+tscc app.ts --module commonjs --emitOneSideEnums
 ```
 Now for the same enum the emitted code will be:
 ```js
