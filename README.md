@@ -5,12 +5,6 @@ The current version is compatible with TypeScript 1.7.5.<br/>
 For the purposes of clarity each npm package that will be released will match TypeScript\`s major and minor version.<br/>
 For example each version of `typescript-closure-compiler` that is compatible with TypeScript 1.7.5 will be constructed as 
 `1.7.x` and each version that is compatible with TypeScript 1.8.10 will be constructed as `1.8.x`.<br/><br/>
-If you work with a specific version of TypeScript (for instance 1.7.5) and want to get the latest compatible version of <br/>`typescript-closure-compiler` then you need to set the version in the `package.json` to:<br/>
-```js
-"dependencies": {
-    "typescript-closure-compiler": "^1.7.1-beta.0"
-}
-```
 
 ## Installing
 
@@ -18,6 +12,11 @@ For the latest stable version:
 
 ```js
 npm install -g typescript-closure-compiler
+```
+
+If you work with a specific version of TypeScript (for instance 1.7.5), <br/>Then you need to install it globally using the @{version} after the `typescript-closure-compiler` name:<br/>
+```js
+npm install -g typescript-closure-compiler@1.7.x
 ```
 
 ## Usage
