@@ -1,7 +1,7 @@
 {
   "name": "typescript-closure-compiler",
   "author": "Sagi Fogel",
-  "version": "1.7.1-beta.15",
+  "version": "1.7.0",
   "description": "Patches the TypeScript compiler to generate JSDoc annotations",
   "dependencies": {
   },
