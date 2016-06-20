@@ -30722,14 +30722,40 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         return true;
     }
+    function reduceStatements(statements) {
+        var combined = [];
+        for (var _a = 0; _a < statements.length; _a++) {
+            var statement = statements[_a];
+            switch (statement.kind) {
+                case 218 /* ModuleDeclaration */:
+                    combined = combined.concat(reduceStatements([statement.body]));
+                    break;
+                case 219 /* ModuleBlock */:
+                    combined = combined.concat(reduceStatements(statement.statements));
+                    break;
+                case 193 /* VariableStatement */:
+                    combined = combined.concat(statement.declarationList.declarations);
+                    break;
+                default:
+                    combined.push(statement);
+            }
+        }
+        return combined;
+    }
     function resolveExportedEntryTypes(entryFile) {
         if (compilerOptions.entry && entryFile) {
-            var statements = entryFile.statements;
-            return statements.filter(function (statement) { return statement.kind === 228 /* ExportDeclaration */; })
+            var statements = reduceStatements(entryFile.statements);
+            return statements.filter(function (statement) { return statement.kind === 228 /* ExportDeclaration */ || !!(ts.getCombinedNodeFlags(statement) & 1 /* Export */); })
                 .reduce(function (arr, statement) {
-                var declartions = statement.exportClause.elements.map(function (el) {
-                    return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
-                });
+                var declartions;
+                if (statement.kind === 228 /* ExportDeclaration */) {
+                    declartions = statement.exportClause.elements.map(function (el) {
+                        return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
+                    });
+                }
+                else {
+                    declartions = [statement];
+                }
                 return arr.concat(declartions);
             }, []);
         }

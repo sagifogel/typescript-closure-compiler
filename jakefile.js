@@ -31,17 +31,20 @@ task("copy-files", [], function () {
     jake.cpR(checkerPath, typeScriptCheckerPath);
     jake.cpR(utilitiesPath, typeScriptUtilitiesPath);
     jake.cpR(commandLineParserPath, typeScriptCommandLineParserPath);
-}, { async: false });
+});
 
-task("build-ts", function () {
-    jake.createExec([tsCommand + " release local"]).run();
-}, { async: false });
+task("build-tsc", { async: true }, function () {
+    var exec = jake.createExec([tsCommand + " release local"], function () {
+        complete();
+    });
+
+    exec.run();
+});
 
 task("copy-to-local", function () {
     var source = path.resolve(typeScriptRootPath, "built/local/typescript.js");
-    
     jake.cpR(source, __dirname);
-}, { async: false });
+}, { async: true });
 
 desc("patches the emitter/program.ts and builds typescript services")
-task("build", ["copy-files", "build-ts", "copy-to-local"], { async: false });
+task("build", ["copy-files", "build-tsc", "copy-to-local"]);
