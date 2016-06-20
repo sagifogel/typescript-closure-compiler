@@ -418,21 +418,50 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             return true;
         }
 
+        function reduceStatements(statements: Array<Statement | Declaration>): Array<Node> {
+            let combined: Array<Node> = [];
+
+            for (let statement of statements) {
+                switch (statement.kind) {
+                    case SyntaxKind.ModuleDeclaration:
+                        combined = combined.concat(reduceStatements([(<ModuleDeclaration>statement).body]));
+                        break;
+                    case SyntaxKind.ModuleBlock:
+                        combined = combined.concat(reduceStatements((<ModuleBlock>statement).statements));
+                        break;
+                    case SyntaxKind.VariableStatement:
+                        combined = combined.concat((<VariableStatement>statement).declarationList.declarations);
+                        break;
+                    default:
+                        combined.push(statement);
+                }
+            }
+
+            return combined;
+        }
+
         function resolveExportedEntryTypes(entryFile: SourceFile): Array<Declaration> {
             if (compilerOptions.entry && entryFile) {
-                let statements = entryFile.statements;
+                let statements = reduceStatements(entryFile.statements);
 
-                return statements.filter(statement => statement.kind === SyntaxKind.ExportDeclaration)
+                return statements.filter(statement => statement.kind === SyntaxKind.ExportDeclaration || !!(ts.getCombinedNodeFlags(statement) & NodeFlags.Export))
                     .reduce((arr: Array<Declaration>, statement: ExportDeclaration) => {
-                        let declartions = statement.exportClause.elements.map(el => {
-                            return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
-                        });
+                        let declartions: Array<Declaration>;
+
+                        if (statement.kind === SyntaxKind.ExportDeclaration) {
+                            declartions = statement.exportClause.elements.map(el => {
+                                return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
+                            });
+                        }
+                        else {
+                            declartions = [statement];
+                        }
 
                         return arr.concat(declartions);
                     }, []);
             }
 
-            return []
+            return [];
         }
 
         function emitJavaScript(jsFilePath: string, fileEmitter: (emitSourceFile: (sourceFile: SourceFile) => void, emitExportedTypes: () => void) => void, root?: SourceFile) {
