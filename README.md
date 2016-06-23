@@ -130,6 +130,11 @@ var EventType = {
     mousedown: 1
 };
 ```
+
+### Usage Examples
+
+See an example of `typescript-closure-compiler` using `gulp-typescript-closure-compiler` plugin in the [TSFunq](https://github.com/sagifogel/TSFunq) project.
+
 ## Building
 
 The build tool that was chosen for this project is [Jake](http://jakejs.com/), for compatibility reasons with TypeScript`s build system.<br/>
