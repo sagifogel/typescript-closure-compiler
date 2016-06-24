@@ -32298,12 +32298,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             else if (node.kind === 166 /* PropertyAccessExpression */) {
                 isDefinedInTopLevelClass = node.expression.kind === 97 /* ThisKeyword */;
             }
-            else if (node.kind === 168 /* CallExpression */ && !isBindedToThis(node)) {
-
-                callExpression = node;
-                nodeName = getNodeName(callExpression.expression);
-                _node = getSymbolAtLocation(callExpression.expression);
-                if (!_node) {
+            else if (node.kind === 168 /* CallExpression */ && !isBindedToThis(node) || node.kind === 69 /* Identifier */) {
+                if (node.kind === 168 /* CallExpression */) {
+                    node = node.expression;
+                    nodeName = getNodeName(node);
+                }
+                if (!(_node = getSymbolAtLocation(node))) {
                     return;
                 }
             }

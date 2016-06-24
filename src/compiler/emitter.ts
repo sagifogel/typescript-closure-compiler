@@ -2216,13 +2216,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 else if (node.kind === SyntaxKind.PropertyAccessExpression) {
                     isDefinedInTopLevelClass = (<PropertyAccessExpression>node).expression.kind === SyntaxKind.ThisKeyword;
                 }
-                else if (node.kind === SyntaxKind.CallExpression && !isBindedToThis(node)) {
-                    let callExpression = <CallExpression>node;
+                else if (node.kind === SyntaxKind.CallExpression && !isBindedToThis(node) || node.kind === SyntaxKind.Identifier) {
+                    if (node.kind === SyntaxKind.CallExpression) {
+                        node = (<CallExpression>node).expression;
+                        nodeName = getNodeName(node);
+                    }
 
-                    nodeName = getNodeName(callExpression.expression)
-                    _node = getSymbolAtLocation(callExpression.expression);
-
-                    if (!_node) {
+                    if (!(_node = getSymbolAtLocation(node))) {
                         return;
                     }
                 }
