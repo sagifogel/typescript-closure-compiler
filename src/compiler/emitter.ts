@@ -5987,7 +5987,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.InterfaceDeclaration:
                     case SyntaxKind.ClassDeclaration:
                     case SyntaxKind.EnumDeclaration:
-                        return getNodeName(node);
+                        return getModuleName(node) + getNodeName(node);
                     case SyntaxKind.BinaryExpression:
                         node = rootNode;
                     case SyntaxKind.ImportSpecifier:
@@ -6329,7 +6329,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
-                return getModuleName(node.expression || node.name) + getParameterOrUnionTypeAnnotation(node, node);
+                return getParameterOrUnionTypeAnnotation(node, node);
             }
 
             function emitConstructorOrInterfaceAnnotation(node: InterfaceDeclaration | ClassLikeDeclaration, isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments & { name?: Identifier }, ctor?: ConstructorDeclaration) {
