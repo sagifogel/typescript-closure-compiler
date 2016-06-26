@@ -3,12 +3,12 @@
 bin/
 node_modules/
 obj/
-Scripts/
 src/
 tests/
 TypeScript/
 .gitignore
 .gitmodules
+.npmignore
 *.dat
 compiler.js
 gulpfile.js

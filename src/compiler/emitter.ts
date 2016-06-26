@@ -5995,6 +5995,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return getTypeOfSymbolAtLocation(node);
                     case SyntaxKind.TemplateExpression:
                         return "string";
+                    case SyntaxKind.PrefixUnaryExpression:
+                    case SyntaxKind.PostfixUnaryExpression:
+                        return getParameterOrUnionTypeAnnotation(rootNode, (<PostfixUnaryExpression>node).operand);
                     case SyntaxKind.ExpressionWithTypeArguments:
                         let expression = <ExpressionWithTypeArguments>node;
 

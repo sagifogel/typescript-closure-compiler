@@ -35621,6 +35621,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     return getTypeOfSymbolAtLocation(node);
                 case 183 /* TemplateExpression */:
                     return "string";
+                case 179 /* PrefixUnaryExpression */:
+                case 180 /* PostfixUnaryExpression */:
+                    return getParameterOrUnionTypeAnnotation(rootNode, node.operand);
                 case 188 /* ExpressionWithTypeArguments */:
                     var expression = node;
                     type = getParameterOrUnionTypeAnnotation(rootNode, expression.expression);
