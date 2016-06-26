@@ -35612,7 +35612,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 215 /* InterfaceDeclaration */:
                 case 214 /* ClassDeclaration */:
                 case 217 /* EnumDeclaration */:
-                    return getNodeName(node);
+                    return getModuleName(node) + getNodeName(node);
                 case 181 /* BinaryExpression */:
                     node = rootNode;
                 case 226 /* ImportSpecifier */:
@@ -35620,6 +35620,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     return getTypeOfSymbolAtLocation(node);
                 case 183 /* TemplateExpression */:
                     return "string";
+                case 179 /* PrefixUnaryExpression */:
+                case 180 /* PostfixUnaryExpression */:
+                    return getParameterOrUnionTypeAnnotation(rootNode, node.operand);
                 case 188 /* ExpressionWithTypeArguments */:
                     var expression = node;
                     type = getParameterOrUnionTypeAnnotation(rootNode, expression.expression);
@@ -35890,7 +35893,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     return type;
                 }
             }
-            return getModuleName(node.expression || node.name) + getParameterOrUnionTypeAnnotation(node, node);
+            return getParameterOrUnionTypeAnnotation(node, node);
         }
         function emitConstructorOrInterfaceAnnotation(node, isClass, interfacesImpl, baseTypeElement, ctor) {
             emitAnnotationIf(function () {
