@@ -5945,6 +5945,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     case SyntaxKind.ArrowFunction:
                     case SyntaxKind.MethodSignature:
                     case SyntaxKind.ConstructorType:
+                    case SyntaxKind.MethodDeclaration:
                     case SyntaxKind.FunctionExpression:
                         return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
                     case SyntaxKind.NumericLiteral:

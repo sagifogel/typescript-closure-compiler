@@ -35574,6 +35574,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 174 /* ArrowFunction */:
                 case 142 /* MethodSignature */:
                 case 153 /* ConstructorType */:
+                case 143 /* MethodDeclaration */:
                 case 173 /* FunctionExpression */:
                     return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, node), isParameterPropertyAssignment);
                 case 8 /* NumericLiteral */:
