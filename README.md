@@ -143,14 +143,26 @@ The build tool that was chosen for this project is [Jake](http://jakejs.com/), f
 git clone https://github.com/sagifogel/typescript-closure-compiler.git
 ```
 
-Install Jake tools and dev dependencies:
+Install Jake tools and the dev dependencies of `typescript-closure-compiler`
 
 ```
 npm install -g jake
 npm install
 ```
 
-Execute the build
+Clone the submodule 
+```
+cd .\TypeScript
+git submodule update --init
+```
+
+Navigate to the `TypeScript` folder and install its dependencies
+
+```
+npm install
+```
+
+Return to the folder of `typescript-closure-compiler` and execute the build
 
 ```
 jake build
