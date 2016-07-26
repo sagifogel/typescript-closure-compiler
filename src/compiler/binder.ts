@@ -9,4 +9,5 @@ namespace ts {
 
     export declare function bindSourceFile(file: SourceFile): void;
     export declare function getModuleInstanceState(node: Node): ModuleInstanceState;
+    export declare function bindSourceFile(file: SourceFile, options: CompilerOptions);
 }

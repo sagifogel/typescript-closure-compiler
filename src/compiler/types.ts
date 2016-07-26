@@ -5,31 +5,37 @@
 
     export interface EmitHost extends ScriptReferenceHost {
         getNewLine(): string;
+        getNewLine(): string;
         writeFile: WriteFileCallback;
         getSourceFiles(): SourceFile[];
+        getSourceFiles(): SourceFile[];
         getCommonSourceDirectory(): string;
+        getCommonSourceDirectory(): string;
+        isEmitBlocked(emitFileName: string): boolean;
+        getCanonicalFileName(fileName: string): string;
         getCanonicalFileName(fileName: string): string;
     }
 
     export interface EmitTextWriter {
-        write(s: string): void;
-        writeTextOfNode(sourceFile: SourceFile, node: Node): void;
+        reset(): void;
         writeLine(): void;
-        increaseIndent(): void;
-        decreaseIndent(): void;
         getText(): string;
-        rawWrite(s: string): void;
-        writeLiteral(s: string): void;
-        getTextPos(): number;
         getLine(): number;
         getColumn(): number;
         getIndent(): number;
+        getTextPos(): number;
+        increaseIndent(): void;
+        decreaseIndent(): void;
+        write(s: string): void;
+        rawWrite(s: string): void;
+        writeLiteral(s: string): void;
+        writeTextOfNode(text: string, node: Node): void;
     }
 
     export interface SourceFile {
-        getLineAndCharacterOfPosition(pos: number): LineAndCharacter;
         getLineStarts(): number[];
-        getPositionOfLineAndCharacter(line: number, character: number): number;
+        getLineAndCharacterOfPosition(pos: number): LineAndCharacter;
         update(newText: string, textChangeRange: TextChangeRange): SourceFile;
+        getPositionOfLineAndCharacter(line: number, character: number): number;
     }
 }
