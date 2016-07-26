@@ -140,17 +140,29 @@ See an example of `typescript-closure-compiler` using `gulp-typescript-closure-c
 The build tool that was chosen for this project is [Jake](http://jakejs.com/), for compatibility reasons with TypeScript`s build system.<br/>
 
 ```
-git clone https://github.com/sagifogel/typescript-closure-compiler.git
+git clone -b typescript-closure-compiler-1.7  https://github.com/sagifogel/typescript-closure-compiler.git
 ```
 
-Install Jake tools and dev dependencies:
+Install Jake tools and the dev dependencies of `typescript-closure-compiler`
 
 ```
 npm install -g jake
 npm install
 ```
 
-Execute the build
+Clone the submodule 
+```
+cd .\TypeScript
+git submodule update --init
+```
+
+Navigate to the `TypeScript` folder and install its dependencies
+
+```
+npm install
+```
+
+Return to the folder of `typescript-closure-compiler` and execute the build
 
 ```
 jake build
