@@ -27,7 +27,6 @@
     export declare function isExpression(node: Node): boolean;
     export declare function isStatementWithLocals(node: Node);
     export declare function isDeclaration(node: Node): boolean;
-    export declare function isInJavaScriptFile(node: Node): boolean;
     export declare function textSpanEnd(span: TextSpan): number;
     export declare let fullTripleSlashReferencePathRegEx: RegExp;
     export declare function isAmbientModule(node: Node): boolean;
@@ -41,6 +40,7 @@
     export declare function convertToBase64(input: string): string;
     export declare function nodeIsSynthesized(node: Node): boolean;
     export declare function isDeclarationName(name: Node): boolean;
+    export declare function isInJavaScriptFile(node: Node): boolean;
     export declare let fullTripleSlashAMDReferencePathRegEx: RegExp;
     export declare function nodeCanBeDecorated(node: Node): boolean;
     export declare function isSuperCallExpression(n: Node): boolean;
