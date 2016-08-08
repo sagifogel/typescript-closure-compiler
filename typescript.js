@@ -14356,6 +14356,7 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
     var symbolCount = 0;
     var emptyArray = [];
     var emptySymbols = {};
+    var jsxElementClassType = undefined;
     var compilerOptions = host.getCompilerOptions();
     var languageVersion = compilerOptions.target || 0 /* ES3 */;
     var modulekind = compilerOptions.module ? compilerOptions.module : languageVersion === 2 /* ES6 */ ? 5 /* ES6 */ : 0 /* None */;
@@ -21583,7 +21584,6 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
         var prop = getPropertyOfType(attributesType, attrib.name.text);
         return prop || unknownSymbol;
     }
-    var jsxElementClassType = undefined;
     function getJsxGlobalElementClassType() {
         if (!jsxElementClassType) {
             jsxElementClassType = getExportedTypeFromNamespace(JsxNames.JSX, JsxNames.ElementClass);

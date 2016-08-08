@@ -43,7 +43,7 @@ namespace ts {
 
         let emptyArray: any[] = [];
         let emptySymbols: SymbolTable = {};
-
+        let jsxElementClassType: Type = undefined;
         let compilerOptions = host.getCompilerOptions();
         let languageVersion = compilerOptions.target || ScriptTarget.ES3;
         let modulekind = compilerOptions.module ? compilerOptions.module : languageVersion === ScriptTarget.ES6 ? ModuleKind.ES6 : ModuleKind.None;
@@ -7863,7 +7863,7 @@ namespace ts {
             return prop || unknownSymbol;
         }
 
-        let jsxElementClassType: Type = undefined;
+        
         function getJsxGlobalElementClassType(): Type {
             if (!jsxElementClassType) {
                 jsxElementClassType = getExportedTypeFromNamespace(JsxNames.JSX, JsxNames.ElementClass);
