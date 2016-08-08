@@ -6,6 +6,7 @@ namespace ts {
     let nextSymbolId = 1;
     let nextNodeId = 1;
     let nextMergeId = 1;
+    let jsxElementClassType: Type = undefined;
 
     export function getNodeId(node: Node): number {
         if (!node.id) node.id = nextNodeId++;
@@ -7863,7 +7864,7 @@ namespace ts {
             return prop || unknownSymbol;
         }
 
-        let jsxElementClassType: Type = undefined;
+        
         function getJsxGlobalElementClassType(): Type {
             if (!jsxElementClassType) {
                 jsxElementClassType = getExportedTypeFromNamespace(JsxNames.JSX, JsxNames.ElementClass);
