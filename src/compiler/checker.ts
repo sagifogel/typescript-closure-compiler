@@ -6,7 +6,6 @@ namespace ts {
     let nextSymbolId = 1;
     let nextNodeId = 1;
     let nextMergeId = 1;
-    let jsxElementClassType: Type = undefined;
 
     export function getNodeId(node: Node): number {
         if (!node.id) node.id = nextNodeId++;
@@ -44,7 +43,7 @@ namespace ts {
 
         let emptyArray: any[] = [];
         let emptySymbols: SymbolTable = {};
-
+        let jsxElementClassType: Type = undefined;
         let compilerOptions = host.getCompilerOptions();
         let languageVersion = compilerOptions.target || ScriptTarget.ES3;
         let modulekind = compilerOptions.module ? compilerOptions.module : languageVersion === ScriptTarget.ES6 ? ModuleKind.ES6 : ModuleKind.None;
