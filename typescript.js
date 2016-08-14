@@ -32465,7 +32465,7 @@ var ts;
         CopyDirection[CopyDirection["ToOutParameter"] = 1] = "ToOutParameter";
     })(CopyDirection || (CopyDirection = {}));
     // targetSourceFile is when users only want one file in entire project to be emitted. This is used in compileOnSave feature
-    function emitFiles(resolver, host, targetSourceFile) {
+    function emitFiles(typeChecker, resolver, host, targetSourceFile) {
         // emit output for the __extends helper function
         var extendsHelper = "\nvar __extends = (this && this.__extends) || function (d, b) {\n    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];\n    function __() { this.constructor = d; }\n    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());\n};";
         var assignHelper = "\nvar __assign = (this && this.__assign) || Object.assign || function(t) {\n    for (var s, i = 1, n = arguments.length; i < n; i++) {\n        s = arguments[i];\n        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))\n            t[p] = s[p];\n    }\n    return t;\n};";
@@ -33512,6 +33512,60 @@ var ts;
                 else {
                     writeTextOfNode(currentText, node);
                 }
+            }
+            function shouldResolveSymbol(node) {
+                return !isForLoop(node) && node.kind !== 215 /* VariableDeclarationList */ && !ts.isDeclaration(node);
+            }
+            function getImmediateContainerNode(node) {
+                while (true) {
+                    node = node.parent;
+                    if (!node) {
+                        return undefined;
+                    }
+                    switch (node.kind) {
+                        case 251 /* SourceFile */:
+                        case 145 /* Constructor */:
+                        case 144 /* MethodDeclaration */:
+                        case 143 /* MethodSignature */:
+                        case 216 /* FunctionDeclaration */:
+                        case 176 /* FunctionExpression */:
+                        case 146 /* GetAccessor */:
+                        case 147 /* SetAccessor */:
+                        case 217 /* ClassDeclaration */:
+                        case 218 /* InterfaceDeclaration */:
+                        case 220 /* EnumDeclaration */:
+                        case 221 /* ModuleDeclaration */:
+                        case 177 /* ArrowFunction */:
+                            return node;
+                    }
+                }
+            }
+            function getDeclarationAndScope(node) {
+                var declaration = node;
+                if (shouldResolveSymbol(node)) {
+                    declaration = getDeclarationlAtLocation(node);
+                }
+                if (declaration && declaration.kind !== 137) {
+                    return {
+                        node: declaration,
+                        scope: getImmediateContainerNode(declaration)
+                    };
+                }
+                return null;
+            }
+            function getSymbolScope(node) {
+                var result = getDeclarationAndScope(node);
+                if (result) {
+                    return result.scope;
+                }
+                return null;
+            }
+            function getSymbolDeclaration(node) {
+                var result = getDeclarationAndScope(node);
+                if (result) {
+                    return result.node;
+                }
+                return null;
             }
             function isNameOfNestedBlockScopedRedeclarationOrCapturedBinding(node) {
                 if (languageVersion < 2 /* ES6 */) {
@@ -35357,6 +35411,11 @@ var ts;
                 emitToken(76 /* DebuggerKeyword */, node.pos);
                 write(";");
             }
+            function isForLoop(node) {
+                return node.kind === 202 /* ForStatement */ ||
+                    node.kind === 204 /* ForOfStatement */ ||
+                    node.kind === 203 /* ForInStatement */;
+            }
             function emitLabelAndColon(node) {
                 emit(node.label);
                 write(": ");
@@ -36598,6 +36657,16 @@ var ts;
                         write(";");
                     }
                 }
+            }
+            function getDeclarationlAtLocation(node) {
+                if (!node.parent) {
+                    return null;
+                }
+                var symbol = typeChecker.getSymbolAtLocation(node);
+                if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
+                    return null;
+                }
+                return symbol.valueDeclaration || symbol.declarations[0];
             }
             function emitConstructor(node, baseTypeElement) {
                 var saveConvertedLoopState = convertedLoopState;
@@ -39909,9 +39978,10 @@ var ts;
             // This is because in the -out scenario all files need to be emitted, and therefore all
             // files need to be type checked. And the way to specify that all files need to be type
             // checked is to not pass the file to getEmitResolver.
-            var emitResolver = getDiagnosticsProducingTypeChecker().getEmitResolver((options.outFile || options.out) ? undefined : sourceFile);
+            var typeChecker = getDiagnosticsProducingTypeChecker();
+            var emitResolver = typeChecker.getEmitResolver((options.outFile || options.out) ? undefined : sourceFile);
             var start = new Date().getTime();
-            var emitResult = ts.emitFiles(emitResolver, getEmitHost(writeFileCallback), sourceFile);
+            var emitResult = ts.emitFiles(typeChecker, emitResolver, getEmitHost(writeFileCallback), sourceFile);
             ts.emitTime += new Date().getTime() - start;
             return emitResult;
         }

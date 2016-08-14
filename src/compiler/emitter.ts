@@ -1629,7 +1629,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
             }
 
-            function shouldResolveSymbol(node): boolean {
+            function shouldResolveSymbol(node: Node): boolean {
                 return !isForLoop(node) && node.kind !== SyntaxKind.VariableDeclarationList && !ts.isDeclaration(node);
             }
 
@@ -5163,7 +5163,7 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function getDeclarationlAtLocation(node): Declaration {
+            function getDeclarationlAtLocation(node: Node): Declaration {
                 if (!node.parent) {
                     return null;
                 }
