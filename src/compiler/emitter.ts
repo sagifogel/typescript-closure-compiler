@@ -19,9 +19,9 @@ namespace ts {
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
 
     const enum Jump {
-        Break       = 1 << 1,
-        Continue    = 1 << 2,
-        Return      = 1 << 3
+        Break = 1 << 1,
+        Continue = 1 << 2,
+        Return = 1 << 3
     }
 
     const entities: Map<number> = {
@@ -282,9 +282,9 @@ namespace ts {
 
     // Flags enum to track count of temp variables and a few dedicated names
     const enum TempFlags {
-        Auto      = 0x00000000,  // No preferred name
+        Auto = 0x00000000,  // No preferred name
         CountMask = 0x0FFFFFFF,  // Temp variable counter
-        _i        = 0x10000000,  // Use/preference flag for '_i'
+        _i = 0x10000000,  // Use/preference flag for '_i'
     }
 
     const enum CopyDirection {
@@ -336,7 +336,7 @@ namespace ts {
     }
 
     // targetSourceFile is when users only want one file in entire project to be emitted. This is used in compileOnSave feature
-    export function emitFiles(typeChecker:TypeChecker, resolver: EmitResolver, host: EmitHost, targetSourceFile: SourceFile): EmitResult {
+    export function emitFiles(typeChecker: TypeChecker, resolver: EmitResolver, host: EmitHost, targetSourceFile: SourceFile): EmitResult {
         // emit output for the __extends helper function
         const extendsHelper = `
 var __extends = (this && this.__extends) || function (d, b) {
@@ -584,11 +584,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             };
 
             const bundleEmitDelegates: Map<(node: SourceFile, emitRelativePathAsModuleName?: boolean) => void> = {
-                [ModuleKind.ES6]() {},
+                [ModuleKind.ES6]() { },
                 [ModuleKind.AMD]: emitAMDModule,
                 [ModuleKind.System]: emitSystemModule,
-                [ModuleKind.UMD]() {},
-                [ModuleKind.CommonJS]() {},
+                [ModuleKind.UMD]() { },
+                [ModuleKind.CommonJS]() { },
             };
 
             return doEmit;
@@ -1585,7 +1585,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             else if (declaration.kind === SyntaxKind.ImportSpecifier) {
                                 // Identifier references named import
                                 write(getGeneratedNameForNode(<ImportDeclaration>declaration.parent.parent.parent));
-                                const name =  (<ImportSpecifier>declaration).propertyName || (<ImportSpecifier>declaration).name;
+                                const name = (<ImportSpecifier>declaration).propertyName || (<ImportSpecifier>declaration).name;
                                 const identifier = getTextOfNodeFromSourceText(currentText, name);
                                 if (languageVersion === ScriptTarget.ES3 && identifier === "default") {
                                     write(`["default"]`);
@@ -1627,6 +1627,72 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 else {
                     writeTextOfNode(currentText, node);
                 }
+            }
+
+            function shouldResolveSymbol(node): boolean {
+                return !isForLoop(node) && node.kind !== SyntaxKind.VariableDeclarationList && !ts.isDeclaration(node);
+            }
+
+            function getImmediateContainerNode(node: Node): Declaration {
+                while (true) {
+                    node = node.parent;
+                    if (!node) {
+                        return undefined;
+                    }
+                    switch (node.kind) {
+                        case SyntaxKind.SourceFile:
+                        case SyntaxKind.Constructor:
+                        case SyntaxKind.MethodDeclaration:
+                        case SyntaxKind.MethodSignature:
+                        case SyntaxKind.FunctionDeclaration:
+                        case SyntaxKind.FunctionExpression:
+                        case SyntaxKind.GetAccessor:
+                        case SyntaxKind.SetAccessor:
+                        case SyntaxKind.ClassDeclaration:
+                        case SyntaxKind.InterfaceDeclaration:
+                        case SyntaxKind.EnumDeclaration:
+                        case SyntaxKind.ModuleDeclaration:
+                        case SyntaxKind.ArrowFunction:
+                            return <Declaration>node;
+                    }
+                }
+            }
+
+            function getDeclarationAndScope(node: Node): { scope: Node, node: Node } {
+                let declaration = node;
+
+                if (shouldResolveSymbol(node)) {
+                    declaration = getDeclarationlAtLocation(node);
+                }
+
+                if (declaration && declaration.kind !== 137) {
+                    return {
+                        node: declaration,
+                        scope: getImmediateContainerNode(declaration)
+                    };
+                }
+
+                return null;
+            }
+
+            function getSymbolScope(node: Node): Node {
+                let result = getDeclarationAndScope(node);
+
+                if (result) {
+                    return result.scope;
+                }
+
+                return null;
+            }
+
+            function getSymbolDeclaration(node: Node): Node {
+                let result = getDeclarationAndScope(node);
+
+                if (result) {
+                    return result.node;
+                }
+
+                return null;
             }
 
             function isNameOfNestedBlockScopedRedeclarationOrCapturedBinding(node: Identifier) {
@@ -3119,19 +3185,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         write("var ");
                         let seen: Map<string>;
                         for (const id of convertedLoopState.hoistedLocalVariables) {
-                           // Don't initialize seen unless we have at least one element.
-                           // Emit a comma to separate for all but the first element.
-                           if (!seen) {
-                               seen = {};
-                           }
-                           else {
-                               write(", ");
-                           }
+                            // Don't initialize seen unless we have at least one element.
+                            // Emit a comma to separate for all but the first element.
+                            if (!seen) {
+                                seen = {};
+                            }
+                            else {
+                                write(", ");
+                            }
 
-                           if (!hasProperty(seen, id.text)) {
-                               emit(id);
-                               seen[id.text] = id.text;
-                           }
+                            if (!hasProperty(seen, id.text)) {
+                                emit(id);
+                                seen[id.text] = id.text;
+                            }
                         }
                         write(";");
                         writeLine();
@@ -3552,7 +3618,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         (!node.label && (convertedLoopState.allowedNonLabeledJumps & jump));
 
                     if (!canUseBreakOrContinue) {
-                        write ("return ");
+                        write("return ");
                         // explicit exit from loop -> copy out parameters
                         copyLoopOutParameters(convertedLoopState, CopyDirection.ToOutParameter, /*emitAsStatements*/ false);
                         if (!node.label) {
@@ -3711,6 +3777,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 write(";");
             }
 
+            function isForLoop(node: Node): boolean {
+                return node.kind === SyntaxKind.ForStatement ||
+                    node.kind === SyntaxKind.ForOfStatement ||
+                    node.kind === SyntaxKind.ForInStatement;
+            }
+
             function emitLabelAndColon(node: LabeledStatement): void {
                 emit(node.label);
                 write(": ");
@@ -3855,7 +3927,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             function emitExportSpecifierInSystemModule(specifier: ExportSpecifier): void {
                 Debug.assert(modulekind === ModuleKind.System);
 
-                if (!resolver.getReferencedValueDeclaration(specifier.propertyName || specifier.name) && !resolver.isValueAliasDeclaration(specifier) ) {
+                if (!resolver.getReferencedValueDeclaration(specifier.propertyName || specifier.name) && !resolver.isValueAliasDeclaration(specifier)) {
                     return;
                 }
 
@@ -5089,6 +5161,20 @@ const _super = (function (geti, seti) {
                         write(";");
                     }
                 }
+            }
+
+            function getDeclarationlAtLocation(node): Declaration {
+                if (!node.parent) {
+                    return null;
+                }
+
+                let symbol = typeChecker.getSymbolAtLocation(node);
+
+                if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
+                    return null;
+                }
+
+                return symbol.valueDeclaration || symbol.declarations[0];
             }
 
             function emitConstructor(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
@@ -7209,7 +7295,7 @@ const _super = (function (geti, seti) {
                                 // - import equals declarations that import external modules are not emitted
                                 continue;
                             }
-                            // fall-though for import declarations that import internal modules
+                        // fall-though for import declarations that import internal modules
                         default:
                             writeLine();
                             emit(statement);
@@ -7227,7 +7313,7 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function emitSystemModule(node: SourceFile,  emitRelativePathAsModuleName?: boolean): void {
+            function emitSystemModule(node: SourceFile, emitRelativePathAsModuleName?: boolean): void {
                 collectExternalModuleInfo(node);
                 // System modules has the following shape
                 // System.register(['dep-1', ... 'dep-n'], function(exports) {/* module body function */})
@@ -7508,7 +7594,7 @@ const _super = (function (geti, seti) {
 
                 if (result) {
                     // Replace entities like &nbsp;
-                    result = result.replace(/&(\w+);/g, function(s: any, m: string) {
+                    result = result.replace(/&(\w+);/g, function (s: any, m: string) {
                         if (entities[m] !== undefined) {
                             const ch = String.fromCharCode(entities[m]);
                             // &quot; needs to be escaped
