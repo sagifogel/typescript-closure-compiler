@@ -16,7 +16,9 @@ namespace ts {
         return getResolvedExternalModuleName(host, file);
     }
 
+    type NameOrText = { text?: string, name?: Identifier | DeclarationName | TypeParameterDeclaration };
     type DependencyGroup = Array<ImportDeclaration | ImportEqualsDeclaration | ExportDeclaration>;
+    type ModuleGeneration = { declarations: { [name: string]: boolean } };
 
     const enum Jump {
         Break = 1 << 1,
@@ -385,7 +387,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments)).next());
     });
 };`;
-
+        let scopeEmitStart = function (scopeDeclaration: Node, scopeName?: string) { };
+        let modulesToGeneratedName: { [name: string]: ModuleGeneration } = {};
         const compilerOptions = host.getCompilerOptions();
         const languageVersion = getEmitScriptTarget(compilerOptions);
         const modulekind = getEmitModuleKind(compilerOptions);
@@ -1708,6 +1711,28 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
                 return false;
             }
+
+            function getIdentifier(node: Identifier): string {
+                if (convertedLoopState) {
+                    if (node.text == "arguments" && resolver.isArgumentsLocalBinding(node)) {
+                        // in converted loop body arguments cannot be used directly.
+                        return convertedLoopState.argumentsName || (convertedLoopState.argumentsName = makeUniqueName("arguments"));
+                    }
+                }
+
+                if (!node.parent) {
+                    return node.text;
+                }
+                else if (isNameOfNestedBlockScopedRedeclarationOrCapturedBinding(node)) {
+                    return getGeneratedNameForNode(node);
+                }
+                else if (nodeIsSynthesized(node)) {
+                    return node.text;
+                }
+                
+                return ts.getTextOfNodeFromSourceText(currentText, node);
+            }
+
 
             function emitIdentifier(node: Identifier) {
                 if (convertedLoopState) {
@@ -5553,34 +5578,120 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function emitClassLikeDeclarationBelowES6(node: ClassLikeDeclaration) {
-                if (node.kind === SyntaxKind.ClassDeclaration) {
-                    // source file level classes in system modules are hoisted so 'var's for them are already defined
-                    if (!shouldHoistDeclarationInSystemJsModule(node)) {
-                        write("var ");
+            function isAmbientContext(node: Node): boolean {
+                while (node) {
+                    if (node.flags & NodeFlags.Ambient) {
+                        return true;
                     }
-                    emitDeclarationName(node);
-                    write(" = ");
+                    node = node.parent;
+                }
+                return false;
+            }
+
+            function isAmbientContextDeclaredWithinSourceFile(node: Node): boolean {
+                if (!ts.fileExtensionIs(currentSourceFile.fileName, ".d.ts")) {
+                    return isAmbientContext(node);
                 }
 
-                write("(function (");
-                const baseTypeNode = getClassExtendsHeritageClauseElement(node);
-                if (baseTypeNode) {
-                    write("_super");
+                return false;
+            }
+
+            function shouldEmitClassLikeDeclaration(node: Node): boolean {
+                return !isAmbientContextDeclaredWithinSourceFile(node);
+            }
+
+            function getNodeName(node: NameOrText): string {
+                return node.text ? node.text : node.name ? (<Identifier>node.name).text : "";
+            }
+
+            function getNodeFullPath(node: Node): string {
+                let path: Array<string> = [];
+
+                do {
+                    path.push(getNodeName(node));
+                    node = getImmediateContainerNode(node)
                 }
-                write(") {");
+                while (node && node.kind !== SyntaxKind.SourceFile);
+
+                return path.reverse().join(".");
+            }
+
+            function ensureModule(node: Declaration): ModuleGeneration {
+                let moduleFullPath: string;
+                let scope = getSymbolScope(node);
+
+                if (scope.kind === SyntaxKind.SourceFile) {
+                    moduleFullPath = "global";
+                }
+                else {
+                    if (scope.kind !== SyntaxKind.ModuleDeclaration && !ts.isFunctionLike(scope)) {
+                        scope = getImmediateContainerNode(scope);
+                    }
+                    moduleFullPath = getNodeFullPath(scope);
+                }
+
+                return modulesToGeneratedName[moduleFullPath] || (modulesToGeneratedName[moduleFullPath] = {
+                    declarations: {}
+                });
+            }
+
+            function isModuleAlreadyGenerated(node: Declaration, module: ModuleGeneration): boolean {
+                let name: string;
+                let names: string[];
+                let declarations: { [name: string]: boolean };
+
+                module = module || ensureModule(node);
+                name = getNodeNameOrIdentifier(node);
+                declarations = module.declarations;
+                names = Object.getOwnPropertyNames(declarations);
+
+                return names.indexOf(name) > -1;
+            }
+            
+            function getNodeNameOrIdentifier(node: Declaration): string {
+                let kind = node.name.kind;
+
+                return kind === SyntaxKind.Identifier ? getIdentifier(<Identifier>node.name) : getNodeName(node);
+            }
+
+            function trySetVariableDeclarationInModule(node: Declaration): boolean {
+                let module = ensureModule(node);
+                let declarations = module.declarations;
+
+                if (isModuleAlreadyGenerated(node, module)) {
+                    return false;
+                }
+
+                declarations[getNodeNameOrIdentifier(node)] = true;
+                return true;
+            }
+
+            function emitClassLikeDeclarationBelowES6(node: ClassLikeDeclaration) {
+                if (!shouldEmitClassLikeDeclaration(node)) {
+                    return;
+                }
+
+                const baseTypeNode = ts.getClassExtendsHeritageClauseElement(node);
+                let interfacesImpl = ts.getClassImplementsHeritageClauseElements(node);
                 const saveTempFlags = tempFlags;
                 const saveTempVariables = tempVariables;
                 const saveTempParameters = tempParameters;
                 const saveComputedPropertyNamesToGeneratedNames = computedPropertyNamesToGeneratedNames;
                 const saveConvertedLoopState = convertedLoopState;
 
+                if (baseTypeNode) {
+                    emitEmitHelpers(currentSourceFile);
+                }
+
                 convertedLoopState = undefined;
                 tempFlags = 0;
                 tempVariables = undefined;
                 tempParameters = undefined;
                 computedPropertyNamesToGeneratedNames = undefined;
+                scopeEmitStart(node);
+                trySetVariableDeclarationInModule(node);
                 increaseIndent();
+
                 if (baseTypeNode) {
                     writeLine();
                     emitStart(baseTypeNode);
@@ -5589,6 +5700,7 @@ const _super = (function (geti, seti) {
                     write(", _super);");
                     emitEnd(baseTypeNode);
                 }
+
                 writeLine();
                 emitConstructor(node, baseTypeNode);
                 emitMemberFunctionsForES5AndLower(node);
