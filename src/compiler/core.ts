@@ -17,6 +17,28 @@ namespace ts {
         True = -1
     }
 
+    export function assign<T>(target: any, ...sources: Array<any>): T {
+        if (target == null) {
+            throw new TypeError("Cannot convert undefined or null to object");
+        }
+
+        target = Object(target);
+
+        for (var index = 0; index < sources.length; index++) {
+            var source = sources[index];
+
+            if (source != null) {
+                for (var key in source) {
+                    if (Object.prototype.hasOwnProperty.call(source, key)) {
+                        target[key] = source[key];
+                    }
+                }
+            }
+        }
+
+        return target;
+    }
+
     export function createFileMap<T>(keyMapper?: (key: string) => string): FileMap<T> {
         let files: Map<T> = {};
         return {

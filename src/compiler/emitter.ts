@@ -26,6 +26,28 @@ namespace ts {
         Return = 1 << 3
     }
 
+    export interface ExtendedEmitHost extends EmitHost {
+        getExternSourceFiles(): SourceFile[];
+    }
+
+    export interface ExtendedTypeCheckerHost extends TypeCheckerHost {
+        getExternSourceFiles(): SourceFile[];
+    }
+
+    export interface ExtendedCompilerOptions extends ts.CompilerOptions {
+        entry: string;
+        externs?: any;
+        exportAs: string;
+        emitInterfaces: boolean;
+        externsOutFile?: string
+        emitAnnotations: boolean;
+        emitOneSideEnums: boolean;
+    }
+
+    export interface ExtendedParsedCommandLine extends ParsedCommandLine {
+        externFileNames: string[];
+    }
+
     const entities: Map<number> = {
         "quot": 0x0022,
         "amp": 0x0026,
@@ -389,7 +411,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };`;
         let scopeEmitStart = function (scopeDeclaration: Node, scopeName?: string) { };
         let modulesToGeneratedName: { [name: string]: ModuleGeneration } = {};
-        const compilerOptions = host.getCompilerOptions();
+        const compilerOptions = <ExtendedCompilerOptions>host.getCompilerOptions();
         const languageVersion = getEmitScriptTarget(compilerOptions);
         const modulekind = getEmitModuleKind(compilerOptions);
         const sourceMapDataList: SourceMapData[] = compilerOptions.sourceMap || compilerOptions.inlineSourceMap ? [] : undefined;
@@ -523,8 +545,29 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
         function createFileEmitter(): (jsFilePath: string, sourceMapFilePath: string, sourceFiles: SourceFile[], isBundledEmit: boolean) => void {
             const writer = createTextWriter(newLine);
-            const { write, writeTextOfNode, writeLine, increaseIndent, decreaseIndent } = writer;
+            const { rawWrite, write, getIndent, getColumn, writeTextOfNode, writeLine, increaseIndent, decreaseIndent } = writer;
+            let forceWriteLine = function (idnetation?: number) {
+                rawWrite(newLine);
+                rawWrite(ts.getIndentString(idnetation || getIndent()));
+            };
+            let writeValueAndNewLine = function (value: string): void {
+                write(value);
+                forceWriteLine();
+            };
 
+            let annotationWriter = <EmitTextWriter>{
+                write: function (comment) {
+                    let stripped = comment.replace(/(\*)|(\/+?)|(\/\*)|(\*\/)/g, '').trim();
+
+                    if (stripped) {
+                        //emitCommentedAnnotation(stripped);
+                    }
+                },
+                getIndent: () => -1,
+                writeLine: () => { },
+                rawWrite: writer.rawWrite,
+                writeLiteral: writer.writeLiteral
+            };
             let sourceMap = compilerOptions.sourceMap || compilerOptions.inlineSourceMap ? createSourceMapWriter(host, writer) : getNullSourceMapWriter();
             let { setSourceFile, emitStart, emitEnd, emitPos } = sourceMap;
 
@@ -535,6 +578,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             let renamedDependencies: Map<string>;
             let isEs6Module: boolean;
             let isCurrentFileExternalModule: boolean;
+            let mergedProps: Array<string> = ["pos", "text", "flags", "type", "name", "typeName", "typeParameters", "types", "symbol", "decalarations", "parameters", "elementType", "initializer"];
 
             // name of an exporter function if file is a System external module
             // System.register([...], function (<exporter>) {...})
@@ -755,6 +799,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     case SyntaxKind.ClassExpression:
                         return generateNameForClassExpression();
                 }
+            }
+
+            function getNodeParentPath(node: Node): string {
+                let path: Array<string> = [];
+
+                while (node = getContainingModule(node)) {
+                    path.push(getGeneratedNameForNode(node));
+                }
+
+                return path.reverse().join(".");
             }
 
             function getGeneratedNameForNode(node: Node) {
@@ -1729,7 +1783,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 else if (nodeIsSynthesized(node)) {
                     return node.text;
                 }
-                
+
                 return ts.getTextOfNodeFromSourceText(currentText, node);
             }
 
@@ -5188,7 +5242,290 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function getDeclarationlAtLocation(node: Node): Declaration {
+            function emitStartAnnotation() {
+                writeValueAndNewLine("/**");
+            }
+
+            function emitEndAnnotation() {
+                writeValueAndNewLine(" */");
+            }
+
+            function emitCommentedAnnotation(value: string) {
+                writeValueAndNewLine(" * " + value);
+            }
+
+            function getParameterizedNode(rootNode: Node, members: NodeArray<Declaration | TypeNode>, omitName?: boolean, genericsTypeChecker?: (param: string) => string): string {
+                let mapped = ts.map(members, (member) => {
+                    return getPropertyKeValue(rootNode, member, omitName, genericsTypeChecker);
+                });
+                return mapped.join(", ");
+            }
+
+            function getTypeLiteral(rootNode: Node, members: NodeArray<Declaration | Node>): string {
+                if (members.length) {
+                    let other: Array<string> = [];
+                    let indexSignatures: Array<string> = [];
+
+                    ts.forEach(members, (member: Declaration | TypeNode): void => {
+                        if (member.kind === SyntaxKind.IndexSignature) {
+                            indexSignatures.push(getIndexSignature(<IndexSignatureDeclaration>member));
+                        }
+                        else {
+                            other.push(getPropertyKeValue(rootNode, member));
+                        }
+                    });
+
+                    if (other.length) {
+                        indexSignatures.push(`{${other.join(", ")}}`);
+                    }
+
+                    return indexSignatures.join("|");
+                }
+
+                return "Object";
+            }
+
+            function addOptionalIfNeeded(node: Node, type: string, isParameterPropertyAssignment: boolean): string {
+                let isOptional = (node.kind === SyntaxKind.Parameter && resolver.isOptionalParameter(<ParameterDeclaration>node)) ||
+                    (node.symbol && (node.symbol.flags & SymbolFlags.Optional) > 0);
+
+                if (isOptional) {
+                    if (isParameterPropertyAssignment || !ts.isFunctionLike(node.parent)) {
+                        type = `(${type}|undefined)`;
+                    }
+                    else {
+                        type = `${type}=`;
+                    }
+                }
+
+                return type;
+            }
+
+            function addVarArgsIfNeeded(node: ParameterDeclaration, type: string): string {
+                return ts.isRestParameter(node) ? addVarArgs(type) : type;
+            }
+
+            function addVarArgs(type: string): string {
+                return `...${type}`;
+            }
+
+            function getUnionType(rootNode: Node, unionType: UnionOrIntersectionTypeNode): string {
+                return getTypes(rootNode, unionType.types);
+            }
+
+            function getTypes(rootNode: Node, types: Array<Node>): string {
+                let mapped = ts.map(types, (type: Node) => {
+                    return getParameterOrUnionTypeAnnotation(rootNode, type);
+                });
+
+                return `(${mapped.join("|")})`;
+            }
+
+            function getArrayLiteral(node: ArrayLiteralExpression): string {
+                let type: string;
+                let typeCounter = 0;
+                let map: { [name: string]: boolean } = {};
+
+                ts.forEach(node.elements, (element) => {
+                    type = getParameterOrUnionTypeAnnotation(node, element);
+
+                    if (!map[type]) {
+                        typeCounter++;
+                    }
+
+                    map[type] = true;
+                    return;
+                });
+
+                if (typeCounter !== 1) {
+                    return "Array<*>";
+                }
+
+                return `Array<${type}>`;
+            }
+
+            function getTypeReference(rootNode: Node, typeRef: TypeReferenceNode): string {
+                let text: string
+                let isVarArgs = ts.isRestParameter(<ParameterDeclaration>typeRef.parent);
+
+                if (!isVarArgs) {
+                    let symbol: { members?: NodeArray<Node> };
+                    let hasCallSignatures = false;
+                    let name = ts.getEntityNameFromTypeNode(typeRef);
+
+                    if (!name) {
+                        name = typeRef.typeName;
+                        text = ts.getTextOfNode(name);
+                    }
+                    else {
+                        text = ts.getTextOfNode(name);
+                    }
+
+                    text = `${getModuleName(name)}${text}`;
+                    symbol = <{ members?: NodeArray<Node> }>getSymbolDeclaration(name);
+
+                    if (symbol && symbol.members) {
+                        hasCallSignatures = symbol.members.some(member => member.kind === SyntaxKind.CallSignature);
+                    }
+
+                    if (!hasCallSignatures && typeRef.typeArguments) {
+                        text = `${text}<${getParameterizedNode(rootNode, typeRef.typeArguments, true)}>`;
+                    }
+                }
+                else if (typeRef.typeArguments) {
+                    text = getParameterizedNode(rootNode, typeRef.typeArguments, true);
+                }
+
+                return text;
+            }
+
+            function getCallSignatures(rootNode: InterfaceDeclaration): Array<Declaration> {
+                return rootNode.members.filter(member => member.kind === SyntaxKind.CallSignature);
+            }
+
+            function getFunctionType(rootNode: Node, func: FunctionLikeDeclaration): string {
+                let returnType = "";
+                let hasReturnType: boolean;
+                let type = func.type || func.body;
+                let genericsTypeChecker: (param: string) => string;
+                let isCtor = func.kind === SyntaxKind.ConstructorType || func.kind === SyntaxKind.Constructor;
+
+                if (rootNode.kind === SyntaxKind.InterfaceDeclaration && getCallSignatures(<InterfaceDeclaration>rootNode).length) {
+                    genericsTypeChecker = createGenericsTypeChecker(getGenericArguments(<InterfaceDeclaration>rootNode));
+                }
+                else {
+                    genericsTypeChecker = createGenericsTypeChecker([]);
+                }
+
+                if (func.kind === SyntaxKind.Constructor) {
+                    returnType = getGeneratedPathForModule(func.parent);
+                }
+                else {
+                    if (type.kind === SyntaxKind.PropertyAccessExpression) {
+                        let symbol = <PropertyDeclaration>getSymbolDeclaration(type);
+
+                        hasReturnType = true;
+                        returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, symbol.initializer));
+                    }
+                    else if (hasReturnType = type.kind !== SyntaxKind.VoidKeyword) {
+                        if (type.kind === SyntaxKind.Block) {
+                            returnType = getReturnType(rootNode, func);
+                        }
+                        else {
+                            returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                        }
+                    }
+                }
+
+                if (func.parameters.length || hasReturnType) {
+                    let params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
+
+                    if (isCtor) {
+                        if (params) {
+                            return `function(new:${returnType}, ${params})`;
+                        }
+
+                        return `function(new:${returnType})`;
+                    }
+                    else {
+                        if (returnType) {
+                            returnType = `: ${returnType}`;
+                        }
+
+                        return `function(${params})${returnType}`;
+                    }
+                }
+
+                return "Function";
+            }
+
+            function getPropertyKeValue(rootNode: Node, member: Declaration | TypeNode, omitName?: boolean, genericsTypeChecker?: (param: string) => string): string {
+                if (!genericsTypeChecker) { genericsTypeChecker = (type) => type; }
+                let type = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, member));
+
+                if (omitName) {
+                    return type;
+                }
+                return `${ts.getTextOfNode((<Declaration>member).name)}:${type}`;
+            }
+
+            function getNodeName(node: NameOrText): string {
+                return node.text ? node.text : node.name ? (<Identifier>node.name).text : "";
+            }
+
+            function getThisType(node: Node): { nodeType: ClassLikeDeclaration, container: Node } {
+                let container = ts.getThisContainer(node, false);
+                let parent = container && container.parent;
+
+                if (parent && (ts.isClassLike(parent) || parent.kind === SyntaxKind.InterfaceDeclaration)) {
+                    if (container.kind !== SyntaxKind.Constructor || ts.isNodeDescendentOf(node, (<FunctionLikeDeclaration>container).body)) {
+                        return {
+                            container,
+                            nodeType: <ClassLikeDeclaration>parent
+                        };
+                    }
+                }
+
+                return null;
+            }
+
+            function getThis(rootNode: Node, node: Node): string {
+                let type = getThisType(node);
+
+                if (!type) {
+                    return "Window";
+                }
+
+                if (type.container.flags & NodeFlags.Static) {
+                    return getTypes(rootNode, ts.filter(type.nodeType.members, member => member.kind === SyntaxKind.Constructor));
+                }
+
+                return getGeneratedPathForModule(type.nodeType);
+            }
+
+            function getSymbolName(rootNode: any, type: Type | TypeNode): string {
+                let name = "";
+                let params = "";
+                let declaration: Declaration;
+
+                if (type.symbol) {
+                    name = type.symbol.name;
+                    declaration = type.symbol.declarations[0];
+                }
+                else {
+                    name = (<IntrinsicType>type).intrinsicName
+                }
+
+                if (rootNode.initializer && rootNode.initializer.typeArguments) {
+                    params = getParameterizedNode(rootNode, rootNode.initializer.typeArguments, true, function (param) { return param; });
+                }
+                else if ((<TypeReference>type).typeArguments) {
+                    params = (<TypeReference>type).typeArguments.map(typeArgument => getSymbolName(rootNode, typeArgument)).join(", ");
+                }
+                else if (declaration) {
+                    name = getParameterOrUnionTypeAnnotation(rootNode, declaration);
+                }
+
+                if (params) {
+                    name += `<${params}>`;
+                }
+
+                return name === "any" ? "?" : name;
+            }
+
+            function getExpression(rootNode: Node, node: Node): string {
+                let type = <Type & UnionOrIntersectionType>typeChecker.getTypeAtLocation(node);
+
+                if (type.types) {
+                    var mapped = type.types.map(type => getSymbolName(rootNode, type));
+
+                    return `(${mapped.join("|")})`;
+                }
+
+                return getSymbolName(rootNode, type);
+            }
+
+            function getSymbolAtLocation(node: Node): Declaration {
                 if (!node.parent) {
                     return null;
                 }
@@ -5202,141 +5539,489 @@ const _super = (function (geti, seti) {
                 return symbol.valueDeclaration || symbol.declarations[0];
             }
 
-            function emitConstructor(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
-                const saveConvertedLoopState = convertedLoopState;
-                const saveTempFlags = tempFlags;
-                const saveTempVariables = tempVariables;
-                const saveTempParameters = tempParameters;
+            function getTypeOfSymbolAtLocation(node: Node): string {
+                let symbol = node.symbol;
 
-                convertedLoopState = undefined;
-                tempFlags = 0;
-                tempVariables = undefined;
-                tempParameters = undefined;
+                if (symbol) {
+                    let type = typeChecker.getTypeOfSymbolAtLocation(symbol, node);
 
-                emitConstructorWorker(node, baseTypeElement);
+                    if (type) {
+                        return getSymbolName(node, type);
+                    }
+                }
 
-                Debug.assert(convertedLoopState === undefined);
-                convertedLoopState = saveConvertedLoopState;
-
-                tempFlags = saveTempFlags;
-                tempVariables = saveTempVariables;
-                tempParameters = saveTempParameters;
+                return null;
             }
 
-            function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments) {
-                // Check if we have property assignment inside class declaration.
-                // If there is property assignment, we need to emit constructor whether users define it or not
-                // If there is no property assignment, we can omit constructor if users do not define it
-                let hasInstancePropertyWithInitializer = false;
+            function getParameterOrUnionTypeAnnotation(rootNode: Node, node: Node, isParameterPropertyAssignment?: boolean): string {
+                let type: string;
+                let mapped: Array<string>;
+                let propertySig: any = node;
+                let typeNode = (<{ type: TypeNode, initializer?: Expression, elementType?: TypeNode }>propertySig);
 
-                // Emit the constructor overload pinned comments
-                forEach(node.members, member => {
-                    if (member.kind === SyntaxKind.Constructor && !(<ConstructorDeclaration>member).body) {
-                        emitCommentsOnNotEmittedNode(member);
-                    }
-                    // Check if there is any non-static property assignment
-                    if (member.kind === SyntaxKind.PropertyDeclaration && (<PropertyDeclaration>member).initializer && (member.flags & NodeFlags.Static) === 0) {
-                        hasInstancePropertyWithInitializer = true;
-                    }
+                switch (node.kind) {
+                    case SyntaxKind.Parameter:
+                    case SyntaxKind.PropertySignature:
+                    case SyntaxKind.ParenthesizedType:
+                    case SyntaxKind.PropertyAssignment:
+                    case SyntaxKind.VariableDeclaration:
+                    case SyntaxKind.TypeAliasDeclaration:
+                    case SyntaxKind.TypeAssertionExpression:
+                        if (typeNode.type) {
+                            return getParameterOrUnionTypeAnnotation(rootNode, typeNode.type, isParameterPropertyAssignment);
+                        }
+                        else if (typeNode.initializer) {
+                            return getParameterOrUnionTypeAnnotation(rootNode, typeNode.initializer, isParameterPropertyAssignment);
+                        }
+                        break;
+                    case SyntaxKind.ArrayType:
+                        type = getParameterOrUnionTypeAnnotation(rootNode, typeNode.elementType, isParameterPropertyAssignment);
+
+                        if (!ts.isRestParameter(<ParameterDeclaration>node.parent)) {
+                            return `Array<${type}>`;
+                        }
+
+                        return addVarArgs(type);
+                    case SyntaxKind.ArrayLiteralExpression:
+                        return getArrayLiteral(<ArrayLiteralExpression>node);
+                    case SyntaxKind.UnionType:
+                        return addOptionalIfNeeded(node.parent, getUnionType(rootNode, <UnionOrIntersectionTypeNode>node), isParameterPropertyAssignment);
+                    case SyntaxKind.TypeReference:
+                        let typeRef = <TypeReferenceNode>node;
+                        let declaration = getSymbolAtLocation(typeRef.typeName);
+
+                        if (declaration.kind === SyntaxKind.TypeAliasDeclaration) {
+                            let typeAlias = declaration;
+
+                            if (typeRef.typeArguments) {
+                                typeAlias = getMergedTypeAliasDeclaration(typeRef, <TypeAliasDeclaration>declaration);
+                            }
+                            return getParameterOrUnionTypeAnnotation(rootNode, typeAlias, false);
+                        }
+
+                        type = addOptionalIfNeeded(node.parent, getTypeReference(rootNode, typeRef), isParameterPropertyAssignment);
+
+                        return addVarArgsIfNeeded(<ParameterDeclaration>node.parent, type);
+                    case SyntaxKind.TypeLiteral:
+                    case SyntaxKind.ObjectLiteralExpression:
+                        return addOptionalIfNeeded(node.parent, getTypeLiteral(rootNode, (<TypeLiteralNode>node).members || (<ObjectLiteralExpression>node).properties), isParameterPropertyAssignment);
+                    case SyntaxKind.IndexSignature:
+                        return getIndexSignature(<IndexSignatureDeclaration>node);
+                    case SyntaxKind.StringKeyword:
+                    case SyntaxKind.NumberKeyword:
+                    case SyntaxKind.BooleanKeyword:
+                    case SyntaxKind.SymbolKeyword:
+                    case SyntaxKind.VoidKeyword:
+                        return addOptionalIfNeeded(node.parent, ts.tokenToString(node.kind), isParameterPropertyAssignment);
+                    case SyntaxKind.Constructor:
+                    case SyntaxKind.FunctionType:
+                    case SyntaxKind.ArrowFunction:
+                    case SyntaxKind.MethodSignature:
+                    case SyntaxKind.ConstructorType:
+                    case SyntaxKind.MethodDeclaration:
+                    case SyntaxKind.FunctionExpression:
+                        return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
+                    case SyntaxKind.NumericLiteral:
+                        return addOptionalIfNeeded(node.parent, "number", isParameterPropertyAssignment);
+                    case SyntaxKind.StringLiteral:
+                        return addOptionalIfNeeded(node.parent, "string", isParameterPropertyAssignment);
+                    case SyntaxKind.RegularExpressionLiteral:
+                        return addOptionalIfNeeded(node.parent, "RegExp", isParameterPropertyAssignment);
+                    case SyntaxKind.TrueKeyword:
+                    case SyntaxKind.FalseKeyword:
+                        return addOptionalIfNeeded(node.parent, "boolean", isParameterPropertyAssignment);
+                    case SyntaxKind.VoidExpression:
+                        return "undefined";
+                    case SyntaxKind.Identifier:
+                        let symbolDeclaration = getSymbolAtLocation(node);
+
+                        if (symbolDeclaration) {
+                            return getParameterOrUnionTypeAnnotation(rootNode, symbolDeclaration, isParameterPropertyAssignment)
+                        }
+                        break;
+                    case SyntaxKind.NewExpression:
+                        let buffer: Array<string> = [];
+                        let propertyAccess = <PropertyAccessExpression>node;
+
+                        do {
+                            propertyAccess = <PropertyAccessExpression>propertyAccess.expression;
+                            buffer.push(getNodeName(propertyAccess))
+                        }
+                        while (propertyAccess.expression);
+
+                        return buffer.reverse().join(".");
+                    case SyntaxKind.ThisKeyword:
+                        return getThis(rootNode, node);
+                    case SyntaxKind.PropertyAccessExpression:
+                    case SyntaxKind.ElementAccessExpression:
+                    case SyntaxKind.CallExpression:
+                    case SyntaxKind.ConditionalExpression:
+                        return addOptionalIfNeeded(node.parent, getExpression(rootNode, node), isParameterPropertyAssignment);
+                    case SyntaxKind.TypeParameter:
+                    case SyntaxKind.InterfaceDeclaration:
+                    case SyntaxKind.ClassDeclaration:
+                    case SyntaxKind.EnumDeclaration:
+                        return getModuleName(node) + getNodeName(node);
+                    case SyntaxKind.BinaryExpression:
+                        node = rootNode;
+                    case SyntaxKind.ImportSpecifier:
+                    case SyntaxKind.ImportEqualsDeclaration:
+                        return getTypeOfSymbolAtLocation(node);
+                    case SyntaxKind.TemplateExpression:
+                        return "string";
+                    case SyntaxKind.PrefixUnaryExpression:
+                    case SyntaxKind.PostfixUnaryExpression:
+                        return getParameterOrUnionTypeAnnotation(rootNode, (<PostfixUnaryExpression>node).operand);
+                    case SyntaxKind.ExpressionWithTypeArguments:
+                        let expression = <ExpressionWithTypeArguments>node;
+
+                        type = getParameterOrUnionTypeAnnotation(rootNode, expression.expression);
+
+                        if (expression.typeArguments) {
+                            let args = expression.typeArguments.map(arg => getParameterOrUnionTypeAnnotation(rootNode, arg));
+
+                            type += `<${args.join(", ")}>`;
+                        }
+
+                        return type;
+                }
+
+                return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
+            }
+
+            function emitIf(condition: () => boolean, action: () => void): void {
+                if (condition()) {
+                    action();
+                }
+            }
+
+            function shouldEmitInterfaces(): boolean { return compilerOptions.emitInterfaces; }
+            function shouldEmitAnnotations(): boolean { return compilerOptions.emitAnnotations; }
+
+            function emitAnnotationIf(action: () => void): void {
+                emitIf(shouldEmitAnnotations, action);
+            }
+
+            function createGenericsTypeChecker(genericArguments: Array<string>): (param: string) => string {
+                return (param: string) => genericArguments.indexOf(param) > -1 ? "?" : param;
+            }
+
+            function emitCallSignatures(interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
+                emitAnnotationIf(() => {
+                    let genericArguments = getGenericArguments(interface);
+                    let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
+
+                    emitCallOrIndexSignatures(interface, members, (indexSignature): string => {
+                        let params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)));
+                        let returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
+
+                        return `function(${params.join(", ")}): ${returnType}`;
+                    });
                 });
+            }
 
-                const ctor = getFirstConstructorWithBody(node);
+            function getIndexSignature(indexSignature: IndexSignatureDeclaration, genericsTypeChecker = (param: string) => param): string {
+                let params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, param)));
+                let returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(indexSignature, indexSignature.type));
 
-                // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
-                // do not emit constructor in class declaration.
-                if (languageVersion >= ScriptTarget.ES6 && !ctor && !hasInstancePropertyWithInitializer) {
-                    return;
+                return `Object<${params.join(", ")}, ${returnType}>`;
+            }
+
+            function emitCallOrIndexSignatures(node: InterfaceDeclaration, members: Array<SignatureDeclaration>, mapFunction: (member: SignatureDeclaration) => string) {
+                let rightParenthesis = "", leftParenthesis = "";
+                let indexOrCallSignatureName = ts.getTextOfNode(node.name);
+                let indexOrCallSignatures = ts.map(members, mapFunction);
+
+                forceWriteLine();
+                emitStartAnnotation();
+
+                if (indexOrCallSignatures.length > 1) {
+                    rightParenthesis = "(";
+                    leftParenthesis = ")";
+                }
+                emitCommentedAnnotation(`@typedef {${rightParenthesis}${indexOrCallSignatures.join("|")}${leftParenthesis}}`);
+                emitEndAnnotation();
+
+                if (!emitModuleIfNeeded(node)) {
+                    write("var ");
                 }
 
-                if (ctor) {
-                    emitLeadingComments(ctor);
-                }
-                emitStart(ctor || node);
+                write(`${indexOrCallSignatureName};`);
+            }
 
-                if (languageVersion < ScriptTarget.ES6) {
-                    write("function ");
-                    emitDeclarationName(node);
-                    emitSignatureParameters(ctor);
-                }
-                else {
-                    write("constructor");
-                    if (ctor) {
-                        emitSignatureParameters(ctor);
+            function emitEnumAnnotation(node: EnumDeclaration) {
+                emitAnnotationIf(() => {
+                    let type = "number";
+                    let multipleTypes = false;
+                    let types = { number: 0, string: 0, other: 0 };
+                    let notNumbers = ts.filter(node.members, (member) => member.initializer && member.initializer.kind === SyntaxKind.TypeAssertionExpression)
+                        .map(member => <TypeAssertion>member.initializer);
+
+                    if (notNumbers.length) {
+                        types.number = node.members.length - notNumbers.length;
+                        notNumbers.map(initializer => initializer.expression)
+                            .forEach(type => {
+                                if (type.kind === SyntaxKind.NumericLiteral) {
+                                    types.number++;
+                                    multipleTypes = types.string + types.other > 0;
+                                }
+                                else if (type.kind === SyntaxKind.StringLiteral) {
+                                    types.string++;
+                                    multipleTypes = types.number + types.other > 0;
+                                }
+                                else {
+                                    types.other++;
+                                    multipleTypes = types.string + types.number > 0;
+                                }
+                            });
+                    }
+
+                    emitStartAnnotation();
+                    emitCombinedLeadingComments(node);
+
+                    if (!multipleTypes && !types.other) {
+                        if (types.string) {
+                            type = "string";
+                        }
+                        else if (!compilerOptions.emitOneSideEnums) {
+                            type = "(string|number)"
+                        }
+                        emitCommentedAnnotation(`@enum {${type}}`);
                     }
                     else {
-                        // Based on EcmaScript6 section 14.5.14: Runtime Semantics: ClassDefinitionEvaluation.
-                        // If constructor is empty, then,
-                        //      If ClassHeritageopt is present, then
-                        //          Let constructor be the result of parsing the String "constructor(... args){ super (...args);}" using the syntactic grammar with the goal symbol MethodDefinition.
-                        //      Else,
-                        //          Let constructor be the result of parsing the String "constructor( ){ }" using the syntactic grammar with the goal symbol MethodDefinition
-                        if (baseTypeElement) {
-                            write("(...args)");
-                        }
-                        else {
-                            write("()");
-                        }
+                        emitCommentedAnnotation("@type {Object<(string|number), *>}");
+                    }
+
+                    emitEndAnnotation();
+                });
+            }
+
+            function emitArrayTypeAnnotation(node: ParameterDeclaration): void {
+                emitAnnotationIf(() => {
+                    let cloned = ts.assign<ParameterDeclaration>({}, node);
+
+                    delete cloned.dotDotDotToken;
+                    cloned.type.parent = cloned;
+
+                    emitVariableTypeAnnotation(cloned);
+                });
+            }
+
+            function emitVariableTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration): void {
+                emitVariableOrPropertyTypeAnnotation(node);
+            }
+
+            function emitPropertyOrParamterAnnotation(node: PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
+                emitAnnotationIf(() => {
+                    emitVariableOrPropertyTypeAnnotation(node, isParameterPropertyAssignment);
+                });
+            }
+
+            function emitVariableOrPropertyTypeAnnotation(node: VariableDeclaration | PropertyDeclaration | ParameterDeclaration, isParameterPropertyAssignment?: boolean): void {
+                emitAnnotationIf(() => {
+                    let type = "?";
+                    let annotation: string;
+
+                    if (node.type || node.initializer) {
+                        type = getParameterOrUnionTypeAnnotation(node, node.type || node.initializer, isParameterPropertyAssignment);
+                    }
+
+                    annotation = ts.isConst(node) ? "@const" : "@type";
+                    if (shouldEmitLeadingComments(node)) {
+                        emitStartAnnotation();
+                        emitCombinedLeadingComments(node);
+                        emitCommentedAnnotation(`${annotation} {${type}}`);
+                        emitEndAnnotation();
+                    }
+                    else {
+                        write(`/** ${annotation} {${type}} */ `);
+                    }
+                });
+            }
+
+            function isPublicMember(node: Node): boolean {
+                let accessModifier = getAccessModifier(node);
+
+                return !accessModifier || accessModifier === SyntaxKind.PublicKeyword;
+            }
+
+            function getAccessModifier(member: Node): SyntaxKind {
+                if (member.modifiers) {
+                    let accessModifiers = ts.filter(member.modifiers, modifier => isAccessibilityModifier(modifier.kind));
+
+                    if (accessModifiers.length) {
+                        return accessModifiers[0].kind;
                     }
                 }
 
-                let startIndex = 0;
+                return null;
+            }
 
-                write(" {");
-                increaseIndent();
-                if (ctor) {
-                    // Emit all the directive prologues (like "use strict").  These have to come before
-                    // any other preamble code we write (like parameter initializers).
-                    startIndex = emitDirectivePrologues(ctor.body.statements, /*startWithNewLine*/ true);
-                    emitDetachedCommentsAndUpdateCommentsInfo(ctor.body.statements);
+            function isAccessibilityModifier(kind: SyntaxKind) {
+                switch (kind) {
+                    case SyntaxKind.PublicKeyword:
+                    case SyntaxKind.PrivateKeyword:
+                    case SyntaxKind.ProtectedKeyword:
+                        return true;
                 }
-                emitCaptureThisForNodeIfNecessary(node);
-                let superCall: ExpressionStatement;
-                if (ctor) {
-                    emitDefaultValueAssignments(ctor);
-                    emitRestParameter(ctor);
 
-                    if (baseTypeElement) {
-                        superCall = getSuperCallAtGivenIndex(ctor, startIndex);
-                        if (superCall) {
-                            writeLine();
-                            emit(superCall);
+                return false;
+            }
+
+            function getReturnType(rootNode: Node, node: SignatureDeclaration): string {
+                let type = typeChecker.getSignatureFromDeclaration(node);
+
+                if (type.resolvedReturnType && type.resolvedReturnType.flags !== TypeFlags.Void) {
+                    if (type.resolvedReturnType.symbol) {
+                        let declarations = type.resolvedReturnType.symbol.declarations;
+
+                        if (declarations && declarations.length) {
+                            let declaration = declarations[0];
+
+                            if (declaration === node) {
+                                return getNodeName(node);
+                            }
+
+                            return getParameterOrUnionTypeAnnotation(rootNode, declaration);
                         }
                     }
 
-                    emitParameterPropertyAssignments(ctor);
+                    return typeChecker.typeToString(type.resolvedReturnType);
                 }
-                else {
-                    if (baseTypeElement) {
-                        writeLine();
-                        emitStart(baseTypeElement);
-                        if (languageVersion < ScriptTarget.ES6) {
-                            write("_super.apply(this, arguments);");
+
+                return null;
+            }
+
+            function emitFunctionAnnotation(node: FunctionLikeDeclaration, parentContext?: ClassLikeDeclaration): void {
+                emitAnnotationIf(() => {
+                    let hasModifiers = false;
+                    let returnTypeInference: string;
+                    let accessModifierKind = getAccessModifier(node);
+                    let hasParameters = node.parameters && node.parameters.length > 0;
+                    let hasReturnType = node.type && node.type.kind !== SyntaxKind.VoidKeyword;
+                    let declaredWithinInterface = node.parent.kind === SyntaxKind.InterfaceDeclaration && !node.type;
+
+                    if (accessModifierKind && accessModifierKind !== SyntaxKind.PublicKeyword) {
+                        hasModifiers = true;
+                    }
+
+                    if (!hasReturnType && !declaredWithinInterface) {
+                        if (returnTypeInference = getReturnType(node, node)) {
+                            hasReturnType = true;
                         }
-                        else {
-                            write("super(...args);");
+                    }
+
+                    if (hasReturnType || declaredWithinInterface || hasParameters || hasModifiers || node.typeParameters || parentContext) {
+                        emitStartAnnotation();
+                        emitCombinedLeadingComments(node);
+
+                        if (parentContext) {
+                            let parentName = getModuleName(parentContext) + getNodeNameOrIdentifier(parentContext);
+
+                            emitCommentedAnnotation(`@this {${parentName}}`);
                         }
-                        emitEnd(baseTypeElement);
+
+                        if (hasModifiers) {
+                            emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
+                        }
+
+                        if (hasParameters) {
+                            emitParametersAnnotations(node, node.parameters);
+                        }
+
+                        if (hasReturnType || declaredWithinInterface) {
+                            if (!returnTypeInference) {
+                                let returnType: Node = hasReturnType ? node.type : ts.createSynthesizedNode(SyntaxKind.AnyKeyword);
+
+                                emitCommentedAnnotation(`@return {${getParameterOrUnionTypeAnnotation(node, returnType)}}`);
+                            }
+                            else {
+                                emitCommentedAnnotation(`@return {${returnTypeInference}}`);
+                            }
+                        }
+
+                        emitGenericTypes(getGenericArguments(node));
+                        emitEndAnnotation();
+                    }
+                });
+            }
+
+            function emitParametersAnnotations(rootNode: Node, parameters: NodeArray<ParameterDeclaration>): void {
+                ts.forEach(parameters, (parameter) => {
+                    let type = getParameterOrUnionTypeAnnotation(rootNode, parameter);
+                    let name = ts.getTextOfNode(parameter.name);
+
+                    if (ts.isRestParameter(parameter)) {
+                        name += "$rest";
+                    }
+
+                    emitCommentedAnnotation(`@param {${type}} ${name}`);
+                });
+            }
+
+            function emitExtendsAnnotation(): void {
+                emitAnnotationIf(() => {
+                    emitStartAnnotation();
+                    emitCommentedAnnotation("@param {Function} d");
+                    emitCommentedAnnotation("@param {Function} b");
+                    write(" */");
+                });
+            }
+
+            function emitInterfaceDeclarationAnnotation(node: InterfaceDeclaration, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
+                emitConstructorOrInterfaceAnnotation(node, false, interfacesImpl);
+            }
+
+            function emitConstructorAnnotation(node: ClassLikeDeclaration, ctor: ConstructorDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
+                emitConstructorOrInterfaceAnnotation(node, true, interfacesImpl, baseTypeElement, ctor);
+            }
+
+            function isAmbientVariableDeclaration(node: Node): boolean {
+                return node.kind === SyntaxKind.VariableDeclaration && isAmbientContext(node);
+            }
+
+            function getClassOrInterfaceFullPath(node: ExpressionWithTypeArguments & { name?: Identifier }): string {
+                if (node.expression) {
+                    var expression = node.expression;
+                    var symbolDeclaration = getSymbolAtLocation(expression);
+
+                    if (isAmbientVariableDeclaration(symbolDeclaration)) {
+                        var type = getModuleName(expression) + getNodeName(expression);
+
+                        if (node.typeArguments) {
+                            var args = node.typeArguments.map(arg => getParameterOrUnionTypeAnnotation(node, arg));
+                            type += `<${args.join(", ")}>`;
+                        }
+
+                        return type;
                     }
                 }
-                emitPropertyDeclarations(node, getInitializedProperties(node, /*isStatic*/ false));
-                if (ctor) {
-                    let statements: Node[] = (<Block>ctor.body).statements;
-                    if (superCall) {
-                        statements = statements.slice(1);
-                    }
-                    emitLinesStartingAt(statements, startIndex);
+
+                return getParameterOrUnionTypeAnnotation(node, node);
+            }
+
+            function getGenericArguments(node: ClassLikeDeclaration | InterfaceDeclaration | FunctionLikeDeclaration): Array<string> {
+                return ts.map(node.typeParameters || <NodeArray<TypeParameterDeclaration>>[], (param) => getNodeName(param));
+            }
+
+            function emitGenericTypes(genericTypes: Array<string>): void {
+                if (genericTypes.length) {
+                    emitCommentedAnnotation(`@template ${genericTypes.join(", ")}`);
                 }
-                emitTempDeclarations(/*newLine*/ true);
-                writeLine();
-                if (ctor) {
-                    emitLeadingCommentsOfPosition((<Block>ctor.body).statements.end);
+            }
+
+            function getDeclarationlAtLocation(node: Node): Declaration {
+                if (!node.parent) {
+                    return null;
                 }
-                decreaseIndent();
-                emitToken(SyntaxKind.CloseBraceToken, ctor ? (<Block>ctor.body).statements.end : node.members.end);
-                emitEnd(<Node>ctor || node);
-                if (ctor) {
-                    emitTrailingComments(ctor);
+
+                let symbol = typeChecker.getSymbolAtLocation(node);
+
+                if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
+                    return null;
                 }
+
+                return symbol.valueDeclaration || symbol.declarations[0];
             }
 
             function emitClassExpression(node: ClassExpression) {
@@ -5600,10 +6285,6 @@ const _super = (function (geti, seti) {
                 return !isAmbientContextDeclaredWithinSourceFile(node);
             }
 
-            function getNodeName(node: NameOrText): string {
-                return node.text ? node.text : node.name ? (<Identifier>node.name).text : "";
-            }
-
             function getNodeFullPath(node: Node): string {
                 let path: Array<string> = [];
 
@@ -5635,6 +6316,22 @@ const _super = (function (geti, seti) {
                 });
             }
 
+            function tryGenerateNameForNode(node: Node): string {
+                if (node.kind === SyntaxKind.Identifier ||
+                    node.kind === SyntaxKind.ModuleDeclaration ||
+                    node.kind === SyntaxKind.EnumDeclaration ||
+                    node.kind === SyntaxKind.ImportDeclaration ||
+                    node.kind === SyntaxKind.ExportDeclaration ||
+                    node.kind === SyntaxKind.FunctionDeclaration ||
+                    node.kind === SyntaxKind.ClassDeclaration ||
+                    node.kind === SyntaxKind.ExportAssignment ||
+                    node.kind === SyntaxKind.ClassExpression) {
+                    return generateNameForNode(node);
+                }
+
+                return "";
+            }
+
             function isModuleAlreadyGenerated(node: Declaration, module: ModuleGeneration): boolean {
                 let name: string;
                 let names: string[];
@@ -5647,7 +6344,27 @@ const _super = (function (geti, seti) {
 
                 return names.indexOf(name) > -1;
             }
-            
+
+            function getGeneratedPathForModule(node: Node): string {
+                let name: string;
+                let moduleFullPath = getNodeParentPath(node);
+
+                if ((<Declaration>node).name) {
+                    let decalration = <Declaration>node;
+                    let identifier = <Identifier>decalration.name;
+                    name = identifier.text;
+                }
+                else {
+                    name = tryGenerateNameForNode(node);
+                }
+
+                if (moduleFullPath) {
+                    return moduleFullPath += "." + name;
+                }
+
+                return name;
+            }
+
             function getNodeNameOrIdentifier(node: Declaration): string {
                 let kind = node.name.kind;
 
@@ -5664,6 +6381,340 @@ const _super = (function (geti, seti) {
 
                 declarations[getNodeNameOrIdentifier(node)] = true;
                 return true;
+            }
+
+            function emitConstructor(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments> = []) {
+                let saveTempFlags = tempFlags;
+                let saveTempVariables = tempVariables;
+                let saveTempParameters = tempParameters;
+                tempFlags = 0;
+                tempVariables = undefined;
+                tempParameters = undefined;
+                forceWriteLine();
+                emitConstructorWorker(node, baseTypeElement, interfacesImpl);
+                tempFlags = saveTempFlags;
+                tempVariables = saveTempVariables;
+                tempParameters = saveTempParameters;
+            }
+
+            function shouldEmitLeadingComments(node: Node): boolean {
+                if (!compilerOptions.removeComments) {
+                    switch (node.kind) {
+                        case SyntaxKind.PropertySignature:
+                        case SyntaxKind.PropertyDeclaration:
+                        case SyntaxKind.MethodSignature:
+                        case SyntaxKind.MethodDeclaration:
+                        case SyntaxKind.Constructor:
+                        case SyntaxKind.GetAccessor:
+                        case SyntaxKind.SetAccessor:
+                        case SyntaxKind.FunctionDeclaration:
+                        case SyntaxKind.ClassDeclaration:
+                        case SyntaxKind.EnumDeclaration:
+                        case SyntaxKind.ModuleDeclaration:
+                            return true;
+                    }
+                }
+                return false;
+            }
+
+            function emitCombinedLeadingComments(node: Node): void {
+                if (shouldEmitLeadingComments(node)) {
+                    var comments = getLeadingCommentsToEmit(node);
+                    if (comments) {
+                        emitComments(currentText, currentLineMap, annotationWriter, comments, false, newLine, writeCommentRange);
+                    }
+                }
+            }
+
+            function emitConstructorOrInterfaceAnnotation(node: InterfaceDeclaration | ClassLikeDeclaration, isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments & { name?: Identifier }, ctor?: ConstructorDeclaration) {
+                emitAnnotationIf(() => {
+                    let type: string;
+                    let heritageType: string;
+
+                    if (isClass) {
+                        type = "@constructor";
+                        heritageType = "implements";
+                    }
+                    else {
+                        type = "@interface";
+                        heritageType = "extends";
+                    }
+
+                    emitStartAnnotation();
+                    emitCombinedLeadingComments(node);
+
+                    if (ctor) {
+                        emitCombinedLeadingComments(ctor);
+                    }
+
+                    emitCommentedAnnotation(type);
+
+                    if (baseTypeElement) {
+                        emitCommentedAnnotation(`@extends {${getClassOrInterfaceFullPath(baseTypeElement)}}`);
+                    }
+
+                    ts.forEach(interfacesImpl, (_interface) => {
+                        emitCommentedAnnotation(`@${heritageType} {${getClassOrInterfaceFullPath(_interface)}}`);
+                    });
+
+                    if (ctor) {
+                        emitParametersAnnotations(node, ctor.parameters);
+                    }
+
+                    emitGenericTypes(getGenericArguments(node));
+                    emitEndAnnotation();
+                });
+            }
+
+            function isScopeLike(node: Node): boolean {
+                if (node && (ts.isFunctionLike(node) ||
+                    node.kind === SyntaxKind.CatchClause ||
+                    node.kind === SyntaxKind.SourceFile)) {
+                    return true;
+                }
+
+                return false;
+            }
+
+            function getModuleName(node: Node): string {
+                let scope = getSymbolScope(node)
+
+                if (scope && !isScopeLike(scope)) {
+                    let generatedPath: string;
+
+                    if (generatedPath = getGeneratedPathForModule(scope)) {
+                        return generatedPath + ".";
+                    }
+                }
+                return "";
+            }
+
+            function emitModuleName(node: Node): string {
+                let generatedPath: string;
+
+                if (generatedPath = getModuleName(node)) {
+                    write(generatedPath);
+                    return generatedPath;
+                }
+                return "";
+            }
+
+            function emitModuleIfNeeded(node: Node): boolean {
+                return !!emitModuleName(node);
+            }
+
+            function emitConstructorWorker(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments>) {
+                // Check if we have property assignment inside class declaration.
+                // If there is property assignment, we need to emit constructor whether users define it or not
+                // If there is no property assignment, we can omit constructor if users do not define it
+                let hasInstancePropertyWithInitializer = false;
+
+                // Emit the constructor overload pinned comments
+                forEach(node.members, member => {
+                    if (member.kind === SyntaxKind.Constructor && !(<ConstructorDeclaration>member).body) {
+                        emitCommentsOnNotEmittedNode(member);
+                    }
+                    // Check if there is any non-static property assignment
+                    if (member.kind === SyntaxKind.PropertyDeclaration && (<PropertyDeclaration>member).initializer && (member.flags & NodeFlags.Static) === 0) {
+                        hasInstancePropertyWithInitializer = true;
+                    }
+                });
+
+                const ctor = getFirstConstructorWithBody(node);
+
+                // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
+                // do not emit constructor in class declaration.
+                if (languageVersion >= ScriptTarget.ES6 && !ctor && !hasInstancePropertyWithInitializer) {
+                    return;
+                }
+
+                if (ctor) {
+                    emitLeadingComments(ctor);
+                }
+                emitStart(ctor || node);
+
+                if (languageVersion < ScriptTarget.ES6) {
+                    write("function ");
+                    emitDeclarationName(node);
+                    emitSignatureParameters(ctor);
+                }
+                else {
+                    write("constructor");
+                    if (ctor) {
+                        emitSignatureParameters(ctor);
+                    }
+                    else {
+                        // Based on EcmaScript6 section 14.5.14: Runtime Semantics: ClassDefinitionEvaluation.
+                        // If constructor is empty, then,
+                        //      If ClassHeritageopt is present, then
+                        //          Let constructor be the result of parsing the String "constructor(... args){ super (...args);}" using the syntactic grammar with the goal symbol MethodDefinition.
+                        //      Else,
+                        //          Let constructor be the result of parsing the String "constructor( ){ }" using the syntactic grammar with the goal symbol MethodDefinition
+                        if (baseTypeElement) {
+                            write("(...args)");
+                        }
+                        else {
+                            write("()");
+                        }
+                    }
+                }
+
+                let startIndex = 0;
+
+                write(" {");
+                increaseIndent();
+                if (ctor) {
+                    // Emit all the directive prologues (like "use strict").  These have to come before
+                    // any other preamble code we write (like parameter initializers).
+                    startIndex = emitDirectivePrologues(ctor.body.statements, /*startWithNewLine*/ true);
+                    emitDetachedCommentsAndUpdateCommentsInfo(ctor.body.statements);
+                }
+                emitCaptureThisForNodeIfNecessary(node);
+                let superCall: ExpressionStatement;
+                if (ctor) {
+                    emitDefaultValueAssignments(ctor);
+                    emitRestParameter(ctor);
+
+                    if (baseTypeElement) {
+                        superCall = getSuperCallAtGivenIndex(ctor, startIndex);
+                        if (superCall) {
+                            writeLine();
+                            emit(superCall);
+                        }
+                    }
+
+                    emitParameterPropertyAssignments(ctor);
+                }
+                else {
+                    if (baseTypeElement) {
+                        writeLine();
+                        emitStart(baseTypeElement);
+                        if (languageVersion < ScriptTarget.ES6) {
+                            write("_super.apply(this, arguments);");
+                        }
+                        else {
+                            write("super(...args);");
+                        }
+                        emitEnd(baseTypeElement);
+                    }
+                }
+                emitPropertyDeclarations(node, getInitializedProperties(node, /*isStatic*/ false));
+                if (ctor) {
+                    let statements: Node[] = (<Block>ctor.body).statements;
+                    if (superCall) {
+                        statements = statements.slice(1);
+                    }
+                    emitLinesStartingAt(statements, startIndex);
+                }
+                emitTempDeclarations(/*newLine*/ true);
+                writeLine();
+                if (ctor) {
+                    emitLeadingCommentsOfPosition((<Block>ctor.body).statements.end);
+                }
+                decreaseIndent();
+                emitToken(SyntaxKind.CloseBraceToken, ctor ? (<Block>ctor.body).statements.end : node.members.end);
+                emitEnd(<Node>ctor || node);
+                if (ctor) {
+                    emitTrailingComments(ctor);
+                }
+            }
+
+            type Primitive = number | string | boolean;
+
+            interface Cloned extends Node {
+                [name: string]: any;
+            }
+
+            function clone(source: Cloned, props: Array<string>): Cloned {
+                let cloned = <Cloned>ts.createSynthesizedNode(source.kind);
+
+                props.forEach(prop => {
+                    let val: any;
+
+                    if (val = source[prop]) {
+                        let ctor = val.constructor;
+                        let isPrimitive = ctor === Boolean || ctor === Number || ctor === String;
+
+                        if (isPrimitive) {
+                            cloned[prop] = val;
+                        }
+                        else {
+                            cloned[prop] = Array.isArray(val) ? (<NodeArray<Cloned>>val).map(e => clone(<Cloned>e, props)) : clone(<Cloned>val, props);
+                        }
+                    }
+                });
+
+                cloned.parent = source.parent;
+
+                return cloned;
+            }
+
+            function getMergedDeclarationWithTypeParameters(node: TypeReferenceNode, declaration: InterfaceDeclaration): ExpressionWithTypeArguments {
+                let clonedDeclaration = <ExpressionWithTypeArguments>clone(declaration, mergedProps);
+
+                clonedDeclaration.expression = declaration.name;
+                clonedDeclaration.kind = SyntaxKind.ExpressionWithTypeArguments;
+                clonedDeclaration.typeArguments = <NodeArray<TypeNode>>declaration.typeParameters.map((type, index) => node.typeArguments[index]);
+
+                return clonedDeclaration;
+            }
+
+            function getMergedTypeAliasDeclaration(node: TypeReferenceNode, declaration: TypeAliasDeclaration): TypeAliasDeclaration {
+                let tuples: { [name: string]: TypeNode | TypeParameterDeclaration } = {};
+                let typeAlias = <TypeAliasDeclaration><Node>clone(<Cloned><Node>declaration, mergedProps);
+                let trySetType = function (node: any): void {
+                    if (node.type && node.type.typeName) {
+                        let typeName = node.type.typeName;
+                        let name = getNodeName(typeName);
+
+                        if (tuples[name]) {
+                            node.type = tuples[name];
+                        }
+                    }
+                };
+                let recurse = (node: Node): void => {
+                    switch (node.kind) {
+                        case SyntaxKind.ParenthesizedType:
+                            recurse((<ParenthesizedTypeNode>node).type);
+                            break;
+                        case SyntaxKind.UnionType:
+                            ts.forEach((<UnionTypeNode>node).types, recurse);
+                            break;
+                        case SyntaxKind.FunctionType:
+                            let functionType = <FunctionOrConstructorTypeNode>node;
+                            if (functionType.parameters) {
+                                ts.forEach((<FunctionOrConstructorTypeNode>node).parameters, recurse);
+                            }
+
+                            if (functionType.type.kind === SyntaxKind.ParenthesizedType ||
+                                functionType.type.kind === SyntaxKind.UnionType ||
+                                functionType.type.kind === SyntaxKind.FunctionType ||
+                                functionType.type.kind === SyntaxKind.ArrayType) {
+                                recurse(functionType.type);
+                            }
+                            else {
+                                trySetType(functionType);
+                            }
+                        case SyntaxKind.ArrayType:
+                            if ((<ArrayTypeNode>node).elementType) {
+                                recurse((<ArrayTypeNode>node).elementType);
+                                break;
+                            }
+                        default:
+                            trySetType(node);
+                    }
+                };
+
+                if (typeAlias.typeParameters) {
+                    typeAlias.typeParameters.forEach((ta, i) => {
+                        tuples[getNodeName(ta)] = node.typeArguments[i];
+                    });
+                }
+
+                recurse(typeAlias.type);
+                typeAlias.typeParameters = <NodeArray<TypeParameterDeclaration>>Object.keys(tuples).map(key => tuples[key]);
+
+                return typeAlias;
             }
 
             function emitClassLikeDeclarationBelowES6(node: ClassLikeDeclaration) {
@@ -5690,7 +6741,9 @@ const _super = (function (geti, seti) {
                 computedPropertyNamesToGeneratedNames = undefined;
                 scopeEmitStart(node);
                 trySetVariableDeclarationInModule(node);
-                increaseIndent();
+                writeLine();
+                emitConstructor(node, baseTypeNode, interfacesImpl);
+                //increaseIndent();
 
                 if (baseTypeNode) {
                     writeLine();
