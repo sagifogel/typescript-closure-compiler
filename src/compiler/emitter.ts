@@ -409,7 +409,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments)).next());
     });
 };`;
-        let scopeEmitStart = function (scopeDeclaration: Node, scopeName?: string) { };
         let modulesToGeneratedName: { [name: string]: ModuleGeneration } = {};
         const compilerOptions = <ExtendedCompilerOptions>host.getCompilerOptions();
         const languageVersion = getEmitScriptTarget(compilerOptions);
@@ -6739,11 +6738,10 @@ const _super = (function (geti, seti) {
                 tempVariables = undefined;
                 tempParameters = undefined;
                 computedPropertyNamesToGeneratedNames = undefined;
-                scopeEmitStart(node);
                 trySetVariableDeclarationInModule(node);
                 writeLine();
                 emitConstructor(node, baseTypeNode, interfacesImpl);
-                //increaseIndent();
+                increaseIndent();
 
                 if (baseTypeNode) {
                     writeLine();
@@ -7431,30 +7429,26 @@ const _super = (function (geti, seti) {
                 if (!shouldEmit) {
                     return emitCommentsOnNotEmittedNode(node);
                 }
-                const hoistedInDeclarationScope = shouldHoistDeclarationInSystemJsModule(node);
-                const emitVarForModule = !hoistedInDeclarationScope && !isModuleMergedWithES6Class(node);
+                
+                const containingModule = getContainingModule(node);
+                const moduleIsNotDeclared = trySetVariableDeclarationInModule(node);
+                const emitVarForModule = !containingModule && moduleIsNotDeclared;
+                const name = getGeneratedNameForNode(node);
+
+                forceWriteLine();
 
                 if (emitVarForModule) {
-                    const isES6ExportedNamespace = isES6ExportedDeclaration(node);
-                    if (!isES6ExportedNamespace || isFirstDeclarationOfKind(node, node.symbol && node.symbol.declarations, SyntaxKind.ModuleDeclaration)) {
-                        emitStart(node);
-                        if (isES6ExportedNamespace) {
-                            write("export ");
-                        }
-                        write("var ");
-                        emit(node.name);
-                        write(";");
-                        emitEnd(node);
-                        writeLine();
-                    }
+                    write("var ");
+                    write(name);
+                    write(" = {};");
+                    writeLine();
+                }
+                else if (moduleIsNotDeclared) {
+                    emitModuleIfNeeded(node);
+                    write(name);
+                    write(" = {};");
                 }
 
-                emitStart(node);
-                write("(function (");
-                emitStart(node.name);
-                write(getGeneratedNameForNode(node));
-                emitEnd(node.name);
-                write(") ");
                 if (node.body.kind === SyntaxKind.ModuleBlock) {
                     const saveConvertedLoopState = convertedLoopState;
                     const saveTempFlags = tempFlags;
@@ -7472,27 +7466,10 @@ const _super = (function (geti, seti) {
                     tempVariables = saveTempVariables;
                 }
                 else {
-                    write("{");
-                    increaseIndent();
                     emitCaptureThisForNodeIfNecessary(node);
-                    writeLine();
                     emit(node.body);
-                    decreaseIndent();
-                    writeLine();
-                    const moduleBlock = <ModuleBlock>getInnerMostModuleDeclarationFromDottedModule(node).body;
-                    emitToken(SyntaxKind.CloseBraceToken, moduleBlock.statements.end);
                 }
-                write(")(");
-                // write moduleDecl = containingModule.m only if it is not exported es6 module member
-                if ((node.flags & NodeFlags.Export) && !isES6ExportedDeclaration(node)) {
-                    emit(node.name);
-                    write(" = ");
-                }
-                emitModuleMemberName(node);
-                write(" || (");
-                emitModuleMemberName(node);
-                write(" = {}));");
-                emitEnd(node);
+                
                 if (!isES6ExportedDeclaration(node) && node.name.kind === SyntaxKind.Identifier && node.parent === currentSourceFile) {
                     if (modulekind === ModuleKind.System && (node.flags & NodeFlags.Export)) {
                         writeLine();
