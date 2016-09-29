@@ -990,16 +990,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
             }
 
-            function emitLines(nodes: Node[]) {
-                emitLinesStartingAt(nodes, /*startIndex*/ 0);
+            function emitLines(nodes: Node[], postfix?: (Node: Node, index: number) => void) {
+                emitLinesStartingAt(nodes, /*startIndex*/ 0, postfix);
             }
 
-            function emitLinesStartingAt(nodes: Node[], startIndex: number): void {
+            function emitLinesStartingAt(nodes: Node[], startIndex: number, postfix?: (Node: Node, index: number) => void): void {
                 for (let i = startIndex; i < nodes.length; i++) {
+                    let node = nodes[i];
+
                     writeLine();
-                    emit(nodes[i]);
+                    emit(node);
+
+                    if (postfix) {
+                        postfix(node, i);
+                    }
                 }
             }
+
 
             function isBinaryOrOctalIntegerLiteral(node: LiteralLikeNode, text: string): boolean {
                 if (node.kind === SyntaxKind.NumericLiteral && text.length > 1) {
@@ -1536,16 +1543,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     emit((<ComputedPropertyName>node).expression);
                 }
                 else {
-                    write("\"");
-
                     if (node.kind === SyntaxKind.NumericLiteral) {
                         write((<LiteralExpression>node).text);
                     }
                     else {
                         writeTextOfNode(currentText, node);
                     }
-
-                    write("\"");
                 }
             }
 
@@ -6741,30 +6744,27 @@ const _super = (function (geti, seti) {
                 trySetVariableDeclarationInModule(node);
                 writeLine();
                 emitConstructor(node, baseTypeNode, interfacesImpl);
-                increaseIndent();
 
                 if (baseTypeNode) {
                     writeLine();
-                    emitStart(baseTypeNode);
+                    forceWriteLine();
                     write("__extends(");
+                    emitModuleIfNeeded(node);
                     emitDeclarationName(node);
-                    write(", _super);");
+                    write(", ");
+                    if (!isExpressionIdentifier(baseTypeNode.expression)) {
+                        emitModuleIfNeeded(baseTypeNode.expression);
+                    }
+                    emit(baseTypeNode.expression);
+                    write(");");
                     emitEnd(baseTypeNode);
                 }
 
-                writeLine();
-                emitConstructor(node, baseTypeNode);
                 emitMemberFunctionsForES5AndLower(node);
                 emitPropertyDeclarations(node, getInitializedProperties(node, /*isStatic*/ true));
                 writeLine();
                 emitDecoratorsOfClass(node, /*decoratedClassAlias*/ undefined);
                 writeLine();
-                emitToken(SyntaxKind.CloseBraceToken, node.members.end, () => {
-                    write("return ");
-                    emitDeclarationName(node);
-                });
-                write(";");
-                emitTempDeclarations(/*newLine*/ true);
 
                 Debug.assert(convertedLoopState === undefined);
                 convertedLoopState = saveConvertedLoopState;
@@ -6773,23 +6773,6 @@ const _super = (function (geti, seti) {
                 tempVariables = saveTempVariables;
                 tempParameters = saveTempParameters;
                 computedPropertyNamesToGeneratedNames = saveComputedPropertyNamesToGeneratedNames;
-                decreaseIndent();
-                writeLine();
-                emitToken(SyntaxKind.CloseBraceToken, node.members.end);
-                emitStart(node);
-                write("(");
-                if (baseTypeNode) {
-                    emit(baseTypeNode.expression);
-                }
-                write("))");
-                if (node.kind === SyntaxKind.ClassDeclaration) {
-                    write(";");
-                }
-                emitEnd(node);
-
-                if (node.kind === SyntaxKind.ClassDeclaration) {
-                    emitExportMemberAssignment(<ClassDeclaration>node);
-                }
             }
 
             function emitClassMemberPrefix(node: ClassLikeDeclaration, member: Node) {
@@ -7310,83 +7293,78 @@ const _super = (function (geti, seti) {
             }
 
             function emitEnumDeclaration(node: EnumDeclaration) {
+                let membersLength = node.members.length - 1;
                 // const enums are completely erased during compilation.
                 if (!shouldEmitEnumDeclaration(node)) {
                     return;
                 }
 
-                if (!shouldHoistDeclarationInSystemJsModule(node)) {
-                    // do not emit var if variable was already hoisted
+                forceWriteLine();
+                emitEnumAnnotation(node);
 
-                    const isES6ExportedEnum = isES6ExportedDeclaration(node);
-                    if (!(node.flags & NodeFlags.Export) || (isES6ExportedEnum && isFirstDeclarationOfKind(node, node.symbol && node.symbol.declarations, SyntaxKind.EnumDeclaration))) {
-                        emitStart(node);
-                        if (isES6ExportedEnum) {
-                            write("export ");
-                        }
-                        write("var ");
-                        emit(node.name);
-                        emitEnd(node);
-                        write(";");
-                    }
+                if (!emitModuleIfNeeded(node)) {
+                    write("var ");
                 }
-                writeLine();
-                emitStart(node);
-                write("(function (");
-                emitStart(node.name);
-                write(getGeneratedNameForNode(node));
-                emitEnd(node.name);
-                write(") {");
+
+                emit(node.name);
+                write(" = {");
                 increaseIndent();
-                emitLines(node.members);
+
+                emitLines(node.members, function (node, i) {
+                    if (i < membersLength) {
+                        write(",");
+                    }
+                });
+
+                if (!compilerOptions.emitOneSideEnums) {
+                    write(",");
+
+                    ts.forEach(node.members, (member, i) => {
+                        let memberIsStringLiteral = false;
+                        let nameIsStringLiteral = member.name.kind === SyntaxKind.StringLiteral;
+
+                        if (member.initializer) {
+                            if (member.initializer.kind === SyntaxKind.StringLiteral ||
+                                (member.initializer.kind === SyntaxKind.TypeAssertionExpression && (<TypeAssertion>member.initializer).expression.kind === SyntaxKind.StringLiteral)) {
+                                memberIsStringLiteral = true;
+                            }
+                        }
+
+                        writeLine();
+
+                        if (!memberIsStringLiteral) {
+                            write("\"");
+                        }
+
+                        writeEnumMemberDeclarationValue(member);
+
+                        if (!memberIsStringLiteral) {
+                            write("\"");
+                        }
+
+                        write(": ");
+                        if (!nameIsStringLiteral) {
+                            write("\"");
+                        }
+                        emitExpressionForPropertyName(member.name);
+                        if (!nameIsStringLiteral) {
+                            write("\"");
+                        }
+
+                        if (i < membersLength) {
+                            write(",");
+                        }
+                    });
+                }
                 decreaseIndent();
                 writeLine();
-                emitToken(SyntaxKind.CloseBraceToken, node.members.end);
-                write(")(");
-                emitModuleMemberName(node);
-                write(" || (");
-                emitModuleMemberName(node);
-                write(" = {}));");
-                emitEnd(node);
-                if (!isES6ExportedDeclaration(node) && node.flags & NodeFlags.Export && !shouldHoistDeclarationInSystemJsModule(node)) {
-                    // do not emit var if variable was already hoisted
-                    writeLine();
-                    emitStart(node);
-                    write("var ");
-                    emit(node.name);
-                    write(" = ");
-                    emitModuleMemberName(node);
-                    emitEnd(node);
-                    write(";");
-                }
-                if (modulekind !== ModuleKind.ES6 && node.parent === currentSourceFile) {
-                    if (modulekind === ModuleKind.System && (node.flags & NodeFlags.Export)) {
-                        // write the call to exporter for enum
-                        writeLine();
-                        write(`${exportFunctionForFile}("`);
-                        emitDeclarationName(node);
-                        write(`", `);
-                        emitDeclarationName(node);
-                        write(");");
-                    }
-                    emitExportMemberAssignments(node.name);
-                }
+                write("};");
             }
 
             function emitEnumMember(node: EnumMember) {
-                const enumParent = <EnumDeclaration>node.parent;
-                emitStart(node);
-                write(getGeneratedNameForNode(enumParent));
-                write("[");
-                write(getGeneratedNameForNode(enumParent));
-                write("[");
                 emitExpressionForPropertyName(node.name);
-                write("] = ");
+                write(": ");
                 writeEnumMemberDeclarationValue(node);
-                write("] = ");
-                emitExpressionForPropertyName(node.name);
-                emitEnd(node);
-                write(";");
             }
 
             function writeEnumMemberDeclarationValue(member: EnumMember) {
@@ -7429,7 +7407,7 @@ const _super = (function (geti, seti) {
                 if (!shouldEmit) {
                     return emitCommentsOnNotEmittedNode(node);
                 }
-                
+
                 const containingModule = getContainingModule(node);
                 const moduleIsNotDeclared = trySetVariableDeclarationInModule(node);
                 const emitVarForModule = !containingModule && moduleIsNotDeclared;
@@ -7469,7 +7447,7 @@ const _super = (function (geti, seti) {
                     emitCaptureThisForNodeIfNecessary(node);
                     emit(node.body);
                 }
-                
+
                 if (!isES6ExportedDeclaration(node) && node.name.kind === SyntaxKind.Identifier && node.parent === currentSourceFile) {
                     if (modulekind === ModuleKind.System && (node.flags & NodeFlags.Export)) {
                         writeLine();
