@@ -787,7 +787,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         return makeUniqueName((<Identifier>node).text);
                     case SyntaxKind.ModuleDeclaration:
                     case SyntaxKind.EnumDeclaration:
-                        return generateNameForModuleOrEnum(<ModuleDeclaration | EnumDeclaration>node);
+                        return (<ModuleDeclaration | EnumDeclaration>node).name.text;
                     case SyntaxKind.ImportDeclaration:
                     case SyntaxKind.ExportDeclaration:
                         return generateNameForImportOrExportDeclaration(<ImportDeclaration | ExportDeclaration>node);
@@ -909,7 +909,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 increaseIndent();
 
                 if (nodeStartPositionsAreOnSameLine(parent, nodes[0])) {
-                    if (spacesBetweenBraces) {
+                    if (ts.isFunctionLike((<any>nodes[0]).initializer)) {
+                        forceWriteLine(getIndent());
+                    }
+                    else if (spacesBetweenBraces) {
                         write(" ");
                     }
                 }
@@ -953,25 +956,26 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
 
                 for (let i = 0; i < count; i++) {
-                    if (multiLine) {
-                        if (i || leadingComma) {
-                            write(",");
+                    let node: Node = nodes[start + i];
+
+                    if (i > 0 && node.kind === SyntaxKind.VariableDeclaration && !isNodeDeclaredWithinLoop(node)) {
+                        write(";");
+                        forceWriteLine();
+                        if (node.kind !== SyntaxKind.Parameter) {
+                            emitVariableTypeAnnotation(<VariableDeclaration>node);
                         }
-                        writeLine();
+                        write("var ");
                     }
-                    else {
-                        if (i || leadingComma) {
-                            write(", ");
-                        }
+                    else if (i || leadingComma) {
+                        write(", ");
                     }
-                    const node = nodes[start + i];
                     // This emitting is to make sure we emit following comment properly
                     //   ...(x, /*comment1*/ y)...
                     //         ^ => node.pos
                     // "comment1" is not considered leading comment for "y" but rather
                     // considered as trailing comment of the previous node.
                     emitTrailingCommentsOfPosition(node.pos);
-                    emitNode(node);
+                    emitNode(<TNode>node);
                     leadingComma = true;
                 }
                 if (trailingComma) {
@@ -1553,6 +1557,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             }
 
             function isExpressionIdentifier(node: Node): boolean {
+                if (!node.parent) {
+                    return false;
+                }
                 const parent = node.parent;
                 switch (parent.kind) {
                     case SyntaxKind.ArrayLiteralExpression:
@@ -1625,11 +1632,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             write("exports.");
                         }
                     }
-                    else {
-                        // Identifier references namespace export
-                        write(getGeneratedNameForNode(container));
-                        write(".");
-                    }
                 }
                 else {
                     if (modulekind !== ModuleKind.ES6) {
@@ -1642,15 +1644,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                                 return;
                             }
                             else if (declaration.kind === SyntaxKind.ImportSpecifier) {
-                                // Identifier references named import
-                                write(getGeneratedNameForNode(<ImportDeclaration>declaration.parent.parent.parent));
                                 const name = (<ImportSpecifier>declaration).propertyName || (<ImportSpecifier>declaration).name;
                                 const identifier = getTextOfNodeFromSourceText(currentText, name);
                                 if (languageVersion === ScriptTarget.ES3 && identifier === "default") {
                                     write(`["default"]`);
                                 }
                                 else {
-                                    write(".");
                                     write(identifier);
                                 }
                                 return;
@@ -1724,7 +1723,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     declaration = getDeclarationlAtLocation(node);
                 }
 
-                if (declaration && declaration.kind !== 137) {
+                if (declaration && declaration.kind !== SyntaxKind.ComputedPropertyName) {
                     return {
                         node: declaration,
                         scope: getImmediateContainerNode(declaration)
@@ -1766,6 +1765,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
                 return false;
+            }
+
+            function shouldEmitModule(node: Node): boolean {
+                return !ts.isConstEnumDeclaration(node) && !isStatic(node) && !isAmbientContext(node);
+            }
+
+            function tryEmitModuleForIdentifier(node: Node): void {
+                if (node.kind === SyntaxKind.Identifier && !isBindedToThis(node)) {
+                    let symbol = getSymbolAtLocation(node);
+
+                    if (symbol && shouldEmitModule(symbol)) {
+                        emitModuleIfNeeded(symbol);
+                    }
+                }
             }
 
             function getIdentifier(node: Identifier): string {
@@ -1829,17 +1842,27 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
             }
 
+            function getClassLikeEnclosingParent(node: Node): ClassLikeDeclaration {
+                while (node && (node.kind !== SyntaxKind.ClassDeclaration && node.kind !== SyntaxKind.ClassExpression)) {
+                    node = node.parent;
+                }
+
+                return <ClassLikeDeclaration>node;
+            }
+
             function emitSuper(node: Node) {
                 if (languageVersion >= ScriptTarget.ES6) {
                     write("super");
                 }
                 else {
                     const flags = resolver.getNodeCheckFlags(node);
+                    const enclosingParent = getClassLikeEnclosingParent(node);
+                    const baseTypeNode = ts.getClassExtendsHeritageClauseElement(enclosingParent);
+
+                    emit(baseTypeNode.expression);
+
                     if (flags & NodeCheckFlags.SuperInstance) {
-                        write("_super.prototype");
-                    }
-                    else {
-                        write("_super");
+                        write(".prototype");
                     }
                 }
             }
@@ -2437,7 +2460,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
             }
 
-            function emitIndexedAccess(node: ElementAccessExpression) {
+            function isBindedToThis(node: Node): boolean {
+                while (node) {
+                    if (node.kind === SyntaxKind.ThisKeyword) {
+                        return true;
+                    }
+
+                    node = (<Decorator>node).expression;
+                }
+
+                return false;
+            }
+
+            function emitIndexedAccess(node: ElementAccessExpression): void {
                 if (tryEmitConstantValue(node)) {
                     return;
                 }
@@ -2451,6 +2486,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
                 emit(node.expression);
                 write("[");
+
+                if (!node.parent && node.expression.parent && !isNodeDeclaredWithinFunction(node.expression.parent)) {
+                    tryEmitModuleForIdentifier(node.expression);
+                }
+
                 emit(node.argumentExpression);
                 write("]");
             }
@@ -2580,7 +2620,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
             function emitNewExpression(node: NewExpression) {
                 write("new ");
-
+                if (!isExpressionIdentifier(node.expression)) {
+                    emitModuleIfNeeded(node.expression);
+                }
                 // Spread operator logic is supported in new expressions in ES5 using a combination
                 // of Function.prototype.bind() and Function.prototype.apply().
                 //
@@ -2706,6 +2748,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 return isSourceFileLevelDeclarationInSystemJsModule(targetDeclaration, /*isExported*/ true);
             }
 
+            function isNotPropertyAccessOrCallExpression(node: Node): boolean {
+                return node.kind !== SyntaxKind.PropertyAccessExpression && node.kind !== SyntaxKind.CallExpression;
+            }
+
             function emitPrefixUnaryExpression(node: PrefixUnaryExpression) {
                 const exportChanged = (node.operator === SyntaxKind.PlusPlusToken || node.operator === SyntaxKind.MinusMinusToken) &&
                     isNameOfExportedSourceLevelDeclarationInSystemExternalModule(node.operand);
@@ -2770,6 +2816,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
                 else {
+                    if (isNotPropertyAccessOrCallExpression(node.operand) && node.operand.kind !== SyntaxKind.Identifier) {
+                        emitModuleIfNeeded(node.operand);
+                    }
                     emit(node.operand);
                     write(tokenToString(node.operator));
                 }
@@ -2893,6 +2942,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitExponentiationOperator(node);
                     }
                     else {
+                        if (!isLiteral(node.left) && isNotPropertyAccessOrCallExpression(node.left) && !isExpressionIdentifier(node.left)) {
+                            emitModuleName(node.left);
+                        }
+
                         emit(node.left);
                         // Add indentation before emit the operator if the operator is on different line
                         // For example:
@@ -2904,6 +2957,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         const indentedBeforeOperator = indentIfOnDifferentLines(node, node.left, node.operatorToken, node.operatorToken.kind !== SyntaxKind.CommaToken ? " " : undefined);
                         write(tokenToString(node.operatorToken.kind));
                         const indentedAfterOperator = indentIfOnDifferentLines(node, node.operatorToken, node.right, " ");
+
+                        if (isNotPropertyAccessOrCallExpression(node.right) && !isExpressionIdentifier(node.right)) {
+                            emitModuleName(node.right);
+                        }
+
                         emit(node.right);
                         decreaseIndentIf(indentedBeforeOperator, indentedAfterOperator);
                     }
@@ -2960,19 +3018,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     return;
                 }
 
-                emitToken(SyntaxKind.OpenBraceToken, node.pos);
-                increaseIndent();
                 if (node.kind === SyntaxKind.ModuleBlock) {
                     Debug.assert(node.parent.kind === SyntaxKind.ModuleDeclaration);
                     emitCaptureThisForNodeIfNecessary(node.parent);
+                    emitLines(node.statements);
+                    emitTempDeclarations(true);
                 }
-                emitLines(node.statements);
-                if (node.kind === SyntaxKind.ModuleBlock) {
-                    emitTempDeclarations(/*newLine*/ true);
+                else {
+                    emitToken(SyntaxKind.OpenBraceToken, node.pos);
+                    increaseIndent();
+                    emitLines(node.statements);
+                    decreaseIndent();
+                    writeLine();
+                    emitToken(SyntaxKind.CloseBraceToken, node.statements.end);
                 }
-                decreaseIndent();
-                writeLine();
-                emitToken(SyntaxKind.CloseBraceToken, node.statements.end);
             }
 
             function emitEmbeddedStatement(node: Node) {
@@ -3058,10 +3117,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
              * Returns false if nothing was written - this can happen for source file level variable declarations
              *     in system modules where such variable declarations are hoisted.
              */
-            function tryEmitStartOfVariableDeclarationList(decl: VariableDeclarationList): boolean {
+            function tryGetStartOfVariableDeclarationList(decl: VariableDeclarationList): string {
+                let empty = "";
+
                 if (shouldHoistVariable(decl, /*checkIfSourceFileLevelDecl*/ true)) {
                     // variables in variable declaration list were already hoisted
-                    return false;
+                    return empty;
                 }
 
                 if (convertedLoopState && (getCombinedNodeFlags(decl) & NodeFlags.BlockScoped) === 0) {
@@ -3070,27 +3131,35 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     for (const varDecl of decl.declarations) {
                         hoistVariableDeclarationFromLoop(convertedLoopState, varDecl);
                     }
-                    return false;
+                    return empty;
+                }
+
+                const firstDeclaration = decl.declarations[0];
+
+                if (isForLoop(decl.parent) && !isNodeDeclaredWithinFunction(firstDeclaration) && isNodeContainedWithinModule(decl.parent)) {
+                    return empty;
+                }
+
+                if (!trySetVariableDeclarationInModule(firstDeclaration)) {
+                    return empty;
                 }
 
                 emitStart(decl);
+
                 if (decl && languageVersion >= ScriptTarget.ES6) {
                     if (isLet(decl)) {
-                        write("let ");
+                        return "let ";
                     }
                     else if (isConst(decl)) {
-                        write("const ");
+                        return "const ";
                     }
                     else {
-                        write("var ");
+                        return "var ";
                     }
                 }
                 else {
-                    write("var ");
+                    return "var ";
                 }
-                // Note here we specifically dont emit end so that if we are going to emit binding pattern
-                // we can alter the source map correctly
-                return true;
             }
 
             function emitVariableDeclarationListSkippingUninitializedEntries(list: VariableDeclarationList): boolean {
@@ -3105,6 +3174,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                     else {
                         write(", ");
+                    }
+
+                    if (!ts.isFunctionLike(getSymbolScope(decl))) {
+                        forceWriteLine();
+                    }
+
+                    if (decl.kind !== SyntaxKind.Parameter && trySetVariableDeclarationInModule(decl)) {
+                        emitVariableTypeAnnotation(decl);
                     }
 
                     emit(decl);
@@ -3478,19 +3555,29 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
                 if (node.initializer && node.initializer.kind === SyntaxKind.VariableDeclarationList) {
                     const variableDeclarationList = <VariableDeclarationList>node.initializer;
-                    const startIsEmitted = tryEmitStartOfVariableDeclarationList(variableDeclarationList);
+                    const startIsEmitted = tryGetStartOfVariableDeclarationList(variableDeclarationList);
                     if (startIsEmitted) {
-                        emitCommaList(variableDeclarationList.declarations);
+                        write(startIsEmitted);
                     }
-                    else {
-                        emitVariableDeclarationListSkippingUninitializedEntries(variableDeclarationList);
-                    }
+
+                    emitCommaList(variableDeclarationList.declarations);
                 }
                 else if (node.initializer) {
                     emit(node.initializer);
                 }
                 write(";");
-                emitOptional(" ", node.condition);
+
+                if (node.condition) {
+                    let condition = " ";
+
+                    if (isNotPropertyAccessOrCallExpression(node.condition) && !isExpressionIdentifier(node.condition)) {
+                        condition += getModuleName(node.condition);
+                    }
+
+                    write(condition);
+                    emit(node.condition);
+                }
+
                 write(";");
                 emitOptional(" ", node.incrementor);
                 write(")");
@@ -3513,17 +3600,32 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             }
 
             function emitForInOrForOfStatementWorker(node: ForInStatement | ForOfStatement, loop: ConvertedLoop) {
+                let moduleName = "";
+                let isContainedWithinModule = false;
+
                 let endPos = emitToken(SyntaxKind.ForKeyword, node.pos);
+
+                if (moduleName = getModuleName(node.initializer)) {
+                    isContainedWithinModule = true;
+                }
+
                 write(" ");
                 endPos = emitToken(SyntaxKind.OpenParenToken, endPos);
                 if (node.initializer.kind === SyntaxKind.VariableDeclarationList) {
                     const variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length >= 1) {
-                        tryEmitStartOfVariableDeclarationList(variableDeclarationList);
+                        if (!isContainedWithinModule) {
+                            let start = tryGetStartOfVariableDeclarationList(variableDeclarationList);
+
+                            if (start) {
+                                write(start);
+                            }
+                        }
                         emit(variableDeclarationList.declarations[0]);
                     }
                 }
                 else {
+                    write(moduleName);
                     emit(node.initializer);
                 }
 
@@ -3533,6 +3635,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 else {
                     write(" of ");
                 }
+
+                if (node.expression.kind === SyntaxKind.Identifier) {
+                    write(moduleName);
+                }
+
                 emit(node.expression);
                 emitToken(SyntaxKind.CloseParenToken, node.expression.end);
 
@@ -3545,6 +3652,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             }
 
             function emitDownLevelForOfStatementWorker(node: ForOfStatement, loop: ConvertedLoop) {
+                let isContainedWithinModule = false;
+                let moduleName = getModuleName(node.expression);
+
+                if (!isNodeDeclaredWithinFunction(node)) {
+                    isContainedWithinModule = !!moduleName;
+                }
+
                 // The following ES6 code:
                 //
                 //    for (let v of expr) { }
@@ -3858,10 +3972,31 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 write(";");
             }
 
+            function isLiteral(node: Node): boolean {
+                return node.kind === SyntaxKind.StringLiteral ||
+                    node.kind === SyntaxKind.NumericLiteral ||
+                    node.kind === SyntaxKind.ArrayLiteralExpression ||
+                    node.kind === SyntaxKind.ObjectLiteralExpression;
+            }
+
             function isForLoop(node: Node): boolean {
                 return node.kind === SyntaxKind.ForStatement ||
                     node.kind === SyntaxKind.ForOfStatement ||
                     node.kind === SyntaxKind.ForInStatement;
+            }
+
+            function isNodeDeclaredWithinLoop(node: Node): boolean {
+                let container = getImmediateContainerNode(node);
+
+                while (node !== container) {
+                    node = node.parent;
+
+                    if (isForLoop(node)) {
+                        return true;
+                    }
+                }
+
+                return false;
             }
 
             function emitLabelAndColon(node: LabeledStatement): void {
@@ -3886,6 +4021,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 if (convertedLoopState) {
                     convertedLoopState.labels[node.label.text] = undefined;
                 }
+            }
+
+            function isNodeDeclaredWithinScope(node: Node): boolean {
+                return isScopeLike(getSymbolScope(node));
+            }
+
+            function isNodeContainedWithinModule(node: Node): boolean {
+                return !!getContainingModule(node);
             }
 
             function getContainingModule(node: Node): ModuleDeclaration {
@@ -4341,6 +4484,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
             }
 
+            function isStatic(node: Node): boolean {
+                return (node.flags & NodeFlags.Static) !== 0;
+            }
+
+            function isAmbientContext(node: Node): boolean {
+                while (node) {
+                    if (node.flags & NodeFlags.Ambient) {
+                        return true;
+                    }
+                    node = node.parent;
+                }
+                return false;
+            }
+
             function emitVariableDeclaration(node: VariableDeclaration) {
                 if (isBindingPattern(node.name)) {
                     if (languageVersion < ScriptTarget.ES6) {
@@ -4444,20 +4601,21 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             }
 
             function emitVariableStatement(node: VariableStatement) {
-                let startIsEmitted = false;
+                let startIsEmitted = "";
 
                 if (node.flags & NodeFlags.Export) {
                     if (isES6ExportedDeclaration(node)) {
                         // Exported ES6 module member
                         write("export ");
-                        startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
+                        startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                     }
                 }
                 else {
-                    startIsEmitted = tryEmitStartOfVariableDeclarationList(node.declarationList);
+                    startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                 }
 
                 if (startIsEmitted) {
+                    write(startIsEmitted);
                     emitCommaList(node.declarationList.declarations);
                     write(";");
                 }
@@ -4642,6 +4800,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     // Emit name if one is present, or emit generated name in down-level case (for export default case)
                     return !!node.name || modulekind !== ModuleKind.ES6;
                 }
+            }
+
+            function isInterfaceFunctionMember(member: Node): boolean {
+                let node = member.parent;
+
+                return node.kind === SyntaxKind.MethodSignature ||
+                    member.kind === SyntaxKind.MethodSignature ||
+                    member.kind === SyntaxKind.PropertySignature && (<any>member).type.kind === SyntaxKind.FunctionType;
             }
 
             function emitFunctionDeclaration(node: FunctionLikeDeclaration) {
@@ -6265,16 +6431,6 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function isAmbientContext(node: Node): boolean {
-                while (node) {
-                    if (node.flags & NodeFlags.Ambient) {
-                        return true;
-                    }
-                    node = node.parent;
-                }
-                return false;
-            }
-
             function isAmbientContextDeclaredWithinSourceFile(node: Node): boolean {
                 if (!ts.fileExtensionIs(currentSourceFile.fileName, ".d.ts")) {
                     return isAmbientContext(node);
@@ -6466,6 +6622,15 @@ const _super = (function (geti, seti) {
                     emitGenericTypes(getGenericArguments(node));
                     emitEndAnnotation();
                 });
+            }
+
+            function isNodeDeclaredWithinFunction(node: Node): boolean {
+                let scope = getSymbolScope(node);
+                if (scope && ts.isFunctionLike(scope)) {
+                    return true;
+                }
+
+                return false;
             }
 
             function isScopeLike(node: Node): boolean {
@@ -7284,7 +7449,19 @@ const _super = (function (geti, seti) {
             }
 
             function emitInterfaceDeclaration(node: InterfaceDeclaration) {
-                emitCommentsOnNotEmittedNode(node);
+                let anyNode = <any>node;
+                let classLikeDeclaration = <ClassLikeDeclaration>anyNode;
+                let callOrIndexSignatures = <SignatureDeclaration[]><any>ts.filter(node.members, member => member.kind === SyntaxKind.CallSignature);
+
+                if (!callOrIndexSignatures.length) {
+                    emitConstructor(classLikeDeclaration, null, ts.getInterfaceBaseTypeNodes(node));
+                    emitMemberFunctionsForES5AndLower(classLikeDeclaration);
+                    emitPropertyDeclarations(classLikeDeclaration, <PropertyDeclaration[]><any>ts.filter(node.members, member => !isInterfaceFunctionMember(member)));
+                    emitCommentsOnNotEmittedNode(node);
+                }
+                else {
+                    emitCallSignatures(node, callOrIndexSignatures);
+                }
             }
 
             function shouldEmitEnumDeclaration(node: EnumDeclaration) {
@@ -7300,7 +7477,7 @@ const _super = (function (geti, seti) {
                 }
 
                 forceWriteLine();
-                emitEnumAnnotation(node);
+                //emitEnumAnnotation(node);
 
                 if (!emitModuleIfNeeded(node)) {
                     write("var ");
@@ -7436,7 +7613,6 @@ const _super = (function (geti, seti) {
                     tempVariables = undefined;
 
                     emit(node.body);
-
                     Debug.assert(convertedLoopState === undefined);
                     convertedLoopState = saveConvertedLoopState;
 
@@ -9151,7 +9327,10 @@ const _super = (function (geti, seti) {
                     case SyntaxKind.ClassDeclaration:
                         return emitClassDeclaration(<ClassDeclaration>node);
                     case SyntaxKind.InterfaceDeclaration:
-                        return emitInterfaceDeclaration(<InterfaceDeclaration>node);
+                        if (shouldEmitInterfaces()) {
+                            return emitInterfaceDeclaration(<InterfaceDeclaration>node);
+                        }
+                        return;
                     case SyntaxKind.EnumDeclaration:
                         return emitEnumDeclaration(<EnumDeclaration>node);
                     case SyntaxKind.EnumMember:
