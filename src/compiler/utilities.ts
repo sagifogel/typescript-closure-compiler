@@ -19,6 +19,7 @@
     export declare function nodeIsPresent(node: Node);
     export declare function isLet(node: Node): boolean;
     export declare function isConst(node: Node): boolean;
+    export declare function isStatement(n: Node): boolean;
     export declare const stringify: (value: any) => string;
     export declare function escapeString(s: string): string;
     export declare function isTypeNode(node: Node): boolean;
@@ -54,11 +55,13 @@
     export declare function escapeNonAsciiCharacters(s: string): string;
     export declare function getCombinedNodeFlags(node: Node): NodeFlags;
     export declare function isConstEnumDeclaration(node: Node): boolean;
+    export declare function isIdentifierName(node: Identifier): boolean;
     export declare function isExternalModule(file: SourceFile): boolean;
     export declare function isDeclarationFile(file: SourceFile): boolean;
     export declare function modifierToFlag(token: SyntaxKind): NodeFlags;
     export declare function escapeIdentifier(identifier: string): string;
     export declare function createSynthesizedNodeArray(): NodeArray<any>;
+    export declare function isFunctionLikeKind(kind: SyntaxKind): boolean;
     export declare function getJSDocReturnTag(node: Node): JSDocReturnTag;
     export declare function isDynamicName(name: DeclarationName): boolean;
     export declare function getExternalModuleName(node: Node): Expression;
@@ -120,6 +123,7 @@
     export declare function getLineOfLocalPosition(currentSourceFile: SourceFile, pos: number);
     export declare function getTextOfNodeFromSourceText(sourceText: string, node: Node): string;
     export declare function getDeclarationOfKind(symbol: Symbol, kind: SyntaxKind): Declaration;
+    export declare function isParameterPropertyDeclaration(node: ParameterDeclaration): boolean;
     export declare function isExpressionWithTypeArgumentsInClassExtendsClause(node: Node): boolean;
     export declare function isElementAccessExpression(node: Node): node is ElementAccessExpression;
     export declare function getExternalModuleNameFromPath(host: EmitHost, fileName: string): string;

@@ -409,7 +409,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments)).next());
     });
 };`;
-        let modulesToGeneratedName: { [name: string]: ModuleGeneration } = {};
+        let entryFile: SourceFile;
+        let emitHost = <ExtendedEmitHost>host;
+        let resolvedExportedTypes: Array<Declaration>;
+        const modulesToGeneratedName: { [name: string]: ModuleGeneration } = {};
         const compilerOptions = <ExtendedCompilerOptions>host.getCompilerOptions();
         const languageVersion = getEmitScriptTarget(compilerOptions);
         const modulekind = getEmitModuleKind(compilerOptions);
@@ -1625,6 +1628,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
             function emitExpressionIdentifier(node: Identifier) {
                 const container = resolver.getReferencedExportContainer(node);
+
+                tryEmitModuleForIdentifier(node);
+
                 if (container) {
                     if (container.kind === SyntaxKind.SourceFile) {
                         // Identifier references module export
@@ -2788,6 +2794,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         write(" ");
                     }
                 }
+
+                if (isNotPropertyAccessOrCallExpression(node.operand) && node.operand.kind !== SyntaxKind.Identifier) {
+                    emitModuleIfNeeded(node.operand);
+                }
+
                 emit(node.operand);
 
                 if (exportChanged) {
@@ -2848,7 +2859,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     if (current.kind === SyntaxKind.SourceFile) {
                         return !isExported || ((getCombinedNodeFlags(node) & NodeFlags.Export) !== 0);
                     }
-                    else if (isDeclaration(current)) {
+                    else if (isFunctionLike(current) || current.kind === SyntaxKind.ModuleBlock) {
                         return false;
                     }
                     else {
@@ -4779,13 +4790,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         }
                         tempParameters.push(name);
                         emit(name);
+                    }
+                    else {
+                        emit(node.name);
 
                         if (ts.isRestParameter(node)) {
                             write("$rest");
                         }
-                    }
-                    else {
-                        emit(node.name);
                     }
                 }
                 else {
@@ -7210,7 +7221,9 @@ const _super = (function (geti, seti) {
             }
 
             function emitClassMemberPrefix(node: ClassLikeDeclaration, member: Node) {
+                emitModuleIfNeeded(node);
                 emitDeclarationName(node);
+
                 if (!(member.flags & NodeFlags.Static)) {
                     write(".prototype");
                 }
@@ -7734,8 +7747,11 @@ const _super = (function (geti, seti) {
             }
 
             function shouldEmitEnumDeclaration(node: EnumDeclaration): boolean {
-                const isConstEnum = isConst(node);
-                return !isConstEnum || compilerOptions.preserveConstEnums || compilerOptions.isolatedModules;
+                if (isAmbientContextDeclaredWithinSourceFile(node)) {
+                    return false;
+                }
+
+                return !isConst(node) || compilerOptions.preserveConstEnums || compilerOptions.isolatedModules;
             }
 
             function isAmbientContextDeclaredWithinDefinitionFile(node: Node): boolean {
@@ -7747,14 +7763,14 @@ const _super = (function (geti, seti) {
             }
 
             function emitEnumDeclaration(node: EnumDeclaration): void {
-                let membersLength = node.members.length - 1;
+                const membersLength = node.members.length - 1;
                 // const enums are completely erased during compilation.
                 if (!shouldEmitEnumDeclaration(node)) {
                     return;
                 }
 
                 forceWriteLine();
-                //emitEnumAnnotation(node);
+                emitEnumAnnotation(node);
 
                 if (!emitModuleIfNeeded(node)) {
                     write("var ");
@@ -7764,7 +7780,7 @@ const _super = (function (geti, seti) {
                 write(" = {");
                 increaseIndent();
 
-                emitLines(node.members, function (node, i) {
+                emitLines(node.members, (node, i) => {
                     if (i < membersLength) {
                         write(",");
                     }
@@ -7775,7 +7791,7 @@ const _super = (function (geti, seti) {
 
                     ts.forEach(node.members, (member, i) => {
                         let memberIsStringLiteral = false;
-                        let nameIsStringLiteral = member.name.kind === SyntaxKind.StringLiteral;
+                        const nameIsStringLiteral = member.name.kind === SyntaxKind.StringLiteral;
 
                         if (member.initializer) {
                             if (member.initializer.kind === SyntaxKind.StringLiteral ||
@@ -7797,10 +7813,13 @@ const _super = (function (geti, seti) {
                         }
 
                         write(": ");
+
                         if (!nameIsStringLiteral) {
                             write("\"");
                         }
+
                         emitExpressionForPropertyName(member.name);
+
                         if (!nameIsStringLiteral) {
                             write("\"");
                         }
@@ -7810,6 +7829,7 @@ const _super = (function (geti, seti) {
                         }
                     });
                 }
+
                 decreaseIndent();
                 writeLine();
                 write("};");
@@ -7842,7 +7862,59 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function shouldEmitModuleDeclaration(node: ModuleDeclaration) {
+            function isInstantiatedModule(node: ModuleDeclaration, preserveConstEnums: boolean) {
+                let moduleState = getModuleInstanceState(node);
+                return moduleState === ModuleInstanceState.Instantiated ||
+                    (preserveConstEnums && moduleState === ModuleInstanceState.ConstEnumOnly);
+            }
+
+            function getModuleInstanceState(node: Node): ModuleInstanceState {
+                // A module is uninstantiated if it contains only
+                // 1. interface declarations, type alias declarations
+                if (node.kind === SyntaxKind.InterfaceDeclaration || node.kind === SyntaxKind.TypeAliasDeclaration) {
+                    return ts.ModuleInstanceState.Instantiated;
+                }
+                // 2. const enum declarations
+                else if (isConstEnumDeclaration(node)) {
+                    return ModuleInstanceState.ConstEnumOnly;
+                }
+                // 3. non-exported import declarations
+                else if ((node.kind === SyntaxKind.ImportDeclaration || node.kind === SyntaxKind.ImportEqualsDeclaration) && !(node.flags & NodeFlags.Export)) {
+                    return ModuleInstanceState.NonInstantiated;
+                }
+                // 4. other uninstantiated module declarations.
+                else if (node.kind === SyntaxKind.ModuleBlock) {
+                    let state = ModuleInstanceState.NonInstantiated;
+                    forEachChild(node, n => {
+                        switch (getModuleInstanceState(n)) {
+                            case ModuleInstanceState.NonInstantiated:
+                                // child is non-instantiated - continue searching
+                                return false;
+                            case ModuleInstanceState.ConstEnumOnly:
+                                // child is const enum only - record state and continue searching
+                                state = ModuleInstanceState.ConstEnumOnly;
+                                return false;
+                            case ModuleInstanceState.Instantiated:
+                                // child is instantiated - record state and stop
+                                state = ModuleInstanceState.Instantiated;
+                                return true;
+                        }
+                    });
+                    return state;
+                }
+                else if (node.kind === SyntaxKind.ModuleDeclaration) {
+                    return getModuleInstanceState((<ModuleDeclaration>node).body);
+                }
+                else {
+                    return ModuleInstanceState.Instantiated;
+                }
+            }
+
+            function shouldEmitModuleDeclaration(node: ModuleDeclaration) :boolean {
+                if (isAmbientContextDeclaredWithinSourceFile(node)) {
+                    return false;
+                }
+
                 return isInstantiatedModule(node, compilerOptions.preserveConstEnums || compilerOptions.isolatedModules);
             }
 
@@ -7852,6 +7924,14 @@ const _super = (function (geti, seti) {
 
             function isFirstDeclarationOfKind(node: Declaration, declarations: Declaration[], kind: SyntaxKind) {
                 return !forEach(declarations, declaration => declaration.kind === kind && declaration.pos < node.pos);
+            }
+
+            function hasLeadingComments(node: Node): boolean {
+                if (shouldEmitLeadingAndTrailingComments(<ModuleDeclaration>node)) {
+                    const leadingComments = getLeadingCommentsToEmit(node);
+
+                    return leadingComments && !!leadingComments.length;
+                }
             }
 
             function emitModuleDeclaration(node: ModuleDeclaration) {
@@ -7869,6 +7949,10 @@ const _super = (function (geti, seti) {
 
                 forceWriteLine();
 
+                if (compilerOptions.emitAnnotations && hasLeadingComments(node)) {
+                    emitLeadingComments(node);
+                }
+		
                 if (emitVarForModule) {
                     write("var ");
                     write(name);
@@ -7897,7 +7981,6 @@ const _super = (function (geti, seti) {
                     tempVariables = saveTempVariables;
                 }
                 else {
-                    emitCaptureThisForNodeIfNecessary(node);
                     emit(node.body);
                 }
 
@@ -8103,10 +8186,7 @@ const _super = (function (geti, seti) {
                         if (isES6ExportedDeclaration(node)) {
                             write("export ");
                             write("var ");
-                        }
-                        else if (!(node.flags & NodeFlags.Export)) {
-                            write("var ");
-                        }
+                        }                     
                     }
 
 
@@ -8116,6 +8196,7 @@ const _super = (function (geti, seti) {
                         write(`", `);
                     }
 
+                    emitModuleIfNeeded(node);
                     emitModuleMemberName(node);
                     write(" = ");
                     emit(node.moduleReference);
@@ -8732,21 +8813,7 @@ const _super = (function (geti, seti) {
                 //         }
                 //     };
                 // }
-                emitVariableDeclarationsForImports();
-                writeLine();
-                const exportedDeclarations = processTopLevelVariableAndFunctionDeclarations(node);
-                const exportStarFunction = emitLocalStorageForExportedNamesIfNecessary(exportedDeclarations);
-                writeLine();
-                write("return {");
-                increaseIndent();
-                writeLine();
-                emitSetters(exportStarFunction, dependencyGroups);
-                writeLine();
                 emitExecute(node, startIndex);
-                decreaseIndent();
-                writeLine();
-                write("}"); // return
-                emitTempDeclarations(/*newLine*/ true);
             }
 
             function emitSetters(exportStarFunction: string, dependencyGroups: DependencyGroup[]) {
@@ -8842,9 +8909,6 @@ const _super = (function (geti, seti) {
             }
 
             function emitExecute(node: SourceFile, startIndex: number) {
-                write("execute: function() {");
-                increaseIndent();
-                writeLine();
                 for (let i = startIndex; i < node.statements.length; i++) {
                     const statement = node.statements[i];
                     switch (statement.kind) {
@@ -8856,12 +8920,6 @@ const _super = (function (geti, seti) {
                         case SyntaxKind.ImportDeclaration:
                             continue;
                         case SyntaxKind.ExportDeclaration:
-                            if (!(<ExportDeclaration>statement).moduleSpecifier) {
-                                for (const element of (<ExportDeclaration>statement).exportClause.elements) {
-                                    // write call to exporter function for every export specifier in exports list
-                                    emitExportSpecifierInSystemModule(element);
-                                }
-                            }
                             continue;
                         case SyntaxKind.ImportEqualsDeclaration:
                             if (!isInternalModuleImportEqualsDeclaration(statement)) {
@@ -8870,13 +8928,9 @@ const _super = (function (geti, seti) {
                             }
                         // fall-though for import declarations that import internal modules
                         default:
-                            writeLine();
                             emit(statement);
                     }
                 }
-                decreaseIndent();
-                writeLine();
-                write("}"); // execute
             }
 
             function writeModuleName(node: SourceFile, emitRelativePathAsModuleName?: boolean): void {
@@ -8887,67 +8941,11 @@ const _super = (function (geti, seti) {
             }
 
             function emitSystemModule(node: SourceFile, emitRelativePathAsModuleName?: boolean): void {
-                collectExternalModuleInfo(node);
-                // System modules has the following shape
-                // System.register(['dep-1', ... 'dep-n'], function(exports) {/* module body function */})
-                // 'exports' here is a function 'exports<T>(name: string, value: T): T' that is used to publish exported values.
-                // 'exports' returns its 'value' argument so in most cases expressions
-                // that mutate exported values can be rewritten as:
-                // expr -> exports('name', expr).
-                // The only exception in this rule is postfix unary operators,
-                // see comment to 'emitPostfixUnaryExpression' for more details
-                Debug.assert(!exportFunctionForFile);
-                // make sure that  name of 'exports' function does not conflict with existing identifiers
-                exportFunctionForFile = makeUniqueName("exports");
-                contextObjectForFile = makeUniqueName("context");
-                writeLine();
-                write("System.register(");
-                writeModuleName(node, emitRelativePathAsModuleName);
-                write("[");
-
-                const groupIndices: Map<number> = {};
                 const dependencyGroups: DependencyGroup[] = [];
-
-                for (let i = 0; i < externalImports.length; i++) {
-                    const text = getExternalModuleNameText(externalImports[i], emitRelativePathAsModuleName);
-                    if (text === undefined) {
-                        continue;
-                    }
-
-                    // text should be quoted string
-                    // for deduplication purposes in key remove leading and trailing quotes so 'a' and "a" will be considered the same
-                    const key = text.substr(1, text.length - 2);
-
-                    if (hasProperty(groupIndices, key)) {
-                        // deduplicate/group entries in dependency list by the dependency name
-                        const groupIndex = groupIndices[key];
-                        dependencyGroups[groupIndex].push(externalImports[i]);
-                        continue;
-                    }
-                    else {
-                        groupIndices[key] = dependencyGroups.length;
-                        dependencyGroups.push([externalImports[i]]);
-                    }
-
-                    if (i !== 0) {
-                        write(", ");
-                    }
-
-                    write(text);
-                }
-                write(`], function(${exportFunctionForFile}, ${contextObjectForFile}) {`);
-                writeLine();
-                increaseIndent();
                 const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ true, /*ensureUseStrict*/ !compilerOptions.noImplicitUseStrict);
-                writeLine();
-                write(`var __moduleName = ${contextObjectForFile} && ${contextObjectForFile}.id;`);
-                writeLine();
-                emitEmitHelpers(node);
+
                 emitCaptureThisForNodeIfNecessary(node);
                 emitSystemModuleBody(node, dependencyGroups, startIndex);
-                decreaseIndent();
-                writeLine();
-                write("});");
             }
 
             interface AMDDependencyNames {
@@ -9036,34 +9034,17 @@ const _super = (function (geti, seti) {
             }
 
             function emitAMDModule(node: SourceFile, emitRelativePathAsModuleName?: boolean) {
-                emitEmitHelpers(node);
-                collectExternalModuleInfo(node);
-
-                writeLine();
-                write("define(");
-                writeModuleName(node, emitRelativePathAsModuleName);
-                emitAMDDependencies(node, /*includeNonAmdDependencies*/ true, emitRelativePathAsModuleName);
-                increaseIndent();
                 const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ true, /*ensureUseStrict*/!compilerOptions.noImplicitUseStrict);
-                emitExportStarHelper();
+
                 emitCaptureThisForNodeIfNecessary(node);
                 emitLinesStartingAt(node.statements, startIndex);
-                emitTempDeclarations(/*newLine*/ true);
-                emitExportEquals(/*emitAsReturn*/ true);
-                decreaseIndent();
-                writeLine();
-                write("});");
             }
 
             function emitCommonJSModule(node: SourceFile) {
                 const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false, /*ensureUseStrict*/ !compilerOptions.noImplicitUseStrict);
-                emitEmitHelpers(node);
-                collectExternalModuleInfo(node);
-                emitExportStarHelper();
+
                 emitCaptureThisForNodeIfNecessary(node);
                 emitLinesStartingAt(node.statements, startIndex);
-                emitTempDeclarations(/*newLine*/ true);
-                emitExportEquals(/*emitAsReturn*/ false);
             }
 
             function emitUMDModule(node: SourceFile) {
@@ -9281,6 +9262,7 @@ const _super = (function (geti, seti) {
                     // Only Emit __extends function when target ES5.
                     // For target ES6 and above, we can emit classDeclaration as is.
                     if (languageVersion < ScriptTarget.ES6 && !extendsEmitted && node.flags & NodeFlags.HasClassExtends) {
+                        emitExtendsAnnotation();
                         writeLines(extendsHelper);
                         extendsEmitted = true;
                     }
@@ -9319,6 +9301,8 @@ const _super = (function (geti, seti) {
                 if (isExternalModule(node) || compilerOptions.isolatedModules) {
                     if (isOwnFileEmit || (!isExternalModule(node) && compilerOptions.isolatedModules)) {
                         const emitModule = moduleEmitDelegates[modulekind] || moduleEmitDelegates[ModuleKind.CommonJS];
+
+                        emitEmitHelpers(node);
                         emitModule(node);
                     }
                     else {
@@ -9332,7 +9316,6 @@ const _super = (function (geti, seti) {
                     exportSpecifiers = undefined;
                     exportEquals = undefined;
                     hasExportStarsToExportValues = false;
-                    emitEmitHelpers(node);
                     emitCaptureThisForNodeIfNecessary(node);
                     emitLinesStartingAt(node.statements, startIndex);
                     emitTempDeclarations(/*newLine*/ true);
@@ -9351,17 +9334,15 @@ const _super = (function (geti, seti) {
 
             function emitNodeConsideringCommentsOption(node: Node, emitNodeConsideringSourcemap: (node: Node) => void): void {
                 if (node) {
-                    if (node.flags & NodeFlags.Ambient) {
-                        return emitCommentsOnNotEmittedNode(node);
-                    }
-
                     if (isSpecializedCommentHandling(node)) {
                         // This is the node that will handle its own comments and sourcemap
                         return emitNodeWithoutSourceMap(node);
                     }
 
+                    const leadingComments = !compilerOptions.emitAnnotations || !shouldEmitLeadingComments(node);
                     const emitComments = shouldEmitLeadingAndTrailingComments(node);
-                    if (emitComments) {
+
+                    if (emitComments && leadingComments) {
                         emitLeadingComments(node);
                     }
 
@@ -9818,6 +9799,45 @@ const _super = (function (geti, seti) {
 
             if (declarationFilePath) {
                 emitSkipped = writeDeclarationFile(declarationFilePath, sourceFiles, isBundledEmit, host, resolver, emitterDiagnostics) || emitSkipped;
+            }
+        }
+
+        function getEmitSourceFile(sourceFile: SourceFile) {
+            return (emitSourceFile: (root: SourceFile) => void, emitExportedTypes: () => void) => {
+                if (sourceFile) {
+                    // Do not call emit directly. It does not set the currentSourceFile.
+                    emitSourceFile(sourceFile);
+
+                    if (sourceFile === entryFile) {
+                        emitExportedTypes();
+                    }
+                }
+                else {
+                    forEach(host.getSourceFiles(), sourceFile => {
+                        if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                            emitSourceFile(sourceFile);
+                        }
+                    });
+
+                    if (entryFile) {
+                        emitExportedTypes();
+                    }
+                }
+            }
+        }
+
+        function getEmitExternSourceFile(sourceFile: SourceFile) {
+            return (emitSourceFile: (root: SourceFile) => void, emitExportedTypes: () => void) => {
+                if (sourceFile) {
+                    emitSourceFile(sourceFile);
+                }
+                else {
+                    forEach(emitHost.getExternSourceFiles(), sourceFile => {
+                        if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
+                            emitSourceFile(sourceFile);
+                        }
+                    });
+                }
             }
         }
     }

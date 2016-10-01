@@ -615,7 +615,7 @@ namespace ts {
             // [a,b,c] from:
             // [a, b, c] = someExpression;
             if (node.parent.kind === SyntaxKind.BinaryExpression &&
-                (<BinaryExpression>node.parent).left === node && 
+                (<BinaryExpression>node.parent).left === node &&
                 (<BinaryExpression>node.parent).operatorToken.kind === SyntaxKind.EqualsToken) {
                 return true;
             }
@@ -647,7 +647,6 @@ namespace ts {
         return symbol.declarations && symbol.declarations.length > 0 && symbol.declarations[0].kind === SyntaxKind.Parameter;
     }
 
-    let displayPartWriter = getDisplayPartWriter();
     function getDisplayPartWriter(): DisplayPartsSymbolWriter {
         let displayParts: SymbolDisplayPart[];
         let lineStart: boolean;
@@ -702,6 +701,8 @@ namespace ts {
             indent = 0;
         }
     }
+
+    let displayPartWriter = getDisplayPartWriter();
 
     export function symbolPart(text: string, symbol: Symbol) {
         return displayPart(text, displayPartKind(symbol), symbol);
