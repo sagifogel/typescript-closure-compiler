@@ -135,7 +135,7 @@ namespace ts {
             name: "out",
             type: "string",
             isFilePath: false, // This is intentionally broken to support compatability with existing tsconfig files
-                               // for correct behaviour, please use outFile
+            // for correct behaviour, please use outFile
             paramType: Diagnostics.FILE,
         },
         {
@@ -309,7 +309,31 @@ namespace ts {
         {
             name: "disableSizeLimit",
             type: "boolean"
-        }
+        }/*,
+        {
+            name: "entry",
+            type: "string",
+            isFilePath: true,
+            description: { key: "", category: DiagnosticCategory.Message, code: 0 },
+            paramType: Diagnostics.FILE
+        },
+        {
+        
+            name: "exportAs",
+            type: "string",
+            description: { key: "", category: DiagnosticCategory.Message, code: 0 }
+        },
+        {
+            name: "externsOutFile",
+            type: "string",
+            isFilePath: true,
+            description: { key: "", category: DiagnosticCategory.Message, code: 0 },
+            paramType: Diagnostics.FILE
+        },
+        {
+            name: "emitOneSideEnums",
+            type: "boolean"
+        }*/
     ];
 
     /* @internal */
@@ -338,21 +362,25 @@ namespace ts {
         return optionNameMapCache;
     }
 
-    export function parseCommandLine(commandLine: string[], readFile?: (path: string) => string): ParsedCommandLine {
+    export function parseCommandLine(commandLine: string[], readFile?: (path: string) => string): ExtendedParsedCommandLine {
         const options: CompilerOptions = {};
         const fileNames: string[] = [];
         const errors: Diagnostic[] = [];
+        const externFileNames: string[] = [];
         const { optionNameMap, shortOptionNames } = getOptionNameMap();
 
         parseStrings(commandLine);
+
         return {
+            errors,
             options,
             fileNames,
-            errors
+            externFileNames
         };
 
         function parseStrings(args: string[]) {
             let i = 0;
+            let isExterns = false;
             while (i < args.length) {
                 let s = args[i];
                 i++;
@@ -370,6 +398,7 @@ namespace ts {
                     if (hasProperty(optionNameMap, s)) {
                         const opt = optionNameMap[s];
 
+                        isExterns = false;
                         // Check to see if no argument was provided (e.g. "--locale" is the last command-line argument).
                         if (!args[i] && opt.type !== "boolean") {
                             errors.push(createCompilerDiagnostic(Diagnostics.Compiler_option_0_expects_an_argument, opt.name));
@@ -400,11 +429,18 @@ namespace ts {
                                 }
                         }
                     }
+                    else if (s === "externs") {
+                        isExterns = true;
+                    }
                     else {
                         errors.push(createCompilerDiagnostic(Diagnostics.Unknown_compiler_option_0, s));
                     }
                 }
+                else if (isExterns) {
+                    externFileNames.push(s);
+                }
                 else {
+                    isExterns = false;
                     fileNames.push(s);
                 }
             }
@@ -448,7 +484,7 @@ namespace ts {
       * Read tsconfig.json file
       * @param fileName The path to the config file
       */
-    export function readConfigFile(fileName: string, readFile: (path: string) => string): { config?: any; error?: Diagnostic }  {
+    export function readConfigFile(fileName: string, readFile: (path: string) => string): { config?: any; error?: Diagnostic } {
         let text = "";
         try {
             text = readFile(fileName);
@@ -508,16 +544,17 @@ namespace ts {
       * @param basePath A root directory to resolve relative path entries in the config
       *    file to. e.g. outDir
       */
-    export function parseJsonConfigFileContent(json: any, host: ParseConfigHost, basePath: string, existingOptions: CompilerOptions = {}, configFileName?: string): ParsedCommandLine {
+    export function parseJsonConfigFileContent(json: any, host: ParseConfigHost, basePath: string, existingOptions: CompilerOptions = {}, configFileName?: string): ExtendedParsedCommandLine {
         const { options: optionsFromJsonConfigFile, errors } = convertCompilerOptionsFromJson(json["compilerOptions"], basePath, configFileName);
 
         const options = extend(existingOptions, optionsFromJsonConfigFile);
         return {
-            options,
+            errors,
+            raw: json,
+            options: options,
             fileNames: getFileNames(),
             typingOptions: getTypingOptions(),
-            raw: json,
-            errors
+            externFileNames: getExternFileNames()
         };
 
         function getFileNames(): string[] {
@@ -610,6 +647,21 @@ namespace ts {
             }
             return options;
         }
+
+        function getExternFileNames(): string[] {
+            let externFileNames: string[] = [];
+
+            if (hasProperty(json, "externs")) {
+                if (json["externs"] instanceof Array) {
+                    externFileNames = map(<string[]>json["externs"], s => combinePaths(basePath, s));
+                }
+                else {
+                    errors.push(createCompilerDiagnostic(Diagnostics.Compiler_option_0_requires_a_value_of_type_1, "externs", "Array"));
+                }
+            }
+
+            return externFileNames;
+        }
     }
 
     export function convertCompilerOptionsFromJson(jsonOptions: any, basePath: string, configFileName?: string): { options: CompilerOptions, errors: Diagnostic[] } {
@@ -645,9 +697,9 @@ namespace ts {
                     }
                     if (opt.isFilePath) {
                         value = normalizePath(combinePaths(basePath, value));
-                       if (value === "") {
-                           value = ".";
-                       }
+                        if (value === "") {
+                            value = ".";
+                        }
                     }
                     options[opt.name] = value;
                 }

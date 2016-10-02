@@ -43398,7 +43398,31 @@ ts.optionDeclarations = [
     {
         name: "disableSizeLimit",
         type: "boolean"
-    }
+    } /*,
+    {
+        name: "entry",
+        type: "string",
+        isFilePath: true,
+        description: { key: "", category: DiagnosticCategory.Message, code: 0 },
+        paramType: Diagnostics.FILE
+    },
+    {
+    
+        name: "exportAs",
+        type: "string",
+        description: { key: "", category: DiagnosticCategory.Message, code: 0 }
+    },
+    {
+        name: "externsOutFile",
+        type: "string",
+        isFilePath: true,
+        description: { key: "", category: DiagnosticCategory.Message, code: 0 },
+        paramType: Diagnostics.FILE
+    },
+    {
+        name: "emitOneSideEnums",
+        type: "boolean"
+    }*/
 ];
 /* @internal */
 
@@ -43422,15 +43446,18 @@ ts.parseCommandLine = function (commandLine, readFile) {
     var options = {};
     var fileNames = [];
     var errors = [];
+    var externFileNames = [];
     var _a = ts.getOptionNameMap(), optionNameMap = _a.optionNameMap, shortOptionNames = _a.shortOptionNames;
     parseStrings(commandLine);
     return {
+        errors: errors,
         options: options,
         fileNames: fileNames,
-        errors: errors
+        externFileNames: externFileNames
     };
     function parseStrings(args) {
         var i = 0;
+        var isExterns = false;
         while (i < args.length) {
             var s = args[i];
             i++;
@@ -43445,6 +43472,7 @@ ts.parseCommandLine = function (commandLine, readFile) {
                 }
                 if (ts.hasProperty(optionNameMap, s)) {
                     var opt = optionNameMap[s];
+                    isExterns = false;
                     // Check to see if no argument was provided (e.g. "--locale" is the last command-line argument).
                     if (!args[i] && opt.type !== "boolean") {
                         errors.push(ts.createCompilerDiagnostic(ts.Diagnostics.Compiler_option_0_expects_an_argument, opt.name));
@@ -43474,11 +43502,18 @@ ts.parseCommandLine = function (commandLine, readFile) {
                             }
                     }
                 }
+                else if (s === "externs") {
+                    isExterns = true;
+                }
                 else {
                     errors.push(ts.createCompilerDiagnostic(ts.Diagnostics.Unknown_compiler_option_0, s));
                 }
             }
+            else if (isExterns) {
+                externFileNames.push(s);
+            }
             else {
+                isExterns = false;
                 fileNames.push(s);
             }
         }
@@ -43586,11 +43621,12 @@ ts.parseJsonConfigFileContent = function (json, host, basePath, existingOptions,
     var _a = ts.convertCompilerOptionsFromJson(json["compilerOptions"], basePath, configFileName), optionsFromJsonConfigFile = _a.options, errors = _a.errors;
     var options = ts.extend(existingOptions, optionsFromJsonConfigFile);
     return {
+        errors: errors,
+        raw: json,
         options: options,
         fileNames: getFileNames(),
         typingOptions: getTypingOptions(),
-        raw: json,
-        errors: errors
+        externFileNames: getExternFileNames()
     };
     function getFileNames() {
         var fileNames = [];
@@ -43676,6 +43712,18 @@ ts.parseJsonConfigFileContent = function (json, host, basePath, existingOptions,
             }
         }
         return options;
+    }
+    function getExternFileNames() {
+        var externFileNames = [];
+        if (ts.hasProperty(json, "externs")) {
+            if (json["externs"] instanceof Array) {
+                externFileNames = ts.map(json["externs"], function (s) { return ts.combinePaths(basePath, s); });
+            }
+            else {
+                errors.push(ts.createCompilerDiagnostic(ts.Diagnostics.Compiler_option_0_requires_a_value_of_type_1, "externs", "Array"));
+            }
+        }
+        return externFileNames;
     }
 };
 
