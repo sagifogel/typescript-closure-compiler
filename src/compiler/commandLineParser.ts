@@ -309,31 +309,31 @@ namespace ts {
         {
             name: "disableSizeLimit",
             type: "boolean"
-        }/*,
+        },
         {
             name: "entry",
             type: "string",
             isFilePath: true,
-            description: { key: "", category: DiagnosticCategory.Message, code: 0 },
+            description: { key: "", category: DiagnosticCategory.Message, code: 0, message: "" },
             paramType: Diagnostics.FILE
         },
         {
-        
+
             name: "exportAs",
             type: "string",
-            description: { key: "", category: DiagnosticCategory.Message, code: 0 }
+            description: { key: "", category: DiagnosticCategory.Message, code: 0, message: "" }
         },
         {
             name: "externsOutFile",
             type: "string",
             isFilePath: true,
-            description: { key: "", category: DiagnosticCategory.Message, code: 0 },
+            description: { key: "", category: DiagnosticCategory.Message, code: 0, message: "" },
             paramType: Diagnostics.FILE
         },
         {
             name: "emitOneSideEnums",
             type: "boolean"
-        }*/
+        }
     ];
 
     /* @internal */
