@@ -365,7 +365,7 @@ namespace ts {
         const extendsHelper = `
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
+    /** @constructor */ function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };`;
 
@@ -636,8 +636,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 [ModuleKind.ES6]() { },
                 [ModuleKind.AMD]: emitAMDModule,
                 [ModuleKind.System]: emitSystemModule,
-                [ModuleKind.UMD]() { },
-                [ModuleKind.CommonJS]() { },
+                [ModuleKind.UMD]: emitUMDModule,
+                [ModuleKind.CommonJS]: emitCommonJSModule
             };
 
             return doEmit;
@@ -8944,6 +8944,7 @@ const _super = (function (geti, seti) {
                 const dependencyGroups: DependencyGroup[] = [];
                 const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ true, /*ensureUseStrict*/ !compilerOptions.noImplicitUseStrict);
 
+                emitEmitHelpers(node);
                 emitCaptureThisForNodeIfNecessary(node);
                 emitSystemModuleBody(node, dependencyGroups, startIndex);
             }
@@ -9036,6 +9037,7 @@ const _super = (function (geti, seti) {
             function emitAMDModule(node: SourceFile, emitRelativePathAsModuleName?: boolean) {
                 const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ true, /*ensureUseStrict*/!compilerOptions.noImplicitUseStrict);
 
+                emitEmitHelpers(node);
                 emitCaptureThisForNodeIfNecessary(node);
                 emitLinesStartingAt(node.statements, startIndex);
             }
@@ -9043,6 +9045,7 @@ const _super = (function (geti, seti) {
             function emitCommonJSModule(node: SourceFile) {
                 const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false, /*ensureUseStrict*/ !compilerOptions.noImplicitUseStrict);
 
+                emitEmitHelpers(node);
                 emitCaptureThisForNodeIfNecessary(node);
                 emitLinesStartingAt(node.statements, startIndex);
             }
@@ -9220,6 +9223,7 @@ const _super = (function (geti, seti) {
                         writeLine();
                     }
                     write("\"use strict\";");
+                    writeLine();
                 }
             }
 
@@ -9302,7 +9306,6 @@ const _super = (function (geti, seti) {
                     if (isOwnFileEmit || (!isExternalModule(node) && compilerOptions.isolatedModules)) {
                         const emitModule = moduleEmitDelegates[modulekind] || moduleEmitDelegates[ModuleKind.CommonJS];
 
-                        emitEmitHelpers(node);
                         emitModule(node);
                     }
                     else {

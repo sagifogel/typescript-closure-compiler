@@ -110,10 +110,10 @@ function executeCommandLine(args) {
         
         var result = ts.parseConfigFileTextToJson(configFileName, cachedConfigFileText);
         if (result.error) {
-		    reportDiagnostics([result.error]);
+            reportDiagnostics([result.error]);
             return ts.sys.exit(ts.ExitStatus.DiagnosticsPresent_OutputsSkipped);
         }
-		var configObject = result.config;
+        var configObject = result.config;
         var configParseResult = ts.parseJsonConfigFileContent(configObject, ts.sys, ts.getDirectoryPath(configFileName));
         if (configParseResult.errors.length > 0) {
             reportDiagnostics(configParseResult.errors);
@@ -121,11 +121,11 @@ function executeCommandLine(args) {
         }
         return configParseResult;
     }
-
-	function emitErrorsAndExit(errors) {
-		reportDiagnostics(configParseResult.errors);
+    
+    function emitErrorsAndExit(errors) {
+        reportDiagnostics(configParseResult.errors);
         return ts.sys.exit(ts.ExitStatus.DiagnosticsPresent_OutputsSkipped);
-	}
+    }
     
     function normalizeFilePath(file) {
         return ts.normalizePath(ts.combinePaths(commandLine.options.rootDir, file));
@@ -176,11 +176,10 @@ function executeCommandLine(args) {
         rootFileNames = rootFileNames.concat(externFileNames)
         fileNames = sortFiles(rootFileNames);
         program = ts.createProgram(fileNames, compilerOptions);
-        now = Date.now();
         emitResult = program.emit();
         ts.getPreEmitDiagnostics(program).concat(emitResult.diagnostics).forEach(reportDiagnostic);
         exitCode = emitResult.emitSkipped ? 1 : 0;
-        console.log("Process exiting with code '" + exitCode + "' and lasted " + (Date.now() - now) + " milliseconds.");
+        console.log("Process exiting with code '" + exitCode + "' and lasted " + ts.emitTime + " milliseconds.");
         process.exit(exitCode);
     }
 }

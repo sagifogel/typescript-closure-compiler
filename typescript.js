@@ -15,7 +15,7 @@ and limitations under the License.
 
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
+    /** @constructor */ function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
 
@@ -33647,7 +33647,7 @@ ts.CopyDirection = {
 
 ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     // emit output for the __extends helper function
-    var extendsHelper = "\nvar __extends = (this && this.__extends) || function (d, b) {\n    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];\n    function __() { this.constructor = d; }\n    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());\n};";
+    var extendsHelper = "\nvar __extends = (this && this.__extends) || function (d, b) {\n    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];\n    /** @constructor */ function __() { this.constructor = d; }\n    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());\n};";
     var assignHelper = "\nvar __assign = (this && this.__assign) || Object.assign || function(t) {\n    for (var s, i = 1, n = arguments.length; i < n; i++) {\n        s = arguments[i];\n        for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))\n            t[p] = s[p];\n    }\n    return t;\n};";
     // emit output for the __decorate helper function
     var decorateHelper = "\nvar __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {\n    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;\n    if (typeof Reflect === \"object\" && typeof Reflect.decorate === \"function\") r = Reflect.decorate(decorators, target, key, desc);\n    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;\n    return c > 3 && r && Object.defineProperty(target, key, r), r;\n};";
@@ -33797,10 +33797,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             },
             _b[2 /* AMD */] = emitAMDModule,
             _b[4 /* System */] = emitSystemModule,
-            _b[3 /* UMD */] = function () {
-            },
-            _b[1 /* CommonJS */] = function () {
-            },
+            _b[3 /* UMD */] = emitUMDModule,
+            _b[1 /* CommonJS */] = emitCommonJSModule,
             _b
         );
         return doEmit;
@@ -41021,6 +41019,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         function emitSystemModule(node, emitRelativePathAsModuleName) {
             var dependencyGroups = [];
             var startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ true, /*ensureUseStrict*/ !compilerOptions.noImplicitUseStrict);
+            emitEmitHelpers(node);
             emitCaptureThisForNodeIfNecessary(node);
             emitSystemModuleBody(node, dependencyGroups, startIndex);
         }
@@ -41100,11 +41099,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         function emitAMDModule(node, emitRelativePathAsModuleName) {
             var startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ true, /*ensureUseStrict*/ !compilerOptions.noImplicitUseStrict);
+            emitEmitHelpers(node);
             emitCaptureThisForNodeIfNecessary(node);
             emitLinesStartingAt(node.statements, startIndex);
         }
         function emitCommonJSModule(node) {
             var startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false, /*ensureUseStrict*/ !compilerOptions.noImplicitUseStrict);
+            emitEmitHelpers(node);
             emitCaptureThisForNodeIfNecessary(node);
             emitLinesStartingAt(node.statements, startIndex);
         }
@@ -41259,6 +41260,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     writeLine();
                 }
                 write("\"use strict\";");
+                writeLine();
             }
         }
         function emitDirectivePrologues(statements, startWithNewLine, ensureUseStrict) {
@@ -41331,7 +41333,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (ts.isExternalModule(node) || compilerOptions.isolatedModules) {
                 if (isOwnFileEmit || (!ts.isExternalModule(node) && compilerOptions.isolatedModules)) {
                     var emitModule = moduleEmitDelegates[modulekind] || moduleEmitDelegates[1 /* CommonJS */];
-                    emitEmitHelpers(node);
                     emitModule(node);
                 }
                 else {
@@ -43012,10 +43013,6 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
         // Cannot specify module gen target of es6 when below es6
         if (options.module === 5 /* ES6 */ && languageVersion < 2 /* ES6 */) {
             programDiagnostics.add(ts.createCompilerDiagnostic(ts.Diagnostics.Cannot_compile_modules_into_es2015_when_targeting_ES5_or_lower));
-        }
-        // Cannot specify module gen that isn't amd or system with --out
-        if (outFile && options.module && !(options.module === 2 /* AMD */ || options.module === 4 /* System */)) {
-            programDiagnostics.add(ts.createCompilerDiagnostic(ts.Diagnostics.Only_amd_and_system_modules_are_supported_alongside_0, options.out ? "out" : "outFile"));
         }
         // there has to be common source directory if user specified --outdir || --sourceRoot
         // if user specified --mapRoot, there needs to be common source directory if there would be multiple files being emitted
