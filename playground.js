@@ -44,7 +44,7 @@
             var localStorageStart = window.localStorage && window.localStorage["src"];
             function loadTutorial() {
                 var tutorialName = window.location.hash.substring('#tut='.length);
-                var path = '/playground/examples/' + tutorialName + '.ts';
+                var path = '/examples/' + tutorialName + '.ts';
                 xhr(path, function (xhr) {
                     sample = xhr.responseText;
                     sampleLoaded = true;
