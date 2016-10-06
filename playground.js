@@ -19,7 +19,7 @@
     var sampleLoaded = false;
     // ------------ Loading logic
     (function () {
-        var DEFAULT_EXAMPLE = '/playground/examples/walkthrough2.ts';
+        var DEFAULT_EXAMPLE = '/examples/walkthrough2.ts';
         var sample = '';
         require.config({ paths: { 'vs': './script/vs' } });
         require(['vs/editor/editor.main', 'vs/language/typescript/lib/typescriptServices'], function () {
