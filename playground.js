@@ -278,7 +278,7 @@
     examples.onchange = function () {
         var selectedExample = examples.options[examples.selectedIndex].value;
         if (selectedExample != "") {
-            xhr('/playground/examples/' + selectedExample, function (xmlHttpReq) {
+            xhr('/examples/' + selectedExample, function (xmlHttpReq) {
                 if (editorLoaded) {
                     lhs.editor.getModel().setValue(xmlHttpReq.responseText);
                 }
