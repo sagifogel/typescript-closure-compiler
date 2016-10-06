@@ -1,74 +1,64 @@
-<style>
-    body {
-        margin: 30px;
-        font: 12px sans-serif;
-    }
-
-    textarea {
-        font: 14px Monaco, Consolas, monospace;
-    }
-</style>
-
-<h1>TypeScript Closure Compiler Demo</h1>
-
-<h2>Input</h2>
-<textarea id="input" rows="20" cols="120" autofocus>
-class Greeter {
-    greeting: string;
-    constructor(message: string) {
-        this.greeting = message;
-    }
-    greet() {
-        return "Hello, " + this.greeting;
-    }
-}
-
-let greeter = new Greeter("world");
-
-let button = document.createElement('button');
-button.textContent = "Say Hello";
-button.onclick = function() {
-    alert(greeter.greet());
-}
-
-document.body.appendChild(button);
-</textarea>
-
-<h2>Output</h2>
-<textarea id="output" rows="20" cols="120" readonly></textarea>
-
-<script src="tscc.browser.js"></script>
-<script>
-    var useAsync = window.URL && window.Worker && window.Blob;
-    var timeout = 0;
-
-    if (useAsync) {
-        var source = compileTypeScript + 'onmessage = function(e) { postMessage(compileTypeScript(e.data)); };';
-        var worker = new Worker(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
-        worker.onmessage = function (e) { process(e.data); };
-    }
-
-    function process(data) {
-        output.value = data.result || data.diagnostics;
-    }
-
-    function compile() {
-        var options = {
-            source: input.value
-        };
-        if (useAsync) {
-            output.value = 'Compiling...';
-            worker.postMessage(options);
-        } else {
-            process(compileTypeScript(options));
-        }
-    }
-
-    function compileSoon() {
-        clearTimeout(timeout);
-        timeout = setTimeout(compile, 500);
-    }
-
-    input.oninput = compileSoon;
-    compile();
-</script>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <title>
+        Playground &middot; TypeScript Closure Compiler
+    </title>
+    <link rel="stylesheet" href="/assets/css/vendor.6ea5b3f8.css">
+    <link rel="stylesheet" href="/assets/css/style.min.83cbdc26.css">
+    <script src="/assets/js/vendors.93c18b14.js"></script>
+    <script src="/assets/js/all.min.a689ec77.js"></script>
+</head>
+<body>
+    <header role="banner">
+        <nav class="navbar navbar-default navbar-fixed-top">
+            <div class="container-fluid">
+                <a href="https://github.com/sagifogel/typescript-closure-compiler"><img class="fork-me-ribbon pull-right hidden-xs" src="/assets/images/fork_me_ribbon.svg" /></a>
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle pull-left collapsed" data-toggle="collapse" data-target="#navbar-collapse-div">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="https://github.com/sagifogel/typescript-closure-compiler">TypeScript Closure Compiler</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div id="playground-host">
+        <div>
+            <div id="wrapper" style="padding-right: 20px; padding-left: 20px;">
+                <div style="padding-left: 50px; float: left;">
+                    <select id="examples">
+                        <option value="">Select...</option>
+                        <option value="walkthrough1.ts">Classic JavaScript</option>
+                        <option value="walkthrough1.1.ts">Adding Types</option>
+                        <option value="walkthrough2.ts">Using Classes</option>
+                        <option value="inheritance_1.ts">Using Inheritance</option>
+                        <option value="walkthrough2.1.ts">Using Generics</option>
+                        <option value="union_types_1.ts">Unions and Type Guards</option>
+                        <option value="raytracer.ts">Building a Raytracer</option>
+                    </select>
+                    <span class="frame-title">TypeScript</span>
+                </div>
+                <div id="rundiv" style="padding-right: 50px; float: right;">
+                    <button class="playground-button" id="execute">Run</button>
+                    <span class="frame-title">JavaScript</span>
+                </div>
+                <div style="clear: both;"></div>
+                <div id="typescriptEditor" style="border: 1px solid grey; border-image: none; left: 0px; height: 500px; position: relative;"></div>
+                <div id="javascriptEditor" style="border: 1px solid grey; border-image: none; top: -502px; height: 500px; position: relative;"></div>
+                <div style="clear: both;"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        var startTime = (new Date()).getTime();
+    </script>
+    <script src="./script/vs/loader.js"></script>
+    <script type="text/javascript" src="./playground.js"></script>
+</body>
+</html>
