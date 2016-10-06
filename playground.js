@@ -22,7 +22,7 @@
     (function () {
         var DEFAULT_EXAMPLE = '/typescript-closure-compiler/examples/walkthrough2.ts';
         var sample = '';
-        require.config({ paths: { 'vs': './Script/vs' } });
+        require.config({ paths: { 'vs': './script/vs' } });
         require(['vs/editor/editor.main', 'vs/language/typescript/lib/typescriptServices'], function () {
             lhs.editor = monaco.editor.create(lhs.domNode, {
                 value: sample,
