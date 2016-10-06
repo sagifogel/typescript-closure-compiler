@@ -35,12 +35,3 @@ node_modules
 \scripts
 
 \.vs
-
-*.js
-*.dat
-*.tmp
-!*jakefile.js
-!*typescript.js
-!*tscc.browser.js
-!*compiler.js
-!*gulpfile.js
