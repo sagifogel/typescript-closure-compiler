@@ -163,106 +163,40 @@
     }
 
     function transpileModule(input) {
-        function reportDiagnostic(diagnostic) {
-            var output = "";
-            var newLine = ts.getNewLineCharacter({});
-            if (diagnostic.file) {
-                var loc = ts.getLineAndCharacterOfPosition(diagnostic.file, diagnostic.start);
-                output += diagnostic.file.fileName + "(" + (loc.line + 1) + "," + (loc.character + 1) + "): ";
-            }
-            var category = ts.DiagnosticCategory[diagnostic.category].toLowerCase();
-            output += category.toLowerCase() + " TS" + diagnostic.code + ": " + flattenDiagnosticMessageText(diagnostic.messageText, newLine) + newLine;
-            return output;
+        var options = {
+            noLib: true,
+            noResolve: true,
+            emitInterfaces: true,
+            emitAnnotations: true,
+            emitOneSideEnum: true,
+            module: ts.ModuleKind.AMD,
+            target: ts.ScriptTarget.ES5,
+            suppressOutputPathCheck: true
+        };
+
+        var inputFileName = options.jsx ? "module.tsx" : "module.ts";
+        var sourceFile = ts.createSourceFile(inputFileName, input, options.target || ts.ScriptTarget.ES5);
+        // Output
+        var outputText;
+        var program = ts.createProgram([inputFileName], options, {
+            getSourceFile: function (fileName) { return fileName.indexOf("module") === 0 ? sourceFile : undefined; },
+            writeFile: function (_name, text) { outputText = text; },
+            getDefaultLibFileName: function () { return "lib.d.ts"; },
+            useCaseSensitiveFileNames: function () { return false; },
+            getCanonicalFileName: function (fileName) { return fileName; },
+            getCurrentDirectory: function () { return ""; },
+            getNewLine: function () { return "\r\n"; },
+            fileExists: function (fileName) { return fileName === inputFileName; },
+            readFile: function () { return ""; },
+            directoryExists: function () { return true; },
+            getDirectories: function () { return []; }
+        });
+        // Emit
+        program.emit();
+        if (outputText === undefined) {
+            throw new Error("Output generation failed");
         }
-
-        function flattenDiagnosticMessageText(messageText, newLine) {
-            if (typeof messageText === "string") {
-                return messageText;
-            }
-            else {
-                var diagnosticChain = messageText;
-                var result = "";
-                var indent = 0;
-                while (diagnosticChain) {
-                    if (indent) {
-                        result += newLine;
-                        for (var i = 0; i < indent; i++) {
-                            result += "  ";
-                        }
-                    }
-                    result += diagnosticChain.messageText;
-                    indent++;
-                    diagnosticChain = diagnosticChain.next;
-                }
-                return result;
-            }
-        }
-
-        function reportDiagnostics(diagnostics) {
-            var result = [];
-            var newLine = ts.getNewLineCharacter({});
-
-            for (var i = 0; i < diagnostics.length; i++) {
-                result.push(reportDiagnostic(diagnostics[i]));
-            }
-
-            return result.join(newLine);
-        }
-
-        function compile(input) {
-            var options = {
-                noLib: true,
-                noEmitOnError: true,
-                emitInterfaces: true,
-                emitAnnotations: true,
-                emitOneSideEnum: true,
-                allowNonTsExtensions: true,
-                target: ts.ScriptTarget.ES5,
-                module: ts.ModuleKind.CommonJS
-            };
-
-            var transpileOptions = { reportDiagnostics: true };
-            var inputFileName = transpileOptions.fileName || "input.ts";
-            var sourceFile = ts.createSourceFile(inputFileName, input, options.target);
-            var libSourceFile = ts.createSourceFile("lib.d.ts", lib_d_ts, options.target);
-            if (transpileOptions.moduleName) {
-                sourceFile.moduleName = transpileOptions.moduleName;
-            }
-            sourceFile.renamedDependencies = transpileOptions.renamedDependencies;
-            var newLine = ts.getNewLineCharacter(options);
-            var outputText;
-            var sourceMapText;
-            var compilerHost = {
-                getSourceFile: function (fileName, target) { return fileName === ts.normalizeSlashes(inputFileName) ? sourceFile : libSourceFile; },
-                writeFile: function (name, text, writeByteOrderMark) {
-                    if (ts.fileExtensionIs(name, ".map")) {
-                        ts.Debug.assert(sourceMapText === undefined, "Unexpected multiple source map outputs for the file '" + name + "'");
-                        sourceMapText = text;
-                    }
-                    else {
-                        ts.Debug.assert(outputText === undefined, "Unexpected multiple outputs for the file: " + name);
-                        outputText = text;
-                    }
-                },
-                getDefaultLibFileName: function () { return libSourceFile.fileName; },
-                useCaseSensitiveFileNames: function () { return false; },
-                getCanonicalFileName: function (fileName) { return fileName; },
-                getCurrentDirectory: function () { return ""; },
-                getNewLine: function () { return newLine; },
-                fileExists: function (fileName) { return fileName === inputFileName; },
-                readFile: function (fileName) { return ""; }
-            };
-
-            var program = ts.createProgram([inputFileName], options, compilerHost);
-            var emitResult = program.emit();
-            var diagnostics = ts.getPreEmitDiagnostics(program).concat(emitResult.diagnostics);
-
-            return { result: outputText, diagnostics: reportDiagnostics(diagnostics), sourceMapText: sourceMapText };
-        }
-
-        var data = compile(input);
-
-        return data.result;
+        return outputText;
     }
     // ------------ Execution logic
     excuteButton.onclick = function () {
