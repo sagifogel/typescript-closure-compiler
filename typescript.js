@@ -33718,9 +33718,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     }
     function createFileEmitter() {
         var writer = ts.createTextWriter(newLine);
-        var rawWrite = writer.rawWrite, write = writer.write, getIndent = writer.getIndent, getColumn = writer.getColumn, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent;
+        var rawWrite = writer.rawWrite, write = writer.write, getIndent = writer.getIndent, getColumn = writer.getColumn, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent, getText = writer.getText;
         var forceWriteLine = function (idnetation) {
-            rawWrite(newLine);
+            if (getText().length > 0) {
+                rawWrite(newLine);
+            }
             rawWrite(ts.getIndentString(idnetation || getIndent()));
         };
         var writeValueAndNewLine = function (value) {

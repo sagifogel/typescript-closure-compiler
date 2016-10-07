@@ -547,9 +547,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
         function createFileEmitter(): (jsFilePath: string, sourceMapFilePath: string, sourceFiles: SourceFile[], isBundledEmit: boolean) => void {
             const writer = createTextWriter(newLine);
-            const { rawWrite, write, getIndent, getColumn, writeTextOfNode, writeLine, increaseIndent, decreaseIndent } = writer;
+            const { rawWrite, write, getIndent, getColumn, writeTextOfNode, writeLine, increaseIndent, decreaseIndent, getText } = writer;
             let forceWriteLine = function (idnetation?: number) {
-                rawWrite(newLine);
+                if (getText().length > 0) {
+                    rawWrite(newLine);
+                }
+
                 rawWrite(ts.getIndentString(idnetation || getIndent()));
             };
             let writeValueAndNewLine = function (value: string): void {
@@ -7910,7 +7913,7 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function shouldEmitModuleDeclaration(node: ModuleDeclaration) :boolean {
+            function shouldEmitModuleDeclaration(node: ModuleDeclaration): boolean {
                 if (isAmbientContextDeclaredWithinSourceFile(node)) {
                     return false;
                 }
@@ -7952,7 +7955,7 @@ const _super = (function (geti, seti) {
                 if (compilerOptions.emitAnnotations && hasLeadingComments(node)) {
                     emitLeadingComments(node);
                 }
-		
+
                 if (emitVarForModule) {
                     write("var ");
                     write(name);
@@ -8186,7 +8189,7 @@ const _super = (function (geti, seti) {
                         if (isES6ExportedDeclaration(node)) {
                             write("export ");
                             write("var ");
-                        }                     
+                        }
                     }
 
 
