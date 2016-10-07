@@ -211,13 +211,13 @@
 
         function compile(input) {
             var options = {
+                noLib: true,
                 noEmitOnError: true,
                 emitInterfaces: true,
                 emitAnnotations: true,
                 emitOneSideEnum: true,
-                isolatedModules: false,
-                target: ts.ScriptTarget.ES5,
                 allowNonTsExtensions: true,
+                target: ts.ScriptTarget.ES5,
                 module: ts.ModuleKind.CommonJS
             };
 
