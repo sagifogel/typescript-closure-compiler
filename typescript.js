@@ -13,7 +13,6 @@ See the Apache Version 2.0 License for specific language governing permissions
 and limitations under the License.
 ***************************************************************************** */
 
-
 var ts = {};
 // token > SyntaxKind.Identifer => token is a keyword
 // Also, If you add a new SyntaxKind be sure to keep the `Markers` section at the bottom in sync
@@ -30771,8 +30770,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         var decreaseIndent = writer.decreaseIndent;
         var getIndent = writer.getIndent;
         var getColumn = writer.getColumn;
+        var getText = writer.getText;
         var forceWriteLine = function (idnetation) {
-            rawWrite(newLine);
+            if (getText().length > 0) {
+                rawWrite(newLine);
+            }
             rawWrite(ts.getIndentString(idnetation || getIndent()));
         };
         var writeValueAndNewLine = function (value) {

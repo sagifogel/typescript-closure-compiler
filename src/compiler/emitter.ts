@@ -466,9 +466,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
         function emitJavaScript(jsFilePath: string, fileEmitter: (emitSourceFile: (sourceFile: SourceFile) => void, emitExportedTypes: () => void) => void, root?: SourceFile) {
             let writer = createTextWriter(newLine);
-            let rawWrite = writer.rawWrite, write = writer.write, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent, getIndent = writer.getIndent, getColumn = writer.getColumn;
+            let rawWrite = writer.rawWrite, write = writer.write, writeTextOfNode = writer.writeTextOfNode, writeLine = writer.writeLine, increaseIndent = writer.increaseIndent, decreaseIndent = writer.decreaseIndent, getIndent = writer.getIndent, getColumn = writer.getColumn, getText = writer.getText;
             let forceWriteLine = function (idnetation?: number) {
-                rawWrite(newLine);
+                if (getText().length > 0) {
+                    rawWrite(newLine);
+                }
+
                 rawWrite(ts.getIndentString(idnetation || getIndent()));
             };
 
