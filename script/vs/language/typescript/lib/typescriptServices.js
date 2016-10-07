@@ -30771,8 +30771,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         var decreaseIndent = writer.decreaseIndent;
         var getIndent = writer.getIndent;
         var getColumn = writer.getColumn;
+        var getText = writer.getText;
         var forceWriteLine = function (idnetation) {
-            rawWrite(newLine);
+            if (getText().length > 0) {
+                rawWrite(newLine);
+            }
             rawWrite(ts.getIndentString(idnetation || getIndent()));
         };
         var writeValueAndNewLine = function (value) {
