@@ -3743,7 +3743,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    write(moduleName);
+                    if (!isExpressionIdentifier(node.initializer)) {
+                        write(moduleName);
+                    }
+
                     emit(node.initializer);
                 }
 
@@ -3753,9 +3756,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 else {
                     write(" of ");
                 }
-                if (node.expression.kind === SyntaxKind.Identifier) {
-                    write(moduleName);
-                }
+                
                 emit(node.expression);
                 emitToken(SyntaxKind.CloseParenToken, node.expression.end);
                 emitEmbeddedStatement(node.statement);
@@ -7466,8 +7467,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 });
                 if (!compilerOptions.emitOneSideEnums) {
-                    write(",");
-
+                    if (node.members.length) {
+                        write(",");
+                    }
                     ts.forEach(node.members, (member, i) => {
                         let memberIsStringLiteral = false;
                         let nameIsStringLiteral = member.name.kind === SyntaxKind.StringLiteral;

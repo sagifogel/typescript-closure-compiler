@@ -33635,7 +33635,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
             else {
-                write(moduleName);
+                if (!isExpressionIdentifier(node.initializer)) {
+                    write(moduleName);
+                }
                 emit(node.initializer);
             }
             if (node.kind === 200 /* ForInStatement */) {
@@ -33643,9 +33645,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             else {
                 write(" of ");
-            }
-            if (node.expression.kind === 69 /* Identifier */) {
-                write(moduleName);
             }
             emit(node.expression);
             emitToken(18 /* CloseParenToken */, node.expression.end);
@@ -36884,7 +36883,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             });
             if (!compilerOptions.emitOneSideEnums) {
-                write(",");
+                if (node.members.length) {
+                    write(",");
+                }
                 ts.forEach(node.members, function (member, i) {
                     var memberIsStringLiteral = false;
                     var nameIsStringLiteral = member.name.kind === 9 /* StringLiteral */;
