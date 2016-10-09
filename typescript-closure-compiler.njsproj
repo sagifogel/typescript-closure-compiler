@@ -23,7 +23,7 @@
     <OutputPath>.</OutputPath>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <ProjectTypeGuids>{3AF33F2E-1136-4D97-BBB7-1795711AC8B8};{9092AA53-FB77-4645-B42D-1CCCA6BD08BD}</ProjectTypeGuids>
-    <ProjectView>ProjectFiles</ProjectView>
+    <ProjectView>ShowAllFiles</ProjectView>
     <TypeScriptSourceMap>true</TypeScriptSourceMap>
     <TypeScriptModuleKind>CommonJS</TypeScriptModuleKind>
     <EnableTypeScript>true</EnableTypeScript>
@@ -36,34 +36,59 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
-    <Content Include="package.json" />
+    <Content Include="assets\css\style.min.83cbdc26.css" />
+    <Content Include="assets\css\vendor.6ea5b3f8.css" />
+    <Content Include="assets\images\fork_me_ribbon.svg" />
+    <Content Include="index.html" />
     <Content Include="README.md" />
-    <Content Include="tscc" />
-    <TypeScriptCompile Include="src\compiler\binder.ts" />
-    <TypeScriptCompile Include="src\compiler\checker.ts" />
-    <TypeScriptCompile Include="src\compiler\commandLineParser.ts" />
-    <TypeScriptCompile Include="src\compiler\core.ts" />
-    <TypeScriptCompile Include="src\compiler\declarationEmitter.ts" />
-    <TypeScriptCompile Include="src\compiler\diagnosticInformationMap.generated.ts" />
-    <TypeScriptCompile Include="src\compiler\emitter.ts" />
-    <TypeScriptCompile Include="src\compiler\parser.ts" />
-    <TypeScriptCompile Include="src\compiler\program.ts" />
-    <TypeScriptCompile Include="src\compiler\scanner.ts" />
-    <TypeScriptCompile Include="src\compiler\sys.ts" />
-    <TypeScriptCompile Include="src\compiler\types.ts" />
-    <TypeScriptCompile Include="src\compiler\utilities.ts" />
-    <TypeScriptCompile Include="src\services\services.ts" />
-    <TypeScriptCompile Include="src\services\shims.ts" />
-    <TypeScriptCompile Include="src\services\utilities.ts" />
+    <Content Include="script\vs\editor\contrib\suggest\browser\symbol-sprite.svg" />
+    <Content Include="script\vs\editor\editor.main.css" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="src\services\" />
-    <Folder Include="src\" />
-    <Folder Include="src\compiler\" />
+    <Folder Include="assets\" />
+    <Folder Include="assets\css\" />
+    <Folder Include="assets\images\" />
+    <Folder Include="assets\js\" />
+    <Folder Include="examples\" />
+    <Folder Include="script\" />
+    <Folder Include="script\vs\" />
+    <Folder Include="script\vs\base\" />
+    <Folder Include="script\vs\base\common\" />
+    <Folder Include="script\vs\base\common\worker\" />
+    <Folder Include="script\vs\base\worker\" />
+    <Folder Include="script\vs\editor\" />
+    <Folder Include="script\vs\editor\contrib\" />
+    <Folder Include="script\vs\editor\contrib\suggest\" />
+    <Folder Include="script\vs\editor\contrib\suggest\browser\" />
+    <Folder Include="script\vs\language\" />
+    <Folder Include="script\vs\language\typescript\" />
+    <Folder Include="script\vs\language\typescript\lib\" />
+    <Folder Include="script\vs\language\typescript\src\" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="jakefile.js" />
-    <Compile Include="typescript.js" />
+    <Compile Include="assets\js\all.min.a689ec77.js" />
+    <Compile Include="assets\js\vendors.93c18b14.js" />
+    <Compile Include="playground.js" />
+    <Compile Include="script\vs\base\common\worker\simpleWorker.js" />
+    <Compile Include="script\vs\base\common\worker\simpleWorker.nls.js" />
+    <Compile Include="script\vs\base\worker\workerMain.js" />
+    <Compile Include="script\vs\editor\editor.main.js" />
+    <Compile Include="script\vs\editor\editor.main.nls.js" />
+    <Compile Include="script\vs\language\typescript\lib\lib-es6-ts.js" />
+    <Compile Include="script\vs\language\typescript\lib\lib-ts.js" />
+    <Compile Include="script\vs\language\typescript\lib\typescriptServices.js" />
+    <Compile Include="script\vs\language\typescript\src\mode.js" />
+    <Compile Include="script\vs\language\typescript\src\worker.js" />
+    <Compile Include="script\vs\loader.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <TypeScriptCompile Include="examples\inheritance_1.ts" />
+    <TypeScriptCompile Include="examples\raytracer.ts" />
+    <TypeScriptCompile Include="examples\union_types_1.ts" />
+    <TypeScriptCompile Include="examples\walkthrough1.1.ts" />
+    <TypeScriptCompile Include="examples\walkthrough1.ts" />
+    <TypeScriptCompile Include="examples\walkthrough2.1.ts" />
+    <TypeScriptCompile Include="examples\walkthrough2.ts" />
   </ItemGroup>
   <!-- Do not delete the following Import Project.  While this appears to do nothing it is a marker for setting TypeScript properties before our import that depends on them. -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
