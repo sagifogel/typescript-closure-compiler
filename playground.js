@@ -219,7 +219,7 @@
                 target: ts.ScriptTarget.ES5,
                 suppressOutputPathCheck: true,
                 emitInterfaces: emitInterfaces.checked,
-                emitOneSideEnum: emitOneSideEnums.checked
+                emitOneSideEnums: emitOneSideEnums.checked
             };
             
             var transpileOptions = { reportDiagnostics: true };
