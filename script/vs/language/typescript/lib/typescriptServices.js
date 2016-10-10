@@ -33729,7 +33729,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             emitNodeWithoutSourceMap(counter);
             write(" < ");
-            if (isContainedWithinModule) {
+            if (!rhsIsIdentifier && isContainedWithinModule) {
                 write(moduleName);
             }
             emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
