@@ -30366,6 +30366,7 @@ ts.writeDeclarationFile = function (jsFilePath, sourceFile, host, resolver, diag
 /// <reference path="checker.ts" />
 /// <reference path="declarationEmitter.ts" />
 /// <reference path="utilities.ts" />
+/// <reference path="parser.ts" />
 /* @internal */
 
 
@@ -31427,7 +31428,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         // Create a temporary variable with a unique unused name.
         function createTempVariable(flags) {
-            var result = ts.createSynthesizedNode(69 /* Identifier */);
+            var result = createSynthesizedNode(69 /* Identifier */);
             result.text = makeTempVariableName(flags);
             return result;
         }
@@ -31846,7 +31847,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
             function emitJsxElement(openingNode, children) {
-                var syntheticReactRef = ts.createSynthesizedNode(69 /* Identifier */);
+                var syntheticReactRef = createSynthesizedNode(69 /* Identifier */);
                 syntheticReactRef.text = "React";
                 syntheticReactRef.parent = openingNode;
                 // Call React.createElement(tag, ...
@@ -32766,22 +32767,28 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             // or we're compiling with an ES6+ target.
             emitObjectLiteralBody(node, properties.length);
         }
+        function createSynthesizedNode(kind, startsOnNewLine) {
+            var node = ts.createNode(kind);
+            node.pos = node.end = -1;
+            node.startsOnNewLine = startsOnNewLine;
+            return node;
+        }
         function createBinaryExpression(left, operator, right, startsOnNewLine) {
-            var result = ts.createSynthesizedNode(181 /* BinaryExpression */, startsOnNewLine);
-            result.operatorToken = ts.createSynthesizedNode(operator);
+            var result = createSynthesizedNode(181 /* BinaryExpression */, startsOnNewLine);
+            result.operatorToken = createSynthesizedNode(operator);
             result.left = left;
             result.right = right;
             return result;
         }
         function createPropertyAccessExpression(expression, name) {
-            var result = ts.createSynthesizedNode(166 /* PropertyAccessExpression */);
+            var result = createSynthesizedNode(166 /* PropertyAccessExpression */);
             result.expression = parenthesizeForAccess(expression);
-            result.dotToken = ts.createSynthesizedNode(21 /* DotToken */);
+            result.dotToken = createSynthesizedNode(21 /* DotToken */);
             result.name = name;
             return result;
         }
         function createElementAccessExpression(expression, argumentExpression) {
-            var result = ts.createSynthesizedNode(167 /* ElementAccessExpression */);
+            var result = createSynthesizedNode(167 /* ElementAccessExpression */);
             result.expression = parenthesizeForAccess(expression);
             result.argumentExpression = argumentExpression;
             return result;
@@ -32805,7 +32812,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 expr.kind !== 8 /* NumericLiteral */) {
                 return expr;
             }
-            var node = ts.createSynthesizedNode(172 /* ParenthesizedExpression */);
+            var node = createSynthesizedNode(172 /* ParenthesizedExpression */);
             node.expression = expr;
             return node;
         }
@@ -33316,7 +33323,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 if (ts.isElementAccessExpression(leftHandSideExpression)) {
                     shouldEmitParentheses = true;
                     write("(");
-                    synthesizedLHS = ts.createSynthesizedNode(167 /* ElementAccessExpression */, /*startsOnNewLine*/ false);
+                    synthesizedLHS = createSynthesizedNode(167 /* ElementAccessExpression */, /*startsOnNewLine*/ false);
                     var identifier = emitTempVariableAssignment(leftHandSideExpression.expression, /*canDefinedTempVariablesInPlaces*/ false, /*shouldEmitCommaBeforeAssignment*/ false);
                     synthesizedLHS.expression = identifier;
                     if (leftHandSideExpression.argumentExpression.kind !== 8 /* NumericLiteral */ &&
@@ -33333,7 +33340,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 else if (ts.isPropertyAccessExpression(leftHandSideExpression)) {
                     shouldEmitParentheses = true;
                     write("(");
-                    synthesizedLHS = ts.createSynthesizedNode(166 /* PropertyAccessExpression */, /*startsOnNewLine*/ false);
+                    synthesizedLHS = createSynthesizedNode(166 /* PropertyAccessExpression */, /*startsOnNewLine*/ false);
                     identifier = emitTempVariableAssignment(leftHandSideExpression.expression, /*canDefinedTempVariablesInPlaces*/ false, /*shouldemitCommaBeforeAssignment*/ false);
                     synthesizedLHS.expression = identifier;
                     synthesizedLHS.dotToken = leftHandSideExpression.dotToken;
@@ -33965,9 +33972,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             emitEnd(node.name);
         }
         function createVoidZero() {
-            var zero = ts.createSynthesizedNode(8 /* NumericLiteral */);
+            var zero = createSynthesizedNode(8 /* NumericLiteral */);
             zero.text = "0";
-            var result = ts.createSynthesizedNode(177 /* VoidExpression */);
+            var result = createSynthesizedNode(177 /* VoidExpression */);
             result.expression = zero;
             return result;
         }
@@ -34150,30 +34157,30 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 // we need to generate a temporary variable
                 value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ true);
                 // Return the expression 'value === void 0 ? defaultValue : value'
-                var equals = ts.createSynthesizedNode(181 /* BinaryExpression */);
+                var equals = createSynthesizedNode(181 /* BinaryExpression */);
                 equals.left = value;
-                equals.operatorToken = ts.createSynthesizedNode(32 /* EqualsEqualsEqualsToken */);
+                equals.operatorToken = createSynthesizedNode(32 /* EqualsEqualsEqualsToken */);
                 equals.right = createVoidZero();
                 return createConditionalExpression(equals, defaultValue, value);
             }
             function createConditionalExpression(condition, whenTrue, whenFalse) {
-                var cond = ts.createSynthesizedNode(182 /* ConditionalExpression */);
+                var cond = createSynthesizedNode(182 /* ConditionalExpression */);
                 cond.condition = condition;
-                cond.questionToken = ts.createSynthesizedNode(53 /* QuestionToken */);
+                cond.questionToken = createSynthesizedNode(53 /* QuestionToken */);
                 cond.whenTrue = whenTrue;
-                cond.colonToken = ts.createSynthesizedNode(54 /* ColonToken */);
+                cond.colonToken = createSynthesizedNode(54 /* ColonToken */);
                 cond.whenFalse = whenFalse;
                 return cond;
             }
             function createNumericLiteral(value) {
-                var node = ts.createSynthesizedNode(8 /* NumericLiteral */);
+                var node = createSynthesizedNode(8 /* NumericLiteral */);
                 node.text = "" + value;
                 return node;
             }
             function createPropertyAccessForDestructuringProperty(object, propName) {
                 // We create a synthetic copy of the identifier in order to avoid the rewriting that might
                 // otherwise occur when the identifier is emitted.
-                var syntheticName = ts.createSynthesizedNode(propName.kind);
+                var syntheticName = createSynthesizedNode(propName.kind);
                 syntheticName.text = propName.text;
                 if (syntheticName.kind !== 69 /* Identifier */) {
                     return createElementAccessExpression(object, syntheticName);
@@ -34181,8 +34188,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 return createPropertyAccessExpression(object, syntheticName);
             }
             function createSliceCall(value, sliceIndex) {
-                var call = ts.createSynthesizedNode(168 /* CallExpression */);
-                var sliceIdentifier = ts.createSynthesizedNode(69 /* Identifier */);
+                var call = createSynthesizedNode(168 /* CallExpression */);
+                var sliceIdentifier = createSynthesizedNode(69 /* Identifier */);
                 sliceIdentifier.text = "slice";
                 call.expression = createPropertyAccessExpression(value, sliceIdentifier);
                 call.arguments = ts.createSynthesizedNodeArray();

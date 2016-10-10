@@ -1,6 +1,7 @@
 ﻿/// <reference path="checker.ts" />
 /// <reference path="declarationEmitter.ts" />
 /// <reference path="utilities.ts" />
+/// <reference path="parser.ts" />
 
 /* @internal */
 namespace ts {
@@ -1008,7 +1009,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         host.getCanonicalFileName,
                         /*isAbsolutePathAnUrl*/ true));
                     sourceMapSourceIndex = sourceMapData.sourceMapSources.length - 1;
-                    
+
                     // The one that can be used from program to get the actual source file
                     sourceMapData.inputSourceFileNames.push(node.fileName);
 
@@ -2761,6 +2762,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitObjectLiteralBody(node, properties.length);
             }
 
+            function createSynthesizedNode(kind: SyntaxKind, startsOnNewLine?: boolean): Node {
+                const node = <SynthesizedNode>ts.createNode(kind);
+                node.pos = node.end = -1;
+                node.startsOnNewLine = startsOnNewLine;
+                return node;
+            }
+
             function createBinaryExpression(left: Expression, operator: SyntaxKind, right: Expression, startsOnNewLine?: boolean): BinaryExpression {
                 let result = <BinaryExpression>createSynthesizedNode(SyntaxKind.BinaryExpression, startsOnNewLine);
                 result.operatorToken = createSynthesizedNode(operator);
@@ -3756,7 +3764,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 else {
                     write(" of ");
                 }
-                
+
                 emit(node.expression);
                 emitToken(SyntaxKind.CloseParenToken, node.expression.end);
                 emitEmbeddedStatement(node.statement);
@@ -6412,7 +6420,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // If there is no property assignment, we can omit constructor if users do not define it
                 let hasInstancePropertyWithInitializer = false;
                 let nodeIsInterface = node.kind === SyntaxKind.InterfaceDeclaration;
-                
+
                 // Emit the constructor overload pinned comments
                 forEach(node.members, member => {
                     if (member.kind === SyntaxKind.Constructor && !(<ConstructorDeclaration>member).body) {
@@ -7411,7 +7419,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (!callOrIndexSignatures.length) {
                     emitConstructor(classLikeDeclaration, null, ts.getInterfaceBaseTypeNodes(node));
                     emitMemberFunctionsForES5AndLower(classLikeDeclaration);
-                    emitPropertyDeclarations(classLikeDeclaration, <Array<PropertyDeclaration>>ts.filter(node.members, member  => !isInterfaceFunctionMember(member)));
+                    emitPropertyDeclarations(classLikeDeclaration, <Array<PropertyDeclaration>>ts.filter(node.members, member => !isInterfaceFunctionMember(member)));
                     emitCommentsOnNotEmittedNode(node);
                 }
                 else {
@@ -7444,7 +7452,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitEnumDeclaration(node: EnumDeclaration) {
-                let membersLength = node.members.length - 1; 
+                let membersLength = node.members.length - 1;
                 // const enums are completely erased during compilation.
                 if (!shouldEmitEnumDeclaration(node)) {
                     return;
