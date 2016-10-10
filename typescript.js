@@ -33729,6 +33729,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             emitNodeWithoutSourceMap(counter);
             write(" < ");
+            if (isContainedWithinModule) {
+                write(moduleName);
+            }
             emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
             write(".length");
             emitEnd(node.initializer);
@@ -33797,6 +33800,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     emitDestructuring(assignmentExpression, /*isAssignmentExpressionStatement*/ true, /*value*/ undefined);
                 }
                 else {
+                    if (isContainedWithinModule) {
+                        var identifier = rhsIterationValue.expression;
+                        identifier.text = "" + moduleName + identifier.text;
+                    }
                     emitNodeWithCommentsAndWithoutSourcemap(assignmentExpression);
                 }
             }

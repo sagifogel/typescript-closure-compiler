@@ -3846,11 +3846,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 // _i < _a.length;
                 emitStart(node.initializer);
+
                 if (isContainedWithinModule) {
                     write(moduleName);
                 }
+
                 emitNodeWithoutSourceMap(counter);
                 write(" < ");
+
+                if (isContainedWithinModule) {
+                    write(moduleName);
+                }
+
                 emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
                 write(".length");
                 emitEnd(node.initializer);
@@ -3924,6 +3931,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitDestructuring(assignmentExpression, /*isAssignmentExpressionStatement*/ true, /*value*/ undefined);
                     }
                     else {
+                        if (isContainedWithinModule) {
+                            let identifier = <Identifier>rhsIterationValue.expression;
+
+                            identifier.text = `${moduleName}${identifier.text}`;
+                        }
+
                         emitNodeWithCommentsAndWithoutSourcemap(assignmentExpression);
                     }
                 }
