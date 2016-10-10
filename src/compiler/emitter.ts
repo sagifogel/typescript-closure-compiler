@@ -3854,7 +3854,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitNodeWithoutSourceMap(counter);
                 write(" < ");
 
-                if (isContainedWithinModule) {
+                if (!rhsIsIdentifier && isContainedWithinModule) {
                     write(moduleName);
                 }
 
