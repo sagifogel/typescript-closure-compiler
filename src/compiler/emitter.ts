@@ -5741,19 +5741,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (func.kind === SyntaxKind.Constructor) {
                     returnType = getGeneratedPathForModule(func.parent);
                 }
-                else {
-                    if (type.kind === SyntaxKind.PropertyAccessExpression) {
-                        let symbol = <PropertyDeclaration>getSymbolDeclaration(type);
+                else if (type.kind !== SyntaxKind.VoidKeyword) {
+                    var signature = typeChecker.getResolvedSignature(<CallExpression><any>func);
 
+                    if (signature.resolvedReturnType) {
                         hasReturnType = true;
-                        returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, symbol.initializer));
-                    }
-                    else if (hasReturnType = type.kind !== SyntaxKind.VoidKeyword) {
-                        if (type.kind === SyntaxKind.Block) {
-                            returnType = getReturnType(rootNode, func);
-                        }
-                        else {
-                            returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                        returnType = getSymbolName(func, signature.resolvedReturnType);
+
+                        if (type.kind !== SyntaxKind.Block) {
+                            returnType = genericsTypeChecker(returnType);
                         }
                     }
                 }

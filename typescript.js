@@ -35398,18 +35398,14 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (func.kind === 144 /* Constructor */) {
                 returnType = getGeneratedPathForModule(func.parent);
             }
-            else {
-                if (type.kind === 166 /* PropertyAccessExpression */) {
-                    var symbol = getSymbolDeclaration(type);
+            else if (type.kind !== 103 /* VoidKeyword */) {
+
+                var signature = typeChecker.getResolvedSignature(func);
+                if (signature.resolvedReturnType) {
                     hasReturnType = true;
-                    returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, symbol.initializer));
-                }
-                else if (hasReturnType = type.kind !== 103 /* VoidKeyword */) {
-                    if (type.kind === 192 /* Block */) {
-                        returnType = getReturnType(rootNode, func);
-                    }
-                    else {
-                        returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(rootNode, type));
+                    returnType = getSymbolName(func, signature.resolvedReturnType);
+                    if (type.kind !== 192 /* Block */) {
+                        returnType = genericsTypeChecker(returnType);
                     }
                 }
             }
