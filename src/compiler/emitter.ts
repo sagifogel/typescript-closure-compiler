@@ -3813,14 +3813,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let rhsIsIdentifier = node.expression.kind === SyntaxKind.Identifier;
                 let counter = createTempVariable(TempFlags._i);
                 let rhsReference = rhsIsIdentifier ? <Identifier>node.expression : createTempVariable(TempFlags.Auto);
+                let shouldEmitModule = rhsIsIdentifier && isContainedWithinModule;
+                let rhsIsNotIdentifierAndWithinModule = !rhsIsIdentifier && isContainedWithinModule;
+
+                if (rhsIsNotIdentifierAndWithinModule) {
+                    counter.text = `${moduleName}${counter.text}`;
+                    rhsReference.text = `${moduleName}${rhsReference.text}`;
+                }
 
                 // This is the let keyword for the counter and rhsReference. The let keyword for
                 // the LHS will be emitted inside the body.
                 emitStart(node.expression);
-                if (isContainedWithinModule) {
+
+                if (shouldEmitModule) {
                     write(moduleName);
                 }
-                else {
+                else if (!isContainedWithinModule) {
                     write("var ");
                 }
 
@@ -3833,9 +3841,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     // , _a = expr
                     write(", ");
                     emitStart(node.expression);
-                    if (isContainedWithinModule) {
+
+                    if (shouldEmitModule) {
                         write(moduleName);
                     }
+
                     emitNodeWithoutSourceMap(rhsReference);
                     write(" = ");
                     emitNodeWithoutSourceMap(node.expression);
@@ -3847,17 +3857,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // _i < _a.length;
                 emitStart(node.initializer);
 
-                if (isContainedWithinModule) {
+                if (shouldEmitModule) {
                     write(moduleName);
                 }
 
                 emitNodeWithoutSourceMap(counter);
                 write(" < ");
-
-                if (!rhsIsIdentifier && isContainedWithinModule) {
-                    write(moduleName);
-                }
-
                 emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
                 write(".length");
                 emitEnd(node.initializer);
@@ -3865,9 +3870,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 // _i++)
                 emitStart(node.initializer);
-                if (isContainedWithinModule) {
+
+                if (shouldEmitModule) {
                     write(moduleName);
                 }
+
                 emitNodeWithoutSourceMap(counter);
                 write("++");
                 emitEnd(node.initializer);
@@ -3889,9 +3896,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
                             write("var ");
-                        }
-                        else {
-                            write(moduleName);
                         }
 
                         if (isBindingPattern(declaration.name)) {
@@ -3931,12 +3935,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitDestructuring(assignmentExpression, /*isAssignmentExpressionStatement*/ true, /*value*/ undefined);
                     }
                     else {
-                        if (isContainedWithinModule) {
-                            let identifier = <Identifier>rhsIterationValue.expression;
-
-                            identifier.text = `${moduleName}${identifier.text}`;
-                        }
-
                         emitNodeWithCommentsAndWithoutSourcemap(assignmentExpression);
                     }
                 }
