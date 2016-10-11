@@ -41,6 +41,4 @@ node_modules
 *.tmp
 !*jakefile.js
 !*typescript.js
-!*tscc.browser.js
-!*compiler.js
 !*gulpfile.js

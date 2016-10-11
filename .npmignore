@@ -10,10 +10,8 @@ TypeScript/
 .gitmodules
 .npmignore
 *.dat
-compiler.js
 gulpfile.js
 jakefile.js
-lib
-tscc.browser.js
 *.njsproj
 *.sln
+typescriptServices.js
