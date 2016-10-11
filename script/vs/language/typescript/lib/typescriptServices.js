@@ -33696,13 +33696,19 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var rhsIsIdentifier = node.expression.kind === 69 /* Identifier */;
             var counter = createTempVariable(268435456 /* _i */);
             var rhsReference = rhsIsIdentifier ? node.expression : createTempVariable(0 /* Auto */);
+            var shouldEmitModule = rhsIsIdentifier && isContainedWithinModule;
+            var rhsIsNotIdentifierAndWithinModule = !rhsIsIdentifier && isContainedWithinModule;
+            if (rhsIsNotIdentifierAndWithinModule) {
+                counter.text = "" + moduleName + counter.text;
+                rhsReference.text = "" + moduleName + rhsReference.text;
+            }
             // This is the let keyword for the counter and rhsReference. The let keyword for
             // the LHS will be emitted inside the body.
             emitStart(node.expression);
-            if (isContainedWithinModule) {
+            if (shouldEmitModule) {
                 write(moduleName);
             }
-            else {
+            else if (!isContainedWithinModule) {
                 write("var ");
             }
             // _i = 0
@@ -33713,7 +33719,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 // , _a = expr
                 write(", ");
                 emitStart(node.expression);
-                if (isContainedWithinModule) {
+                if (shouldEmitModule) {
                     write(moduleName);
                 }
                 emitNodeWithoutSourceMap(rhsReference);
@@ -33724,21 +33730,18 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             write("; ");
             // _i < _a.length;
             emitStart(node.initializer);
-            if (isContainedWithinModule) {
+            if (shouldEmitModule) {
                 write(moduleName);
             }
             emitNodeWithoutSourceMap(counter);
             write(" < ");
-            if (!rhsIsIdentifier && isContainedWithinModule) {
-                write(moduleName);
-            }
             emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
             write(".length");
             emitEnd(node.initializer);
             write("; ");
             // _i++)
             emitStart(node.initializer);
-            if (isContainedWithinModule) {
+            if (shouldEmitModule) {
                 write(moduleName);
             }
             emitNodeWithoutSourceMap(counter);
@@ -33759,9 +33762,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     var declaration = variableDeclarationList.declarations[0];
                     if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
                         write("var ");
-                    }
-                    else {
-                        write(moduleName);
                     }
                     if (ts.isBindingPattern(declaration.name)) {
                         // This works whether the declaration is a var, let, or const.
@@ -33800,10 +33800,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     emitDestructuring(assignmentExpression, /*isAssignmentExpressionStatement*/ true, /*value*/ undefined);
                 }
                 else {
-                    if (isContainedWithinModule) {
-                        var identifier = rhsIterationValue.expression;
-                        identifier.text = "" + moduleName + identifier.text;
-                    }
                     emitNodeWithCommentsAndWithoutSourcemap(assignmentExpression);
                 }
             }
@@ -53818,6 +53814,4 @@ TypeScript.Services.TypeScriptServicesFactory = ts.TypeScriptServicesFactory;
 
 var toolsVersion = "1.7";
 
-define("vs/language/typescript/lib/typescriptServices", [], function () {
-    return ts;
-});
+define("vs/language/typescript/lib/typescriptServices", [], function () { return ts; });
