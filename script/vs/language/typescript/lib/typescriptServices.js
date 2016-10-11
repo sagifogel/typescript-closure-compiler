@@ -33659,7 +33659,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         function emitDownLevelForOfStatement(node) {
             var isContainedWithinModule = false;
-            var moduleName = getModuleName(node.expression);
+            var moduleName = getModuleName(node);
             if (!isNodeDeclaredWithinFunction(node)) {
                 isContainedWithinModule = !!moduleName;
             }
@@ -33699,17 +33699,16 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var shouldEmitModule = rhsIsIdentifier && isContainedWithinModule;
             var rhsIsNotIdentifierAndWithinModule = !rhsIsIdentifier && isContainedWithinModule;
             if (rhsIsNotIdentifierAndWithinModule) {
-                counter.text = "" + moduleName + counter.text;
                 rhsReference.text = "" + moduleName + rhsReference.text;
             }
             // This is the let keyword for the counter and rhsReference. The let keyword for
             // the LHS will be emitted inside the body.
             emitStart(node.expression);
-            if (shouldEmitModule) {
-                write(moduleName);
-            }
-            else if (!isContainedWithinModule) {
+            if (!isContainedWithinModule) {
                 write("var ");
+            }
+            else {
+                counter.text = "" + moduleName + counter.text;
             }
             // _i = 0
             emitNodeWithoutSourceMap(counter);
@@ -33730,9 +33729,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             write("; ");
             // _i < _a.length;
             emitStart(node.initializer);
-            if (shouldEmitModule) {
-                write(moduleName);
-            }
             emitNodeWithoutSourceMap(counter);
             write(" < ");
             emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
@@ -33741,9 +33737,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             write("; ");
             // _i++)
             emitStart(node.initializer);
-            if (shouldEmitModule) {
-                write(moduleName);
-            }
             emitNodeWithoutSourceMap(counter);
             write("++");
             emitEnd(node.initializer);
@@ -33755,6 +33748,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             // Initialize LHS
             // let v = _a[_i];
             var rhsIterationValue = createElementAccessExpression(rhsReference, counter);
+            rhsIterationValue.parent = node;
             emitStart(node.initializer);
             if (node.initializer.kind === 212 /* VariableDeclarationList */) {
                 var variableDeclarationList = node.initializer;
