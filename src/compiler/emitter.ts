@@ -3772,7 +3772,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitDownLevelForOfStatement(node: ForOfStatement) {
                 let isContainedWithinModule = false;
-                let moduleName = getModuleName(node.expression);
+                let moduleName = getModuleName(node);
 
                 if (!isNodeDeclaredWithinFunction(node)) {
                     isContainedWithinModule = !!moduleName;
@@ -3817,7 +3817,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let rhsIsNotIdentifierAndWithinModule = !rhsIsIdentifier && isContainedWithinModule;
 
                 if (rhsIsNotIdentifierAndWithinModule) {
-                    counter.text = `${moduleName}${counter.text}`;
                     rhsReference.text = `${moduleName}${rhsReference.text}`;
                 }
 
@@ -3825,11 +3824,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // the LHS will be emitted inside the body.
                 emitStart(node.expression);
 
-                if (shouldEmitModule) {
-                    write(moduleName);
-                }
-                else if (!isContainedWithinModule) {
+                if (!isContainedWithinModule) {
                     write("var ");
+                }
+                else {
+                    counter.text = `${moduleName}${counter.text}`;
                 }
 
                 // _i = 0
@@ -3856,11 +3855,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 // _i < _a.length;
                 emitStart(node.initializer);
-
-                if (shouldEmitModule) {
-                    write(moduleName);
-                }
-
                 emitNodeWithoutSourceMap(counter);
                 write(" < ");
                 emitNodeWithCommentsAndWithoutSourcemap(rhsReference);
@@ -3870,11 +3864,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 // _i++)
                 emitStart(node.initializer);
-
-                if (shouldEmitModule) {
-                    write(moduleName);
-                }
-
                 emitNodeWithoutSourceMap(counter);
                 write("++");
                 emitEnd(node.initializer);
@@ -3888,6 +3877,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // Initialize LHS
                 // let v = _a[_i];
                 let rhsIterationValue = createElementAccessExpression(rhsReference, counter);
+
+                rhsIterationValue.parent = node;
                 emitStart(node.initializer);
                 if (node.initializer.kind === SyntaxKind.VariableDeclarationList) {
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
