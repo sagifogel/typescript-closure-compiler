@@ -34366,7 +34366,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     if (initializer.kind === 165 /* ObjectLiteralExpression */ && !isNodeDeclaredWithinScope(node)) {
                         forceWriteLine();
                     }
-                    if (ts.isFunctionLike(initializer) && initializer.kind !== 174 /* ArrowFunction */) {
+                    if (ts.isFunctionLike(initializer) && initializer.kind !== 174 /* ArrowFunction */ && initializer.kind !== 173 /* FunctionExpression */) {
                         emitFunctionAnnotation(initializer);
                     }
                 }
@@ -35387,30 +35387,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var returnType = "";
             var hasReturnType;
             var type = func.type || func.body;
-            var genericsTypeChecker;
             var isCtor = func.kind === 153 /* ConstructorType */ || func.kind === 144 /* Constructor */;
-            if (rootNode.kind === 215 /* InterfaceDeclaration */ && getCallSignatures(rootNode).length) {
-                genericsTypeChecker = createGenericsTypeChecker(getGenericArguments(rootNode));
-            }
-            else {
-                genericsTypeChecker = createGenericsTypeChecker([]);
-            }
-            if (func.kind === 144 /* Constructor */) {
-                returnType = getGeneratedPathForModule(func.parent);
-            }
-            else if (type.kind !== 103 /* VoidKeyword */) {
-
-                var signature = typeChecker.getResolvedSignature(func);
-                if (signature.resolvedReturnType) {
-                    hasReturnType = true;
-                    returnType = getSymbolName(func, signature.resolvedReturnType);
-                    if (type.kind !== 192 /* Block */) {
-                        returnType = genericsTypeChecker(returnType);
-                    }
-                }
+            if (type.kind !== 103 /* VoidKeyword */) {
+                hasReturnType = !!(returnType = getReturnType(rootNode, func));
             }
             if (func.parameters.length || hasReturnType) {
-                var params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
+                var params = getParameterizedNode(rootNode, func.parameters, true);
                 if (isCtor) {
                     if (params) {
                         return "function(new:" + returnType + ", " + params + ")";
