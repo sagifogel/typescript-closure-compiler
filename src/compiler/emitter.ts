@@ -4575,7 +4575,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         if (initializer.kind === SyntaxKind.ObjectLiteralExpression && !isNodeDeclaredWithinScope(node)) {
                             forceWriteLine();
                         }
-                        if (ts.isFunctionLike(initializer) && initializer.kind !== SyntaxKind.ArrowFunction) {
+                        if (ts.isFunctionLike(initializer) && initializer.kind !== SyntaxKind.ArrowFunction && initializer.kind !== SyntaxKind.FunctionExpression) {
                             emitFunctionAnnotation(<FunctionExpression>initializer);
                         }
                     }
@@ -5728,34 +5728,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let returnType = "";
                 let hasReturnType: boolean;
                 let type = func.type || func.body;
-                let genericsTypeChecker: (param: string) => string;
                 let isCtor = func.kind === SyntaxKind.ConstructorType || func.kind === SyntaxKind.Constructor;
 
-                if (rootNode.kind === SyntaxKind.InterfaceDeclaration && getCallSignatures(<InterfaceDeclaration>rootNode).length) {
-                    genericsTypeChecker = createGenericsTypeChecker(getGenericArguments(<InterfaceDeclaration>rootNode));
-                }
-                else {
-                    genericsTypeChecker = createGenericsTypeChecker([]);
-                }
-
-                if (func.kind === SyntaxKind.Constructor) {
-                    returnType = getGeneratedPathForModule(func.parent);
-                }
-                else if (type.kind !== SyntaxKind.VoidKeyword) {
-                    var signature = typeChecker.getResolvedSignature(<CallExpression><any>func);
-
-                    if (signature.resolvedReturnType) {
-                        hasReturnType = true;
-                        returnType = getSymbolName(func, signature.resolvedReturnType);
-
-                        if (type.kind !== SyntaxKind.Block) {
-                            returnType = genericsTypeChecker(returnType);
-                        }
-                    }
+                if (type.kind !== SyntaxKind.VoidKeyword) {
+                    hasReturnType = !!(returnType = getReturnType(rootNode, func));
                 }
 
                 if (func.parameters.length || hasReturnType) {
-                    let params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
+                    let params = getParameterizedNode(rootNode, func.parameters, true);
 
                     if (isCtor) {
                         if (params) {
