@@ -34851,7 +34851,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (shouldResolveSymbol(node)) {
                 declaration = getDeclarationlAtLocation(node);
             }
-            if (declaration && declaration.kind !== 137 /* ComputedPropertyName */) {
+            if (declaration && declaration.kind !== 137 /* ComputedPropertyName */ && declaration.kind !== 138 /* TypeParameter */) {
                 return {
                     node: declaration,
                     scope: getImmediateContainerNode(declaration)

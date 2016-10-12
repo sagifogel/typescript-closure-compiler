@@ -1845,7 +1845,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     declaration = getDeclarationlAtLocation(node);
                 }
 
-                if (declaration && declaration.kind !== SyntaxKind.ComputedPropertyName) {
+                if (declaration && declaration.kind !== SyntaxKind.ComputedPropertyName && declaration.kind !== SyntaxKind.TypeParameter) {
                     return {
                         node: declaration,
                         scope: getImmediateContainerNode(declaration)
