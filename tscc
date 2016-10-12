@@ -176,11 +176,10 @@ function executeCommandLine(args) {
         rootFileNames = rootFileNames.concat(externFileNames)
         fileNames = sortFiles(rootFileNames);
         program = ts.createProgram(fileNames, compilerOptions);
-        now = Date.now();
         emitResult = program.emit();
         ts.getPreEmitDiagnostics(program).concat(emitResult.diagnostics).forEach(reportDiagnostic);
         exitCode = emitResult.emitSkipped ? 1 : 0;
-        console.log("Process exiting with code '" + exitCode + "' and lasted " + (Date.now() - now) + " milliseconds.");
+        console.log("Process exiting with code '" + exitCode + "' and lasted " + ts.emitTime + " milliseconds.");
         process.exit(exitCode);
     }
 }

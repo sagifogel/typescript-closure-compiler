@@ -12,6 +12,3 @@ gulp.task("default", function () {
                .pipe(rename("typescriptServices.js"))
                .pipe(gulp.dest(__dirname));
 });
-
-
-
