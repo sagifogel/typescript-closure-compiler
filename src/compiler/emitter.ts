@@ -4754,7 +4754,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         if (initializer.kind === SyntaxKind.ObjectLiteralExpression && !isNodeDeclaredWithinScope(node)) {
                             forceWriteLine();
                         }
-                        if (ts.isFunctionLike(initializer) && initializer.kind !== SyntaxKind.ArrowFunction) {
+                        if (ts.isFunctionLike(initializer) && initializer.kind !== SyntaxKind.ArrowFunction && initializer.kind !== SyntaxKind.FunctionExpression) {
                             emitFunctionAnnotation(<FunctionExpression>initializer);
                         }
                     }
@@ -5930,34 +5930,14 @@ const _super = (function (geti, seti) {
                 let returnType = "";
                 let hasReturnType: boolean;
                 let type = func.type || func.body;
-                let genericsTypeChecker: (param: string) => string;
                 let isCtor = func.kind === SyntaxKind.ConstructorType || func.kind === SyntaxKind.Constructor;
 
-                if (rootNode.kind === SyntaxKind.InterfaceDeclaration && getCallSignatures(<InterfaceDeclaration>rootNode).length) {
-                    genericsTypeChecker = createGenericsTypeChecker(getGenericArguments(<InterfaceDeclaration>rootNode));
-                }
-                else {
-                    genericsTypeChecker = createGenericsTypeChecker([]);
-                }
-
-                if (func.kind === SyntaxKind.Constructor) {
-                    returnType = getGeneratedPathForModule(func.parent);
-                }
-                else if (type.kind !== SyntaxKind.VoidKeyword) {
-                    var signature = typeChecker.getResolvedSignature(<CallExpression><any>func);
-
-                    if (signature.resolvedReturnType) {
-                        hasReturnType = true;
-                        returnType = getSymbolName(func, signature.resolvedReturnType);
-
-                        if (type.kind !== SyntaxKind.Block) {
-                            returnType = genericsTypeChecker(returnType);
-                        }
-                    }
+                if (type.kind !== SyntaxKind.VoidKeyword) {
+                    hasReturnType = !!(returnType = getReturnType(rootNode, func));
                 }
 
                 if (func.parameters.length || hasReturnType) {
-                    let params = getParameterizedNode(rootNode, func.parameters, true, genericsTypeChecker);
+                    let params = getParameterizedNode(rootNode, func.parameters, true);
 
                     if (isCtor) {
                         if (params) {
@@ -6159,7 +6139,12 @@ const _super = (function (geti, seti) {
                     case SyntaxKind.ConstructorType:
                     case SyntaxKind.MethodDeclaration:
                     case SyntaxKind.FunctionExpression:
-                        return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
+                        try {
+                            return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
+                        }
+                        catch (e) {
+                            console.log("getFunctionType", node.kind);
+                        }
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number", isParameterPropertyAssignment);
                     case SyntaxKind.StringLiteral:
@@ -6548,8 +6533,8 @@ const _super = (function (geti, seti) {
                 return getParameterOrUnionTypeAnnotation(node, node);
             }
 
-            
-	    function emitConstructorOrInterfaceAnnotation(node: InterfaceDeclaration | ClassLikeDeclaration, isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments & { name?: Identifier }, ctor?: ConstructorDeclaration) {
+
+            function emitConstructorOrInterfaceAnnotation(node: InterfaceDeclaration | ClassLikeDeclaration, isClass: boolean, interfacesImpl: Array<ExpressionWithTypeArguments>, baseTypeElement?: ExpressionWithTypeArguments & { name?: Identifier }, ctor?: ConstructorDeclaration) {
                 emitAnnotationIf(() => {
                     let type: string;
                     let heritageType: string;
@@ -6598,7 +6583,7 @@ const _super = (function (geti, seti) {
                     emitCommentedAnnotation(`@template ${genericTypes.join(", ")}`);
                 }
             }
-	    
+
             function emitConstructor(node: ClassLikeDeclaration, baseTypeElement: ExpressionWithTypeArguments, interfacesImpl: Array<ExpressionWithTypeArguments> = []) {
                 let saveTempFlags = tempFlags;
                 let saveTempVariables = tempVariables;
@@ -9402,7 +9387,7 @@ const _super = (function (geti, seti) {
                             return true;
                     }
                 }
-		
+
                 return false;
             }
 
