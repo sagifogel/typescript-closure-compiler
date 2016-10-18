@@ -5317,7 +5317,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
 
                 if (isInterfaceFunctionMemberOrAmbient) {
-                    if (node.kind === 140) {
+                    if (node.kind === SyntaxKind.PropertySignature) {
                         emittedNode = node.type;
                     }
 
