@@ -29648,6 +29648,7 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
             return diagnostics.getDiagnostics(sourceFile.fileName);
         }
         ts.forEach(host.getSourceFiles(), checkSourceFile);
+        ts.forEach(host.getExternSourceFiles(), checkSourceFile);
         return diagnostics.getDiagnostics();
     }
     function getGlobalDiagnostics() {
@@ -30391,20 +30392,26 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
         return ts.getDeclarationOfKind(moduleSymbol, 251 /* SourceFile */);
     }
     function initializeTypeChecker() {
-        // Bind all source files and propagate errors
-        ts.forEach(host.getSourceFiles(), function (file) {
-            ts.bindSourceFile(file, compilerOptions);
-        });
         var augmentations;
-        // Initialize global symbol table
-        ts.forEach(host.getSourceFiles(), function (file) {
+        var bindFile = function (file) {
+            ts.bindSourceFile(file, compilerOptions);
+        };
+        var mergeToTable = function (file) {
             if (!ts.isExternalOrCommonJsModule(file)) {
                 mergeSymbolTable(globals, file.locals);
             }
             if (file.moduleAugmentations.length) {
                 (augmentations || (augmentations = [])).push(file.moduleAugmentations);
             }
-        });
+        };
+        // Bind all source files and propagate errors
+        ts.forEach(host.getSourceFiles(), bindFile);
+        // Initialize global symbol table
+        ts.forEach(host.getSourceFiles(), mergeToTable);
+        // Bind all extern source files and propagate errors
+        ts.forEach(host.getExternSourceFiles(), bindFile);
+        // Initialize global symbol table
+        ts.forEach(host.getExternSourceFiles(), mergeToTable);
         if (augmentations) {
             // merge module augmentations.
             // this needs to be done after global symbol table is initialized to make sure that all ambient modules are indexed
@@ -33656,6 +33663,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     // emit output for the __param helper function
     var paramHelper = "\nvar __param = (this && this.__param) || function (paramIndex, decorator) {\n    return function (target, key) { decorator(target, key, paramIndex); }\n};";
     var awaiterHelper = "\nvar __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {\n    return new (P || (P = Promise))(function (resolve, reject) {\n        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }\n        function rejected(value) { try { step(generator.throw(value)); } catch (e) { reject(e); } }\n        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }\n        step((generator = generator.apply(thisArg, _arguments)).next());\n    });\n};";
+    var emitSkipped = false;
     var entryFile;
     var emitHost = host;
     var resolvedExportedTypes;
@@ -33665,10 +33673,15 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     var modulekind = ts.getEmitModuleKind(compilerOptions);
     var sourceMapDataList = compilerOptions.sourceMap || compilerOptions.inlineSourceMap ? [] : undefined;
     var emitterDiagnostics = ts.createDiagnosticCollection();
-    var emitSkipped = false;
     var newLine = host.getNewLine();
+    var emitOutFile = compilerOptions.outFile || compilerOptions.out;
+    var shouldEmitExternsOutFile = !!compilerOptions.externsOutFile;
+    if (compilerOptions.entry && compilerOptions.exportAs) {
+        entryFile = host.getSourceFile(compilerOptions.entry);
+        resolvedExportedTypes = resolveExportedEntryTypes(entryFile);
+    }
     var emitJavaScript = createFileEmitter();
-    ts.forEachExpectedEmitFile(host, emitFile, targetSourceFile);
+    forEachExpectedEmitFile(emitHost, emitFile, targetSourceFile);
     return {
         emitSkipped: emitSkipped,
         diagnostics: emitterDiagnostics.getDiagnostics(),
@@ -33715,6 +33728,118 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
         }
+    }
+    function forEachExpectedEmitFile(host, action, targetSourceFile) {
+        var options = host.getCompilerOptions();
+        // Emit on each source file
+        if (options.outFile || options.out) {
+            onBundledEmit(host);
+        }
+        else {
+            var sourceFiles = targetSourceFile === undefined ? host.getSourceFiles() : [targetSourceFile];
+            for (var _a = 0, sourceFiles_2 = sourceFiles; _a < sourceFiles_2.length; _a++) {
+                var sourceFile = sourceFiles_2[_a];
+                if (!ts.isDeclarationFile(sourceFile)) {
+                    onSingleFileEmit(host, sourceFile);
+                }
+            }
+        }
+        function onSingleFileEmit(host, sourceFile) {
+            // JavaScript files are always LanguageVariant.JSX, as JSX syntax is allowed in .js files also.
+            // So for JavaScript files, '.jsx' is only emitted if the input was '.jsx', and JsxEmit.Preserve.
+            // For TypeScript, the only time to emit with a '.jsx' extension, is on JSX input, and JsxEmit.Preserve
+            var extension = ".js";
+            if (options.jsx === 1 /* Preserve */) {
+                if (ts.isSourceFileJavaScript(sourceFile)) {
+                    if (ts.fileExtensionIs(sourceFile.fileName, ".jsx")) {
+                        extension = ".jsx";
+                    }
+                }
+                else if (sourceFile.languageVariant === 1 /* JSX */) {
+                    // TypeScript source file preserving JSX syntax
+                    extension = ".jsx";
+                }
+            }
+            var jsFilePath = ts.getOwnEmitOutputFilePath(sourceFile, host, extension);
+            var emitFileNames = {
+                jsFilePath: jsFilePath,
+                sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
+                declarationFilePath: !ts.isSourceFileJavaScript(sourceFile) ? getDeclarationEmitFilePath(jsFilePath, options) : undefined
+            };
+            action(emitFileNames, [sourceFile], /*isBundledEmit*/ false);
+        }
+        function onBundledEmit(host) {
+            // Can emit only sources that are not declaration file and are either non module code or module with --module or --target es6 specified
+            var bundledSources = ts.filter(host.getSourceFiles(), function (sourceFile) { return !ts.isDeclarationFile(sourceFile) &&
+                (!ts.isExternalModule(sourceFile) ||
+                    (ts.getEmitModuleKind(options) && ts.isExternalModule(sourceFile))); }); // module that can emit - note falsy value from getEmitModuleKind means the module kind that shouldn't be emitted
+            if (compilerOptions.externs && compilerOptions.externs.length && !shouldEmitExternsOutFile) {
+                bundledSources = bundledSources.concat(host.getExternSourceFiles());
+            }
+            if (bundledSources.length) {
+                var jsFilePath = options.outFile || options.out;
+                var emitFileNames = {
+                    jsFilePath: jsFilePath,
+                    sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
+                    declarationFilePath: getDeclarationEmitFilePath(jsFilePath, options)
+                };
+                action(emitFileNames, bundledSources, /*isBundledEmit*/ true);
+                if (shouldEmitExternsOutFile) {
+                    var jsFilePath_1 = compilerOptions.externsOutFile;
+                    var emitFileNames_1 = {
+                        jsFilePath: jsFilePath_1,
+                        sourceMapFilePath: getSourceMapFilePath(jsFilePath_1, options),
+                        declarationFilePath: getDeclarationEmitFilePath(jsFilePath_1, options)
+                    };
+                    action(emitFileNames_1, host.getExternSourceFiles(), /*isBundledEmit*/ true);
+                }
+            }
+        }
+        function getSourceMapFilePath(jsFilePath, options) {
+            return options.sourceMap ? jsFilePath + ".map" : undefined;
+        }
+        function getDeclarationEmitFilePath(jsFilePath, options) {
+            return options.declaration ? ts.removeFileExtension(jsFilePath) + ".d.ts" : undefined;
+        }
+    }
+    function reduceStatements(statements) {
+        var combined = [];
+        for (var _a = 0, statements_3 = statements; _a < statements_3.length; _a++) {
+            var statement = statements_3[_a];
+            switch (statement.kind) {
+                case 221 /* ModuleDeclaration */:
+                    combined = combined.concat(reduceStatements([statement.body]));
+                    break;
+                case 222 /* ModuleBlock */:
+                    combined = combined.concat(reduceStatements(statement.statements));
+                    break;
+                case 196 /* VariableStatement */:
+                    combined = combined.concat(statement.declarationList.declarations);
+                    break;
+                default:
+                    combined.push(statement);
+            }
+        }
+        return combined;
+    }
+    function resolveExportedEntryTypes(entryFile) {
+        if (compilerOptions.entry && entryFile) {
+            var statements = reduceStatements(entryFile.statements);
+            return statements.filter(function (statement) { return statement.kind === 231 /* ExportDeclaration */ || !!(ts.getCombinedNodeFlags(statement) & 2 /* Export */); })
+                .reduce(function (arr, statement) {
+                var declartions;
+                if (statement.kind === 231 /* ExportDeclaration */) {
+                    declartions = statement.exportClause.elements.map(function (el) {
+                        return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
+                    });
+                }
+                else {
+                    declartions = [statement];
+                }
+                return arr.concat(declartions);
+            }, []);
+        }
+        return [];
     }
     function createFileEmitter() {
         var writer = ts.createTextWriter(newLine);
@@ -37769,7 +37894,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitDeclarationName(node);
             }
             if (isInterfaceFunctionMemberOrAmbient) {
-                if (node.kind === 140) {
+                if (node.kind === 141 /* PropertySignature */) {
                     emittedNode = node.type;
                 }
                 emitSignatureParameters(emittedNode);
@@ -41774,41 +41899,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             emitSkipped = ts.writeDeclarationFile(declarationFilePath, sourceFiles, isBundledEmit, host, resolver, emitterDiagnostics) || emitSkipped;
         }
     }
-    function getEmitSourceFile(sourceFile) {
-        return function (emitSourceFile, emitExportedTypes) {
-            if (sourceFile) {
-                // Do not call emit directly. It does not set the currentSourceFile.
-                emitSourceFile(sourceFile);
-                if (sourceFile === entryFile) {
-                    emitExportedTypes();
-                }
-            }
-            else {
-                ts.forEach(host.getSourceFiles(), function (sourceFile) {
-                    if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
-                        emitSourceFile(sourceFile);
-                    }
-                });
-                if (entryFile) {
-                    emitExportedTypes();
-                }
-            }
-        };
-    }
-    function getEmitExternSourceFile(sourceFile) {
-        return function (emitSourceFile, emitExportedTypes) {
-            if (sourceFile) {
-                emitSourceFile(sourceFile);
-            }
-            else {
-                ts.forEach(emitHost.getExternSourceFiles(), function (sourceFile) {
-                    if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
-                        emitSourceFile(sourceFile);
-                    }
-                });
-            }
-        };
-    }
 };
 /// <reference path="sys.ts" />
 /// <reference path="emitter.ts" />
@@ -42122,6 +42212,7 @@ ts.flattenDiagnosticMessageText = function (messageText, newLine) {
 ts.createProgram = function (rootNames, options, host, oldProgram) {
     var program;
     var files = [];
+    var externFiles = [];
     var fileProcessingDiagnostics = ts.createDiagnosticCollection();
     var programDiagnostics = ts.createDiagnosticCollection();
     var commonSourceDirectory;
@@ -42130,8 +42221,10 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
     var classifiableNames;
     var programSizeLimitExceeded = -1;
     var programSizeForNonTsFiles = 0;
+    var compilerOptions = options;
     var skipDefaultLib = options.noLib;
     var supportedExtensions = ts.getSupportedExtensions(options);
+    var externs = compilerOptions.externs || [];
     var start = new Date().getTime();
     host = host || ts.createCompilerHost(options);
     // Map storing if there is emit blocking diagnostics for given input
@@ -42159,6 +42252,7 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
             return resolvedModuleNames;
         });
     var filesByName = ts.createFileMap();
+    var libFilePath = host.getDefaultLibFileName(options);
     // stores 'filename -> file association' ignoring case
     // used to track cases when two file names differ only in casing 
     var filesByNameIgnoreCase = host.useCaseSensitiveFileNames() ? ts.createFileMap(function (fileName) { return fileName.toLowerCase(); }) : undefined;
@@ -42183,15 +42277,19 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
         //  - A 'no-default-lib' reference comment is encountered in
         //      processing the root files.
         if (!skipDefaultLib) {
-            processRootFile(host.getDefaultLibFileName(options), /*isDefaultLib*/ true);
+            processRootFile(libFilePath, /*isDefaultLib*/ true);
         }
     }
+    externs = externs.map(function (file) { return ts.normalizePath(file); });
+    externFiles = files.filter(function (sourceFile) { return externs.indexOf(sourceFile.fileName) > -1; });
+    files = files.filter(function (sourceFile) { return externFiles.indexOf(sourceFile) === -1 || sourceFile.fileName === libFilePath; });
     // unconditionally set oldProgram to undefined to prevent it from being captured in closure
     oldProgram = undefined;
     program = {
         getRootFileNames: function () { return rootNames; },
         getSourceFile: getSourceFile,
         getSourceFiles: function () { return files; },
+        getExternSourceFiles: function () { return externFiles; },
         getCompilerOptions: function () { return options; },
         getSyntacticDiagnostics: getSyntacticDiagnostics,
         getOptionsDiagnostics: getOptionsDiagnostics,
@@ -42339,6 +42437,7 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
             getNewLine: function () { return host.getNewLine(); },
             getSourceFile: program.getSourceFile,
             getSourceFiles: program.getSourceFiles,
+            getExternSourceFiles: program.getExternSourceFiles,
             writeFile: writeFileCallback || (function (fileName, data, writeByteOrderMark, onError) { return host.writeFile(fileName, data, writeByteOrderMark, onError); }),
             isEmitBlocked: isEmitBlocked
         };
@@ -42928,8 +43027,8 @@ ts.createProgram = function (rootNames, options, host, oldProgram) {
         var allFilesBelongToPath = true;
         if (sourceFiles) {
             var absoluteRootDirectoryPath = host.getCanonicalFileName(ts.getNormalizedAbsolutePath(rootDirectory, currentDirectory));
-            for (var _i = 0, sourceFiles_2 = sourceFiles; _i < sourceFiles_2.length; _i++) {
-                var sourceFile = sourceFiles_2[_i];
+            for (var _i = 0, sourceFiles_3 = sourceFiles; _i < sourceFiles_3.length; _i++) {
+                var sourceFile = sourceFiles_3[_i];
                 if (!ts.isDeclarationFile(sourceFile)) {
                     var absoluteSourceFilePath = host.getCanonicalFileName(ts.getNormalizedAbsolutePath(sourceFile.fileName, currentDirectory));
                     if (absoluteSourceFilePath.indexOf(absoluteRootDirectoryPath) !== 0) {
@@ -54329,8 +54428,8 @@ ts.createLanguageService = function (host, documentRegistry) {
         }
         else {
             var internedName = getInternedName(symbol, node, declarations);
-            for (var _i = 0, sourceFiles_3 = sourceFiles; _i < sourceFiles_3.length; _i++) {
-                var sourceFile = sourceFiles_3[_i];
+            for (var _i = 0, sourceFiles_4 = sourceFiles; _i < sourceFiles_4.length; _i++) {
+                var sourceFile = sourceFiles_4[_i];
                 cancellationToken.throwIfCancellationRequested();
                 var nameTable = ts.getNameTable(sourceFile);
                 if (ts.lookUp(nameTable, internedName) !== undefined) {
