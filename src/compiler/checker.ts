@@ -25,7 +25,7 @@ namespace ts {
         return symbol.id;
     }
 
-    export function createTypeChecker(host: TypeCheckerHost, produceDiagnostics: boolean): TypeChecker {
+    export function createTypeChecker(host: ExtendedTypeCheckerHost, produceDiagnostics: boolean): TypeChecker {
         // Cancellation that controls whether or not we can cancel in the middle of type checking.
         // In general cancelling is *not* safe for the type checker.  We might be in the middle of
         // computing something, and we will leave our internals in an inconsistent state.  Callers
@@ -316,7 +316,7 @@ namespace ts {
                 target.flags |= source.flags;
                 if (source.valueDeclaration &&
                     (!target.valueDeclaration ||
-                     (target.valueDeclaration.kind === SyntaxKind.ModuleDeclaration && source.valueDeclaration.kind !== SyntaxKind.ModuleDeclaration))) {
+                        (target.valueDeclaration.kind === SyntaxKind.ModuleDeclaration && source.valueDeclaration.kind !== SyntaxKind.ModuleDeclaration))) {
                     // other kinds of value declarations take precedence over modules
                     target.valueDeclaration = source.valueDeclaration;
                 }
@@ -570,8 +570,8 @@ namespace ts {
                                 useResult = result.flags & SymbolFlags.TypeParameter
                                     // type parameters are visible in parameter list, return type and type parameter list
                                     ? lastLocation === (<FunctionLikeDeclaration>location).type ||
-                                      lastLocation.kind === SyntaxKind.Parameter ||
-                                      lastLocation.kind === SyntaxKind.TypeParameter
+                                    lastLocation.kind === SyntaxKind.Parameter ||
+                                    lastLocation.kind === SyntaxKind.TypeParameter
                                     // local types not visible outside the function body
                                     : false;
                             }
@@ -4089,7 +4089,7 @@ namespace ts {
                     : undefined;
                 const typeParameters = classType ? classType.localTypeParameters :
                     declaration.typeParameters ? getTypeParametersFromDeclaration(declaration.typeParameters) :
-                    getTypeParametersFromJSDocTemplate(declaration);
+                        getTypeParametersFromJSDocTemplate(declaration);
                 const parameters: Symbol[] = [];
                 let hasStringLiterals = false;
                 let minArgumentCount = -1;
@@ -5216,8 +5216,8 @@ namespace ts {
         }
 
         function isSignatureAssignableTo(source: Signature,
-                                         target: Signature,
-                                         ignoreReturnTypes: boolean): boolean {
+            target: Signature,
+            ignoreReturnTypes: boolean): boolean {
             return compareSignaturesRelated(source, target, ignoreReturnTypes, /*reportErrors*/ false, /*errorReporter*/ undefined, compareTypesAssignable) !== Ternary.False;
         }
 
@@ -5225,11 +5225,11 @@ namespace ts {
          * See signatureRelatedTo, compareSignaturesIdentical
          */
         function compareSignaturesRelated(source: Signature,
-                                          target: Signature,
-                                          ignoreReturnTypes: boolean,
-                                          reportErrors: boolean,
-                                          errorReporter: (d: DiagnosticMessage, arg0?: string, arg1?: string) => void,
-                                          compareTypes: (s: Type, t: Type, reportErrors?: boolean) => Ternary): Ternary {
+            target: Signature,
+            ignoreReturnTypes: boolean,
+            reportErrors: boolean,
+            errorReporter: (d: DiagnosticMessage, arg0?: string, arg1?: string) => void,
+            compareTypes: (s: Type, t: Type, reportErrors?: boolean) => Ternary): Ternary {
             // TODO (drosen): De-duplicate code between related functions.
             if (source === target) {
                 return Ternary.True;
@@ -5294,10 +5294,10 @@ namespace ts {
         }
 
         function compareTypePredicateRelatedTo(source: TypePredicate,
-                                               target: TypePredicate,
-                                               reportErrors: boolean,
-                                               errorReporter: (d: DiagnosticMessage, arg0?: string, arg1?: string) => void,
-                                               compareTypes: (s: Type, t: Type, reportErrors?: boolean) => Ternary): Ternary {
+            target: TypePredicate,
+            reportErrors: boolean,
+            errorReporter: (d: DiagnosticMessage, arg0?: string, arg1?: string) => void,
+            compareTypes: (s: Type, t: Type, reportErrors?: boolean) => Ternary): Ternary {
             if (source.kind !== target.kind) {
                 if (reportErrors) {
                     errorReporter(Diagnostics.A_this_based_type_guard_is_not_compatible_with_a_parameter_based_type_guard);
@@ -6866,7 +6866,7 @@ namespace ts {
                     const declaration = getDeclarationOfKind(symbol, SyntaxKind.VariableDeclaration);
                     const top = declaration && getDeclarationContainer(declaration);
                     const originalType = type;
-                    const nodeStack: {node: Node, child: Node}[] = [];
+                    const nodeStack: { node: Node, child: Node }[] = [];
                     loop: while (node.parent) {
                         const child = node;
                         node = node.parent;
@@ -6874,7 +6874,7 @@ namespace ts {
                             case SyntaxKind.IfStatement:
                             case SyntaxKind.ConditionalExpression:
                             case SyntaxKind.BinaryExpression:
-                                nodeStack.push({node, child});
+                                nodeStack.push({ node, child });
                                 break;
                             case SyntaxKind.SourceFile:
                             case SyntaxKind.ModuleDeclaration:
@@ -6886,7 +6886,7 @@ namespace ts {
                         }
                     }
 
-                    let nodes: {node: Node, child: Node};
+                    let nodes: { node: Node, child: Node };
                     while (nodes = nodeStack.pop()) {
                         const {node, child} = nodes;
                         switch (node.kind) {
@@ -10377,7 +10377,7 @@ namespace ts {
                 // Permit 'number[] | "foo"' to be asserted to 'string'.
                 const bothAreStringLike =
                     someConstituentTypeHasKind(targetType, TypeFlags.StringLike) &&
-                        someConstituentTypeHasKind(widenedType, TypeFlags.StringLike);
+                    someConstituentTypeHasKind(widenedType, TypeFlags.StringLike);
                 if (!bothAreStringLike && !(isTypeAssignableTo(targetType, widenedType))) {
                     checkTypeAssignableTo(exprType, targetType, node, Diagnostics.Neither_type_0_nor_type_1_is_assignable_to_the_other);
                 }
@@ -11675,7 +11675,7 @@ namespace ts {
                     let hasReportedError = false;
                     for (const { name } of parent.parameters) {
                         if (isBindingPattern(name) &&
-                                checkIfTypePredicateVariableIsDeclaredInBindingPattern(name, parameterName, typePredicate.parameterName)) {
+                            checkIfTypePredicateVariableIsDeclaredInBindingPattern(name, parameterName, typePredicate.parameterName)) {
                             hasReportedError = true;
                             break;
                         }
@@ -11720,7 +11720,7 @@ namespace ts {
                     if (checkIfTypePredicateVariableIsDeclaredInBindingPattern(
                         <BindingPattern>name,
                         predicateVariableNode,
-                         predicateVariableName)) {
+                        predicateVariableName)) {
                         return true;
                     }
                 }
@@ -14736,7 +14736,7 @@ namespace ts {
                         error((<ImportEqualsDeclaration>node).name, Diagnostics.Module_augmentation_cannot_introduce_new_names_in_the_top_level_scope);
                         break;
                     }
-                    // fallthrough
+                // fallthrough
                 case SyntaxKind.ImportDeclaration:
                     grammarErrorOnFirstToken(node, Diagnostics.Imports_are_not_permitted_in_module_augmentations_Consider_moving_them_to_the_enclosing_external_module);
                     break;
@@ -14750,7 +14750,7 @@ namespace ts {
                         }
                         break;
                     }
-                    // fallthrough
+                // fallthrough
                 case SyntaxKind.ClassDeclaration:
                 case SyntaxKind.EnumDeclaration:
                 case SyntaxKind.FunctionDeclaration:
@@ -15274,6 +15274,7 @@ namespace ts {
                 return diagnostics.getDiagnostics(sourceFile.fileName);
             }
             forEach(host.getSourceFiles(), checkSourceFile);
+            forEach(host.getExternSourceFiles(), checkSourceFile);
             return diagnostics.getDiagnostics();
         }
 
@@ -15469,7 +15470,7 @@ namespace ts {
                     case SpecialPropertyAssignmentKind.ModuleExports:
                         return getSymbolOfNode(entityName.parent.parent);
                     default:
-                        // Fall through if it is not a special property assignment
+                    // Fall through if it is not a special property assignment
                 }
             }
 
@@ -16122,21 +16123,30 @@ namespace ts {
         }
 
         function initializeTypeChecker() {
-            // Bind all source files and propagate errors
-            forEach(host.getSourceFiles(), file => {
-                bindSourceFile(file, compilerOptions);
-            });
-
             let augmentations: LiteralExpression[][];
-            // Initialize global symbol table
-            forEach(host.getSourceFiles(), file => {
+
+            const bindFile = (file: SourceFile) => {
+                bindSourceFile(file, compilerOptions);
+            };
+
+            const mergeToTable = (file: SourceFile) => {
                 if (!isExternalOrCommonJsModule(file)) {
                     mergeSymbolTable(globals, file.locals);
                 }
                 if (file.moduleAugmentations.length) {
                     (augmentations || (augmentations = [])).push(file.moduleAugmentations);
                 }
-            });
+            };
+
+            // Bind all source files and propagate errors
+            forEach(host.getSourceFiles(), bindFile);
+            // Initialize global symbol table
+            forEach(host.getSourceFiles(), mergeToTable);
+
+            // Bind all extern source files and propagate errors
+            forEach(host.getExternSourceFiles(), bindFile);
+            // Initialize global symbol table
+            forEach(host.getExternSourceFiles(), mergeToTable);
 
             if (augmentations) {
                 // merge module augmentations.

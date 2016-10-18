@@ -15,6 +15,10 @@ namespace ts {
 
     export const version = "1.8.34";
 
+    interface ExtendedProgram extends Program {
+        getExternSourceFiles(): SourceFile[];
+    }
+
     export function findConfigFile(searchPath: string, fileExists: (fileName: string) => boolean): string {
         let fileName = "tsconfig.json";
         while (true) {
@@ -340,8 +344,9 @@ namespace ts {
     }
 
     export function createProgram(rootNames: string[], options: CompilerOptions, host?: CompilerHost, oldProgram?: Program): Program {
-        let program: Program;
+        let program: ExtendedProgram;
         let files: SourceFile[] = [];
+        let externFiles: SourceFile[] = [];
         let fileProcessingDiagnostics = createDiagnosticCollection();
         const programDiagnostics = createDiagnosticCollection();
 
@@ -351,10 +356,10 @@ namespace ts {
         let classifiableNames: Map<string>;
         const programSizeLimitExceeded = -1;
         let programSizeForNonTsFiles = 0;
-
+        let compilerOptions = <ExtendedCompilerOptions>options;
         let skipDefaultLib = options.noLib;
         const supportedExtensions = getSupportedExtensions(options);
-
+        let externs = <string[]>compilerOptions.externs || [];
         const start = new Date().getTime();
 
         host = host || createCompilerHost(options);
@@ -384,6 +389,7 @@ namespace ts {
             });
 
         const filesByName = createFileMap<SourceFile>();
+        const libFilePath = host.getDefaultLibFileName(options);
         // stores 'filename -> file association' ignoring case
         // used to track cases when two file names differ only in casing 
         const filesByNameIgnoreCase = host.useCaseSensitiveFileNames() ? createFileMap<SourceFile>(fileName => fileName.toLowerCase()) : undefined;
@@ -410,10 +416,13 @@ namespace ts {
             //  - A 'no-default-lib' reference comment is encountered in
             //      processing the root files.
             if (!skipDefaultLib) {
-                processRootFile(host.getDefaultLibFileName(options), /*isDefaultLib*/ true);
+                processRootFile(libFilePath, /*isDefaultLib*/ true);
             }
         }
 
+        externs = externs.map(file => normalizePath(file));
+        externFiles = files.filter(sourceFile => externs.indexOf(sourceFile.fileName) > -1);
+        files = files.filter(sourceFile => externFiles.indexOf(sourceFile) === -1 || sourceFile.fileName === libFilePath);
         // unconditionally set oldProgram to undefined to prevent it from being captured in closure
         oldProgram = undefined;
 
@@ -421,6 +430,7 @@ namespace ts {
             getRootFileNames: () => rootNames,
             getSourceFile,
             getSourceFiles: () => files,
+            getExternSourceFiles: () => externFiles,
             getCompilerOptions: () => options,
             getSyntacticDiagnostics,
             getOptionsDiagnostics,
@@ -581,7 +591,7 @@ namespace ts {
             return true;
         }
 
-        function getEmitHost(writeFileCallback?: WriteFileCallback): EmitHost {
+        function getEmitHost(writeFileCallback?: WriteFileCallback): ExtendedEmitHost {
             return {
                 getCanonicalFileName,
                 getCommonSourceDirectory: program.getCommonSourceDirectory,
@@ -590,6 +600,7 @@ namespace ts {
                 getNewLine: () => host.getNewLine(),
                 getSourceFile: program.getSourceFile,
                 getSourceFiles: program.getSourceFiles,
+                getExternSourceFiles: program.getExternSourceFiles,
                 writeFile: writeFileCallback || (
                     (fileName, data, writeByteOrderMark, onError) => host.writeFile(fileName, data, writeByteOrderMark, onError)),
                 isEmitBlocked,

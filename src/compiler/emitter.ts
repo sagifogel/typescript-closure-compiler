@@ -409,6 +409,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments)).next());
     });
 };`;
+        let emitSkipped = false;
         let entryFile: SourceFile;
         let emitHost = <ExtendedEmitHost>host;
         let resolvedExportedTypes: Array<Declaration>;
@@ -418,11 +419,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         const modulekind = getEmitModuleKind(compilerOptions);
         const sourceMapDataList: SourceMapData[] = compilerOptions.sourceMap || compilerOptions.inlineSourceMap ? [] : undefined;
         const emitterDiagnostics = createDiagnosticCollection();
-        let emitSkipped = false;
         const newLine = host.getNewLine();
+        const emitOutFile = compilerOptions.outFile || compilerOptions.out;
+        const shouldEmitExternsOutFile = !!compilerOptions.externsOutFile;
+
+        if (compilerOptions.entry && compilerOptions.exportAs) {
+            entryFile = host.getSourceFile(compilerOptions.entry);
+            resolvedExportedTypes = resolveExportedEntryTypes(entryFile);
+        }
 
         const emitJavaScript = createFileEmitter();
-        forEachExpectedEmitFile(host, emitFile, targetSourceFile);
+        forEachExpectedEmitFile(emitHost, emitFile, targetSourceFile);
 
         return {
             emitSkipped,
@@ -543,6 +550,134 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
             }
+        }
+
+        function forEachExpectedEmitFile(host: ExtendedEmitHost, action: (emitFileNames: EmitFileNames, sourceFiles: SourceFile[], isBundledEmit: boolean) => void, targetSourceFile?: SourceFile) {
+            const options = host.getCompilerOptions();
+            // Emit on each source file
+            if (options.outFile || options.out) {
+                onBundledEmit(host);
+            }
+            else {
+                const sourceFiles = targetSourceFile === undefined ? host.getSourceFiles() : [targetSourceFile];
+                for (const sourceFile of sourceFiles) {
+                    if (!isDeclarationFile(sourceFile)) {
+                        onSingleFileEmit(host, sourceFile);
+                    }
+                }
+            }
+
+            function onSingleFileEmit(host: ExtendedEmitHost, sourceFile: SourceFile) {
+                // JavaScript files are always LanguageVariant.JSX, as JSX syntax is allowed in .js files also.
+                // So for JavaScript files, '.jsx' is only emitted if the input was '.jsx', and JsxEmit.Preserve.
+                // For TypeScript, the only time to emit with a '.jsx' extension, is on JSX input, and JsxEmit.Preserve
+                let extension = ".js";
+                if (options.jsx === JsxEmit.Preserve) {
+                    if (isSourceFileJavaScript(sourceFile)) {
+                        if (fileExtensionIs(sourceFile.fileName, ".jsx")) {
+                            extension = ".jsx";
+                        }
+                    }
+                    else if (sourceFile.languageVariant === LanguageVariant.JSX) {
+                        // TypeScript source file preserving JSX syntax
+                        extension = ".jsx";
+                    }
+                }
+                const jsFilePath = getOwnEmitOutputFilePath(sourceFile, host, extension);
+                const emitFileNames: EmitFileNames = {
+                    jsFilePath,
+                    sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
+                    declarationFilePath: !isSourceFileJavaScript(sourceFile) ? getDeclarationEmitFilePath(jsFilePath, options) : undefined
+                };
+                action(emitFileNames, [sourceFile], /*isBundledEmit*/false);
+            }
+
+            function onBundledEmit(host: ExtendedEmitHost) {
+                // Can emit only sources that are not declaration file and are either non module code or module with --module or --target es6 specified
+                let bundledSources = filter(host.getSourceFiles(),
+                    sourceFile => !isDeclarationFile(sourceFile) && // Not a declaration file
+                        (!isExternalModule(sourceFile) || // non module file
+                            (getEmitModuleKind(options) && isExternalModule(sourceFile)))); // module that can emit - note falsy value from getEmitModuleKind means the module kind that shouldn't be emitted
+
+
+                if (compilerOptions.externs && compilerOptions.externs.length && !shouldEmitExternsOutFile) {
+                    bundledSources = bundledSources.concat(host.getExternSourceFiles());
+                }
+
+                if (bundledSources.length) {
+                    const jsFilePath = options.outFile || options.out;
+                    const emitFileNames: EmitFileNames = {
+                        jsFilePath,
+                        sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
+                        declarationFilePath: getDeclarationEmitFilePath(jsFilePath, options)
+                    };
+                    action(emitFileNames, bundledSources, /*isBundledEmit*/true);
+
+                    if (shouldEmitExternsOutFile) {
+                        const jsFilePath = compilerOptions.externsOutFile;
+                        const emitFileNames: EmitFileNames = {
+                            jsFilePath,
+                            sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
+                            declarationFilePath: getDeclarationEmitFilePath(jsFilePath, options)
+                        };
+                        action(emitFileNames, host.getExternSourceFiles(), /*isBundledEmit*/true);
+                    }
+                }
+            }
+
+            function getSourceMapFilePath(jsFilePath: string, options: CompilerOptions) {
+                return options.sourceMap ? jsFilePath + ".map" : undefined;
+            }
+
+            function getDeclarationEmitFilePath(jsFilePath: string, options: CompilerOptions) {
+                return options.declaration ? removeFileExtension(jsFilePath) + ".d.ts" : undefined;
+            }
+        }
+
+        function reduceStatements(statements: Array<Statement | Declaration>): Array<Node> {
+            let combined: Array<Node> = [];
+
+            for (let statement of statements) {
+                switch (statement.kind) {
+                    case SyntaxKind.ModuleDeclaration:
+                        combined = combined.concat(reduceStatements([(<ModuleDeclaration>statement).body]));
+                        break;
+                    case SyntaxKind.ModuleBlock:
+                        combined = combined.concat(reduceStatements((<ModuleBlock>statement).statements));
+                        break;
+                    case SyntaxKind.VariableStatement:
+                        combined = combined.concat((<VariableStatement>statement).declarationList.declarations);
+                        break;
+                    default:
+                        combined.push(statement);
+                }
+            }
+
+            return combined;
+        }
+
+        function resolveExportedEntryTypes(entryFile: SourceFile): Array<Declaration> {
+            if (compilerOptions.entry && entryFile) {
+                let statements = reduceStatements(entryFile.statements);
+
+                return statements.filter(statement => statement.kind === SyntaxKind.ExportDeclaration || !!(ts.getCombinedNodeFlags(statement) & NodeFlags.Export))
+                    .reduce((arr: Array<Declaration>, statement: ExportDeclaration) => {
+                        let declartions: Array<Declaration>;
+
+                        if (statement.kind === SyntaxKind.ExportDeclaration) {
+                            declartions = statement.exportClause.elements.map(el => {
+                                return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
+                            });
+                        }
+                        else {
+                            declartions = [statement];
+                        }
+
+                        return arr.concat(declartions);
+                    }, []);
+            }
+
+            return [];
         }
 
         function createFileEmitter(): (jsFilePath: string, sourceMapFilePath: string, sourceFiles: SourceFile[], isBundledEmit: boolean) => void {
@@ -9793,45 +9928,6 @@ const _super = (function (geti, seti) {
 
             if (declarationFilePath) {
                 emitSkipped = writeDeclarationFile(declarationFilePath, sourceFiles, isBundledEmit, host, resolver, emitterDiagnostics) || emitSkipped;
-            }
-        }
-
-        function getEmitSourceFile(sourceFile: SourceFile) {
-            return (emitSourceFile: (root: SourceFile) => void, emitExportedTypes: () => void) => {
-                if (sourceFile) {
-                    // Do not call emit directly. It does not set the currentSourceFile.
-                    emitSourceFile(sourceFile);
-
-                    if (sourceFile === entryFile) {
-                        emitExportedTypes();
-                    }
-                }
-                else {
-                    forEach(host.getSourceFiles(), sourceFile => {
-                        if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
-                            emitSourceFile(sourceFile);
-                        }
-                    });
-
-                    if (entryFile) {
-                        emitExportedTypes();
-                    }
-                }
-            }
-        }
-
-        function getEmitExternSourceFile(sourceFile: SourceFile) {
-            return (emitSourceFile: (root: SourceFile) => void, emitExportedTypes: () => void) => {
-                if (sourceFile) {
-                    emitSourceFile(sourceFile);
-                }
-                else {
-                    forEach(emitHost.getExternSourceFiles(), sourceFile => {
-                        if (ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts") {
-                            emitSourceFile(sourceFile);
-                        }
-                    });
-                }
             }
         }
     }
