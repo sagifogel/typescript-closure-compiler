@@ -554,16 +554,26 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
         function forEachExpectedEmitFile(host: ExtendedEmitHost, action: (emitFileNames: EmitFileNames, sourceFiles: SourceFile[], isBundledEmit: boolean) => void, targetSourceFile?: SourceFile) {
             const options = host.getCompilerOptions();
-            // Emit on each source file
-            if (options.outFile || options.out) {
-                onBundledEmit(host);
+            let filteredSources = filter(host.getSourceFiles(), (sourceFile) => getBaseFileName(sourceFile.fileName) !== "lib.d.ts");
+            const externsSources = compilerOptions.externs && compilerOptions.externs.length ? host.getExternSourceFiles() : [];
+
+            if (emitOutFile) {
+                onBundledEmit(options.outFile || options.out, filteredSources);
             }
             else {
-                const sourceFiles = targetSourceFile === undefined ? host.getSourceFiles() : [targetSourceFile];
+                emitSingleFiles(targetSourceFile === undefined ? filteredSources : [targetSourceFile]);
+            }
+
+            if (shouldEmitExternsOutFile) {
+                onBundledEmit(compilerOptions.externsOutFile, externsSources);
+            }
+            else {
+                emitSingleFiles(externsSources);
+            }
+
+            function emitSingleFiles(sourceFiles: SourceFile[]): void {
                 for (const sourceFile of sourceFiles) {
-                    if (!isDeclarationFile(sourceFile)) {
-                        onSingleFileEmit(host, sourceFile);
-                    }
+                    onSingleFileEmit(host, sourceFile);
                 }
             }
 
@@ -584,44 +594,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
                 const jsFilePath = getOwnEmitOutputFilePath(sourceFile, host, extension);
-                const emitFileNames: EmitFileNames = {
-                    jsFilePath,
-                    sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
-                    declarationFilePath: !isSourceFileJavaScript(sourceFile) ? getDeclarationEmitFilePath(jsFilePath, options) : undefined
-                };
-                action(emitFileNames, [sourceFile], /*isBundledEmit*/false);
+
+                onEmit(jsFilePath, [sourceFile], false, !isSourceFileJavaScript(sourceFile));
             }
 
-            function onBundledEmit(host: ExtendedEmitHost) {
+            function onBundledEmit(jsBundledPath: string, bundledSources: SourceFile[]) {
                 // Can emit only sources that are not declaration file and are either non module code or module with --module or --target es6 specified
-                let bundledSources = filter(host.getSourceFiles(),
-                    sourceFile => !isDeclarationFile(sourceFile) && // Not a declaration file
-                        (!isExternalModule(sourceFile) || // non module file
-                            (getEmitModuleKind(options) && isExternalModule(sourceFile)))); // module that can emit - note falsy value from getEmitModuleKind means the module kind that shouldn't be emitted
+                onEmit(jsBundledPath, bundledSources, true);
+            }
 
-
-                if (compilerOptions.externs && compilerOptions.externs.length && !shouldEmitExternsOutFile) {
-                    bundledSources = bundledSources.concat(host.getExternSourceFiles());
-                }
-
-                if (bundledSources.length) {
-                    const jsFilePath = options.outFile || options.out;
+            function onEmit(jsFilePath: string, sourceFiles: Array<SourceFile>, isBundledEmit: boolean, isSourceFileJavaScript: boolean = false): void {
+                if (sourceFiles.length) {
                     const emitFileNames: EmitFileNames = {
                         jsFilePath,
                         sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
-                        declarationFilePath: getDeclarationEmitFilePath(jsFilePath, options)
+                        declarationFilePath: !isSourceFileJavaScript ? getDeclarationEmitFilePath(jsFilePath, options) : undefined
                     };
-                    action(emitFileNames, bundledSources, /*isBundledEmit*/true);
-
-                    if (shouldEmitExternsOutFile) {
-                        const jsFilePath = compilerOptions.externsOutFile;
-                        const emitFileNames: EmitFileNames = {
-                            jsFilePath,
-                            sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
-                            declarationFilePath: getDeclarationEmitFilePath(jsFilePath, options)
-                        };
-                        action(emitFileNames, host.getExternSourceFiles(), /*isBundledEmit*/true);
-                    }
+                    action(emitFileNames, sourceFiles, isBundledEmit);
                 }
             }
 
@@ -737,6 +726,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             let convertedLoopState: ConvertedLoopState;
 
             let extendsEmitted: boolean;
+            let useStrictEmitted: boolean = false;
             let assignEmitted: boolean;
             let decorateEmitted: boolean;
             let paramEmitted: boolean;
@@ -789,11 +779,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
                 // Emit helpers from all the files
                 if (isBundledEmit && modulekind) {
+                    ensureUseStrictPrologue(false, !compilerOptions.noImplicitUseStrict);
                     forEach(sourceFiles, emitEmitHelpers);
                 }
 
                 // Do not call emit directly. It does not set the currentSourceFile.
-                forEach(sourceFiles, emitSourceFile);
+                forEach(sourceFiles, (sourceFile: SourceFile) => {
+                    emitSourceFile(sourceFile);
+
+                    if (sourceFile === entryFile) {
+                        emitExportedTypes();
+                    }
+                });
 
                 writeLine();
 
@@ -834,6 +831,63 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 isEs6Module = false;
                 renamedDependencies = undefined;
                 isCurrentFileExternalModule = false;
+            }
+
+            function emitExportedTypes(): void {
+                let cahce: Map<boolean> = {};
+                let exportedTypes: Map<string> = {};
+                let exportedMembers: Array<string> = [];
+                let sortByLength = (t1: string, t2: string) => {
+                    if (t1.length === t2.length) { return 0; }
+                    if (t1.length < t2.length) { return -1; }
+                    return 1;
+                };
+
+                forceWriteLine();
+
+                ts.forEach(resolvedExportedTypes, resolvedExportedType => {
+                    let exportedType = <ClassLikeDeclaration | EnumDeclaration>resolvedExportedType;
+                    let moduleName = getModuleName(exportedType);
+                    let nodeName = getNodeName(exportedType);
+                    let containerName = moduleName + nodeName;
+
+                    exportedTypes[nodeName] = containerName;
+
+                    ts.forEach(exportedType.members, (member: Declaration) => {
+                        let isEnumMember = member.kind === SyntaxKind.EnumMember;
+
+                        if (isEnumMember || (member.kind !== SyntaxKind.ComputedPropertyName && member.kind !== SyntaxKind.Constructor && isPublicMember(member))) {
+                            let result: string;
+                            let buffer: Array<string> = [];
+                            let memberName = getNodeName(member);
+                            let nodeName = containerName;
+
+                            if (!isEnumMember && (member.flags & NodeFlags.Static) === 0) {
+                                nodeName += ".prototype";
+                            }
+
+                            buffer.push(nodeName);
+                            buffer.push(`["${memberName}"]`);
+                            buffer.push(` = ${nodeName}.${memberName};`);
+                            result = buffer.join("");
+
+                            if (!cahce[result]) {
+                                cahce[result] = true;
+                                exportedMembers.push(result);
+                            }
+                        }
+                    });
+                });
+                exportedMembers
+                    .sort(sortByLength)
+                    .forEach(writeValueAndNewLine);
+
+                writeValueAndNewLine(`var hasExports = typeof module === "object" && typeof module["exports"] === "object";`);
+                writeValueAndNewLine(`var ${compilerOptions.exportAs} = (hasExports ? module["exports"]["${compilerOptions.exportAs}"] : self["${compilerOptions.exportAs}"]) || {};`);
+                Object.keys(exportedTypes).sort(sortByLength).forEach(key => {
+                    writeValueAndNewLine(`${compilerOptions.exportAs}["${key}"] = ${exportedTypes[key]};`);
+                });
+                writeValueAndNewLine(`hasExports ? module["exports"] = ${compilerOptions.exportAs}: self["${compilerOptions.exportAs}"] = ${compilerOptions.exportAs};`);
             }
 
             function emitSourceFile(sourceFile: SourceFile): void {
@@ -5635,7 +5689,7 @@ const _super = (function (geti, seti) {
 
                 // Emit all the directive prologues (like "use strict").  These have to come before
                 // any other preamble code we write (like parameter initializers).
-                const startIndex = emitDirectivePrologues(body.statements, /*startWithNewLine*/ true);
+                const startIndex = emitDirectivePrologues(body.statements, /*startWithNewLine*/ true, !compilerOptions.noImplicitUseStrict);
 
                 emitFunctionBodyPreamble(node);
                 emitLinesStartingAt(body.statements, startIndex);
@@ -6365,14 +6419,14 @@ const _super = (function (geti, seti) {
                 return (param: string) => genericArguments.indexOf(param) > -1 ? "?" : param;
             }
 
-            function emitCallSignatures(interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
+            function emitCallSignatures(_interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
                 emitAnnotationIf(() => {
-                    let genericArguments = getGenericArguments(interface);
+                    let genericArguments = getGenericArguments(_interface);
                     let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
 
-                    emitCallOrIndexSignatures(interface, members, (indexSignature): string => {
-                        let params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)));
-                        let returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
+                    emitCallOrIndexSignatures(_interface, members, (indexSignature): string => {
+                        let params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, param)));
+                        let returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, indexSignature.type));
 
                         return `function(${params.join(", ")}): ${returnType}`;
                     });
@@ -6759,8 +6813,8 @@ const _super = (function (geti, seti) {
                     emitConstructorAnnotation(node, ctor, baseTypeElement, interfacesImpl);
                 }
                 else {
-                    let interface: any = node;
-                    emitInterfaceDeclarationAnnotation(<InterfaceDeclaration>interface, interfacesImpl);
+                    let _interface: any = node;
+                    emitInterfaceDeclarationAnnotation(<InterfaceDeclaration>_interface, interfacesImpl);
                 }
 
                 // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
@@ -6815,7 +6869,7 @@ const _super = (function (geti, seti) {
                 if (ctor) {
                     // Emit all the directive prologues (like "use strict").  These have to come before
                     // any other preamble code we write (like parameter initializers).
-                    startIndex = emitDirectivePrologues(ctor.body.statements, /*startWithNewLine*/ true);
+                    startIndex = emitDirectivePrologues(ctor.body.statements, /*startWithNewLine*/ true, !compilerOptions.noImplicitUseStrict);
                     emitDetachedCommentsAndUpdateCommentsInfo(ctor.body.statements);
                 }
                 emitCaptureThisForNodeIfNecessary(node);
@@ -9190,7 +9244,7 @@ const _super = (function (geti, seti) {
                 exportSpecifiers = undefined;
                 exportEquals = undefined;
                 hasExportStarsToExportValues = false;
-                const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false);
+                const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false, !compilerOptions.noImplicitUseStrict);
                 emitEmitHelpers(node);
                 emitCaptureThisForNodeIfNecessary(node);
                 emitLinesStartingAt(node.statements, startIndex);
@@ -9323,11 +9377,21 @@ const _super = (function (geti, seti) {
             }
 
             function ensureUseStrictPrologue(startWithNewLine: boolean, writeUseStrict: boolean) {
+                if (useStrictEmitted) {
+                    return;
+                }
+
                 if (writeUseStrict) {
                     if (startWithNewLine) {
                         writeLine();
                     }
+
                     write("\"use strict\";");
+
+                    if (emitOutFile) {
+                        useStrictEmitted = true;
+                    }
+
                     writeLine();
                 }
             }
@@ -9419,7 +9483,7 @@ const _super = (function (geti, seti) {
                 }
                 else {
                     // emit prologue directives prior to __extends
-                    const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false);
+                    const startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false, !compilerOptions.noImplicitUseStrict);
                     externalImports = undefined;
                     exportSpecifiers = undefined;
                     exportEquals = undefined;

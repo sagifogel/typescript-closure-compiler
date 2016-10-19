@@ -13,6 +13,7 @@ See the Apache Version 2.0 License for specific language governing permissions
 and limitations under the License.
 ***************************************************************************** */
 
+"use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     /** @constructor */ function __() { this.constructor = d; }
@@ -33731,17 +33732,24 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     }
     function forEachExpectedEmitFile(host, action, targetSourceFile) {
         var options = host.getCompilerOptions();
-        // Emit on each source file
-        if (options.outFile || options.out) {
-            onBundledEmit(host);
+        var filteredSources = ts.filter(host.getSourceFiles(), function (sourceFile) { return ts.getBaseFileName(sourceFile.fileName) !== "lib.d.ts"; });
+        var externsSources = compilerOptions.externs && compilerOptions.externs.length ? host.getExternSourceFiles() : [];
+        if (emitOutFile) {
+            onBundledEmit(options.outFile || options.out, filteredSources);
         }
         else {
-            var sourceFiles = targetSourceFile === undefined ? host.getSourceFiles() : [targetSourceFile];
+            emitSingleFiles(targetSourceFile === undefined ? filteredSources : [targetSourceFile]);
+        }
+        if (shouldEmitExternsOutFile) {
+            onBundledEmit(compilerOptions.externsOutFile, externsSources);
+        }
+        else {
+            emitSingleFiles(externsSources);
+        }
+        function emitSingleFiles(sourceFiles) {
             for (var _a = 0, sourceFiles_2 = sourceFiles; _a < sourceFiles_2.length; _a++) {
                 var sourceFile = sourceFiles_2[_a];
-                if (!ts.isDeclarationFile(sourceFile)) {
-                    onSingleFileEmit(host, sourceFile);
-                }
+                onSingleFileEmit(host, sourceFile);
             }
         }
         function onSingleFileEmit(host, sourceFile) {
@@ -33761,38 +33769,21 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
             var jsFilePath = ts.getOwnEmitOutputFilePath(sourceFile, host, extension);
-            var emitFileNames = {
-                jsFilePath: jsFilePath,
-                sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
-                declarationFilePath: !ts.isSourceFileJavaScript(sourceFile) ? getDeclarationEmitFilePath(jsFilePath, options) : undefined
-            };
-            action(emitFileNames, [sourceFile], /*isBundledEmit*/ false);
+            onEmit(jsFilePath, [sourceFile], false, !ts.isSourceFileJavaScript(sourceFile));
         }
-        function onBundledEmit(host) {
+        function onBundledEmit(jsBundledPath, bundledSources) {
             // Can emit only sources that are not declaration file and are either non module code or module with --module or --target es6 specified
-            var bundledSources = ts.filter(host.getSourceFiles(), function (sourceFile) { return !ts.isDeclarationFile(sourceFile) &&
-                (!ts.isExternalModule(sourceFile) ||
-                    (ts.getEmitModuleKind(options) && ts.isExternalModule(sourceFile))); }); // module that can emit - note falsy value from getEmitModuleKind means the module kind that shouldn't be emitted
-            if (compilerOptions.externs && compilerOptions.externs.length && !shouldEmitExternsOutFile) {
-                bundledSources = bundledSources.concat(host.getExternSourceFiles());
-            }
-            if (bundledSources.length) {
-                var jsFilePath = options.outFile || options.out;
+            onEmit(jsBundledPath, bundledSources, true);
+        }
+        function onEmit(jsFilePath, sourceFiles, isBundledEmit, isSourceFileJavaScript) {
+            if (isSourceFileJavaScript === void 0) { isSourceFileJavaScript = false; }
+            if (sourceFiles.length) {
                 var emitFileNames = {
                     jsFilePath: jsFilePath,
                     sourceMapFilePath: getSourceMapFilePath(jsFilePath, options),
-                    declarationFilePath: getDeclarationEmitFilePath(jsFilePath, options)
+                    declarationFilePath: !isSourceFileJavaScript ? getDeclarationEmitFilePath(jsFilePath, options) : undefined
                 };
-                action(emitFileNames, bundledSources, /*isBundledEmit*/ true);
-                if (shouldEmitExternsOutFile) {
-                    var jsFilePath_1 = compilerOptions.externsOutFile;
-                    var emitFileNames_1 = {
-                        jsFilePath: jsFilePath_1,
-                        sourceMapFilePath: getSourceMapFilePath(jsFilePath_1, options),
-                        declarationFilePath: getDeclarationEmitFilePath(jsFilePath_1, options)
-                    };
-                    action(emitFileNames_1, host.getExternSourceFiles(), /*isBundledEmit*/ true);
-                }
+                action(emitFileNames, sourceFiles, isBundledEmit);
             }
         }
         function getSourceMapFilePath(jsFilePath, options) {
@@ -33891,6 +33882,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         var decoratedClassAliases;
         var convertedLoopState;
         var extendsEmitted;
+        var useStrictEmitted = false;
         var assignEmitted;
         var decorateEmitted;
         var paramEmitted;
@@ -33938,10 +33930,16 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             isOwnFileEmit = !isBundledEmit;
             // Emit helpers from all the files
             if (isBundledEmit && modulekind) {
+                ensureUseStrictPrologue(false, !compilerOptions.noImplicitUseStrict);
                 ts.forEach(sourceFiles, emitEmitHelpers);
             }
             // Do not call emit directly. It does not set the currentSourceFile.
-            ts.forEach(sourceFiles, emitSourceFile);
+            ts.forEach(sourceFiles, function (sourceFile) {
+                emitSourceFile(sourceFile);
+                if (sourceFile === entryFile) {
+                    emitExportedTypes();
+                }
+            });
             writeLine();
             var sourceMappingURL = sourceMap.getSourceMappingURL();
             if (sourceMappingURL) {
@@ -33978,6 +33976,57 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             isEs6Module = false;
             renamedDependencies = undefined;
             isCurrentFileExternalModule = false;
+        }
+        function emitExportedTypes() {
+            var cahce = {};
+            var exportedTypes = {};
+            var exportedMembers = [];
+            var sortByLength = function (t1, t2) {
+                if (t1.length === t2.length) {
+                    return 0;
+                }
+                if (t1.length < t2.length) {
+                    return -1;
+                }
+                return 1;
+            };
+            forceWriteLine();
+            ts.forEach(resolvedExportedTypes, function (resolvedExportedType) {
+                var exportedType = resolvedExportedType;
+                var moduleName = getModuleName(exportedType);
+                var nodeName = getNodeName(exportedType);
+                var containerName = moduleName + nodeName;
+                exportedTypes[nodeName] = containerName;
+                ts.forEach(exportedType.members, function (member) {
+                    var isEnumMember = member.kind === 250 /* EnumMember */;
+                    if (isEnumMember || (member.kind !== 137 /* ComputedPropertyName */ && member.kind !== 145 /* Constructor */ && isPublicMember(member))) {
+                        var result = void 0;
+                        var buffer = [];
+                        var memberName = getNodeName(member);
+                        var nodeName_1 = containerName;
+                        if (!isEnumMember && (member.flags & 64 /* Static */) === 0) {
+                            nodeName_1 += ".prototype";
+                        }
+                        buffer.push(nodeName_1);
+                        buffer.push("[\"" + memberName + "\"]");
+                        buffer.push(" = " + nodeName_1 + "." + memberName + ";");
+                        result = buffer.join("");
+                        if (!cahce[result]) {
+                            cahce[result] = true;
+                            exportedMembers.push(result);
+                        }
+                    }
+                });
+            });
+            exportedMembers
+                .sort(sortByLength)
+                .forEach(writeValueAndNewLine);
+            writeValueAndNewLine("var hasExports = typeof module === \"object\" && typeof module[\"exports\"] === \"object\";");
+            writeValueAndNewLine("var " + compilerOptions.exportAs + " = (hasExports ? module[\"exports\"][\"" + compilerOptions.exportAs + "\"] : self[\"" + compilerOptions.exportAs + "\"]) || {};");
+            Object.keys(exportedTypes).sort(sortByLength).forEach(function (key) {
+                writeValueAndNewLine(compilerOptions.exportAs + "[\"" + key + "\"] = " + exportedTypes[key] + ";");
+            });
+            writeValueAndNewLine("hasExports ? module[\"exports\"] = " + compilerOptions.exportAs + ": self[\"" + compilerOptions.exportAs + "\"] = " + compilerOptions.exportAs + ";");
         }
         function emitSourceFile(sourceFile) {
             currentSourceFile = sourceFile;
@@ -38170,7 +38219,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             emitDetachedCommentsAndUpdateCommentsInfo(body.statements);
             // Emit all the directive prologues (like "use strict").  These have to come before
             // any other preamble code we write (like parameter initializers).
-            var startIndex = emitDirectivePrologues(body.statements, /*startWithNewLine*/ true);
+            var startIndex = emitDirectivePrologues(body.statements, /*startWithNewLine*/ true, !compilerOptions.noImplicitUseStrict);
             emitFunctionBodyPreamble(node);
             emitLinesStartingAt(body.statements, startIndex);
             emitTempDeclarations(/*newLine*/ true);
@@ -38793,13 +38842,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         function createGenericsTypeChecker(genericArguments) {
             return function (param) { return genericArguments.indexOf(param) > -1 ? "?" : param; };
         }
-        function emitCallSignatures(interface, members) {
+        function emitCallSignatures(_interface, members) {
             emitAnnotationIf(function () {
-                var genericArguments = getGenericArguments(interface);
+                var genericArguments = getGenericArguments(_interface);
                 var genericsTypeChecker = createGenericsTypeChecker(genericArguments);
-                emitCallOrIndexSignatures(interface, members, function (indexSignature) {
-                    var params = ts.map(indexSignature.parameters, function (param) { return genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)); });
-                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
+                emitCallOrIndexSignatures(_interface, members, function (indexSignature) {
+                    var params = ts.map(indexSignature.parameters, function (param) { return genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, param)); });
+                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, indexSignature.type));
                     return "function(" + params.join(", ") + "): " + returnType;
                 });
             });
@@ -39113,8 +39162,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitConstructorAnnotation(node, ctor, baseTypeElement, interfacesImpl);
             }
             else {
-                var interface = node;
-                emitInterfaceDeclarationAnnotation(interface, interfacesImpl);
+                var _interface = node;
+                emitInterfaceDeclarationAnnotation(_interface, interfacesImpl);
             }
             // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
             // do not emit constructor in class declaration.
@@ -39162,7 +39211,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (ctor) {
                 // Emit all the directive prologues (like "use strict").  These have to come before
                 // any other preamble code we write (like parameter initializers).
-                startIndex = emitDirectivePrologues(ctor.body.statements, /*startWithNewLine*/ true);
+                startIndex = emitDirectivePrologues(ctor.body.statements, /*startWithNewLine*/ true, !compilerOptions.noImplicitUseStrict);
                 emitDetachedCommentsAndUpdateCommentsInfo(ctor.body.statements);
             }
             emitCaptureThisForNodeIfNecessary(node);
@@ -41233,7 +41282,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             exportSpecifiers = undefined;
             exportEquals = undefined;
             hasExportStarsToExportValues = false;
-            var startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false);
+            var startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false, !compilerOptions.noImplicitUseStrict);
             emitEmitHelpers(node);
             emitCaptureThisForNodeIfNecessary(node);
             emitLinesStartingAt(node.statements, startIndex);
@@ -41353,11 +41402,17 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             return !!node.expression.text.match(/use strict/);
         }
         function ensureUseStrictPrologue(startWithNewLine, writeUseStrict) {
+            if (useStrictEmitted) {
+                return;
+            }
             if (writeUseStrict) {
                 if (startWithNewLine) {
                     writeLine();
                 }
                 write("\"use strict\";");
+                if (emitOutFile) {
+                    useStrictEmitted = true;
+                }
                 writeLine();
             }
         }
@@ -41439,7 +41494,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             else {
                 // emit prologue directives prior to __extends
-                var startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false);
+                var startIndex = emitDirectivePrologues(node.statements, /*startWithNewLine*/ false, !compilerOptions.noImplicitUseStrict);
                 externalImports = undefined;
                 exportSpecifiers = undefined;
                 exportEquals = undefined;
