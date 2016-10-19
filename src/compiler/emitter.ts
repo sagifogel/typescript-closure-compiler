@@ -6023,14 +6023,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return (param: string) => genericArguments.indexOf(param) > -1 ? "?" : param;
             }
 
-            function emitCallSignatures(interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
+            function emitCallSignatures(_interface: InterfaceDeclaration, members: Array<SignatureDeclaration>) {
                 emitAnnotationIf(() => {
-                    let genericArguments = getGenericArguments(interface);
+                    let genericArguments = getGenericArguments(_interface);
                     let genericsTypeChecker = createGenericsTypeChecker(genericArguments);
 
-                    emitCallOrIndexSignatures(interface, members, (indexSignature): string => {
-                        let params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)));
-                        let returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
+                    emitCallOrIndexSignatures(_interface, members, (indexSignature): string => {
+                        let params = ts.map(indexSignature.parameters, param => genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, param)));
+                        let returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, indexSignature.type));
 
                         return `function(${params.join(", ")}): ${returnType}`;
                     });
@@ -6416,8 +6416,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitConstructorAnnotation(node, ctor, baseTypeElement, interfacesImpl);
                 }
                 else {
-                    let interface: any = node;
-                    emitInterfaceDeclarationAnnotation(<InterfaceDeclaration>interface, interfacesImpl);
+                    let _interface: any = node;
+                    emitInterfaceDeclarationAnnotation(<InterfaceDeclaration>_interface, interfacesImpl);
                 }
                 // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
                 // do not emit constructor in class declaration.

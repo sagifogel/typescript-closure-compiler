@@ -34743,7 +34743,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitDeclarationName(node);
             }
             if (isInterfaceFunctionMemberOrAmbient) {
-                if (node.kind === 140) {
+                if (node.kind === 140 /* PropertySignature */) {
                     emittedNode = node.type;
                 }
                 emitSignatureParameters(emittedNode);
@@ -35635,13 +35635,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         function createGenericsTypeChecker(genericArguments) {
             return function (param) { return genericArguments.indexOf(param) > -1 ? "?" : param; };
         }
-        function emitCallSignatures(interface, members) {
+        function emitCallSignatures(_interface, members) {
             emitAnnotationIf(function () {
-                var genericArguments = getGenericArguments(interface);
+                var genericArguments = getGenericArguments(_interface);
                 var genericsTypeChecker = createGenericsTypeChecker(genericArguments);
-                emitCallOrIndexSignatures(interface, members, function (indexSignature) {
-                    var params = ts.map(indexSignature.parameters, function (param) { return genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)); });
-                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
+                emitCallOrIndexSignatures(_interface, members, function (indexSignature) {
+                    var params = ts.map(indexSignature.parameters, function (param) { return genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, param)); });
+                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, indexSignature.type));
                     return "function(" + params.join(", ") + "): " + returnType;
                 });
             });
@@ -35955,8 +35955,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitConstructorAnnotation(node, ctor, baseTypeElement, interfacesImpl);
             }
             else {
-                var interface = node;
-                emitInterfaceDeclarationAnnotation(interface, interfacesImpl);
+                var _interface = node;
+                emitInterfaceDeclarationAnnotation(_interface, interfacesImpl);
             }
             // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
             // do not emit constructor in class declaration.
