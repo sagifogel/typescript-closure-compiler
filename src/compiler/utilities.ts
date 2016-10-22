@@ -152,6 +152,7 @@
     export declare function isIdentifierTypePredicate(predicate: TypePredicate): predicate is IdentifierTypePredicate;
     export declare function getInterfaceBaseTypeNodes(node: InterfaceDeclaration): NodeArray<ExpressionWithTypeArguments>;
     export declare function getClassExtendsHeritageClauseElement(node: ClassLikeDeclaration): ExpressionWithTypeArguments;
+    export declare function cloneNode<T extends Node>(node: T, location?: TextRange, flags?: NodeFlags, parent?: Node): T;
     export declare function getAllAccessorDeclarations(declarations: NodeArray<Declaration>, accessor: AccessorDeclaration);
     export declare function isRequireCall(expression: Node, checkArgumentIsStringLiteral: boolean): expression is CallExpression;
     export declare function createDiagnosticForNodeFromMessageChain(node: Node, messageChain: DiagnosticMessageChain): Diagnostic;

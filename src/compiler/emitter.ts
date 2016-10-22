@@ -4563,6 +4563,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitModuleMemberName(<Declaration>name.parent);
                     }
                     else {
+                        emitModuleIfNeeded(value.parent);
                         emit(name);
                     }
 
@@ -4768,7 +4769,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitArrayLiteralAssignment(<ArrayLiteralExpression>target, value, sourceMapNode);
                     }
                     else {
-                        emitAssignment(<Identifier>target, value, /*shouldEmitCommaBeforeAssignment*/ emitCount > 0, sourceMapNode);
+                        emitAssignment(<Identifier>target, value, false, sourceMapNode);
                         emitCount++;
                     }
                 }
@@ -4803,7 +4804,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
 
-                function emitBindingElement(target: BindingElement | VariableDeclaration, value: Expression) {
+                function emitBindingElement(target: BindingElement | VariableDeclaration, value: Expression, initializer?: Expression) {
                     // Any temporary assignments needed to emit target = value should point to target
                     if (target.initializer) {
                         // Combine value and initializer
@@ -4814,38 +4815,79 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         value = createVoidZero();
                     }
                     if (isBindingPattern(target.name)) {
+                        let moduleName: string;
+                        const initializer = value;
+                        let identifier = <Identifier>value;
                         const pattern = <BindingPattern>target.name;
                         const elements = pattern.elements;
                         const numElements = elements.length;
+                        const lastElement = elements[numElements - 1];
 
-                        if (numElements !== 1) {
-                            // For anything other than a single-element destructuring we need to generate a temporary
-                            // to ensure value is evaluated exactly once. Additionally, if we have zero elements
-                            // we need to emit *something* to ensure that in case a 'var' keyword was already emitted,
-                            // so in that case, we'll intentionally create that temporary.
-                            value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0, target);
+                        value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0, target);
+
+                        if (moduleName = getModuleName(target)) {
+                            identifier.text = `${moduleName}${identifier.text}`;
                         }
 
                         for (let i = 0; i < numElements; i++) {
                             const element = elements[i];
+
+                            if (pattern.kind !== SyntaxKind.ObjectBindingPattern && element.kind === SyntaxKind.OmittedExpression) {
+                                continue;
+                            }
+
+                            forceWriteLine();
+
                             if (pattern.kind === SyntaxKind.ObjectBindingPattern) {
                                 // Rewrite element to a declaration with an initializer that fetches property
                                 const propName = element.propertyName || <Identifier>element.name;
-                                emitBindingElement(element, createPropertyAccessForDestructuringProperty(value, propName));
+
+                                emitBindingElement(element, createPropertyAccessForDestructuringProperty(value, propName), initializer);
                             }
                             else if (element.kind !== SyntaxKind.OmittedExpression) {
                                 if (!element.dotDotDotToken) {
                                     // Rewrite element to a declaration that accesses array element at index i
-                                    emitBindingElement(element, createElementAccessExpression(value, createNumericLiteral(i)));
+                                    emitBindingElement(element, createElementAccessExpression(value, createNumericLiteral(i)), initializer);
                                 }
                                 else if (i === numElements - 1) {
-                                    emitBindingElement(element, createSliceCall(value, i));
+                                    emitBindingElement(element, createSliceCall(value, i), initializer);
                                 }
+                            }
+
+                            if (element !== lastElement) {
+                                write(";")
                             }
                         }
                     }
                     else {
-                        emitAssignment(<Identifier>target.name, value, /*shouldEmitCommaBeforeAssignment*/ emitCount > 0, target);
+                        let member: VariableDeclaration;
+                        const propName = (<Identifier>target.name).text;
+
+                        if (initializer.kind == SyntaxKind.Identifier && initializer.parent) {
+                            var type = typeChecker.getTypeAtLocation(initializer);
+
+                            var prop = typeChecker.getPropertyOfType(type, propName)
+
+                            if (prop) {
+                                emitVariableTypeAnnotation(<VariableDeclaration>getDeclarationFromSymbol(prop));
+                            }
+                        }
+                        else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
+                            member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
+                            emitVariableTypeAnnotation(member);
+                        }
+                        else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
+                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer);
+                        }
+
+                        if (!emitModuleIfNeeded(root)) {
+                            write("var ");
+                        }
+
+                        const cloned = ts.cloneNode(<PropertyAccessExpression>value, value, value.flags);
+
+                        delete cloned.expression.parent;
+                        emitAssignment(<Identifier>target.name, cloned, false, target);
                         emitCount++;
                     }
                 }
@@ -4985,6 +5027,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     node.parent.kind === SyntaxKind.SourceFile;
             }
 
+            function isNameBindingPattern(variable: VariableDeclaration): boolean {
+                if (variable && variable.name) {
+                    return isBindingPattern(variable.name);
+                }
+
+                return false;
+            }
+
             function emitVariableStatement(node: VariableStatement) {
                 if (isAmbientContextDeclaredWithinSourceFile(node)) {
                     return;
@@ -5013,7 +5063,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
 
                     if (statement) {
-                        let firstDeclaration = statement.declarationList.declarations[0];
+                        const firstDeclaration = statement.declarationList.declarations[0];
                         shouldEmitNewLine = !ts.isFunctionLike(getSymbolScope(firstDeclaration));
                     }
                 }
@@ -5064,17 +5114,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     if (shouldEmitNewLine) {
                         forceWriteLine();
                     }
-
-                    if (nodeFirstVariable.kind !== SyntaxKind.Parameter) {
-                        emitVariableTypeAnnotation(nodeFirstVariable);
+                    if (isNameBindingPattern(nodeFirstVariable) && nodeFirstVariable.initializer.kind === SyntaxKind.Identifier) {
+                        emitCommaList(node.declarationList.declarations);
+                        write(";");
                     }
+                    else {
+                        if (nodeFirstVariable.kind !== SyntaxKind.Parameter) {
+                            emitVariableTypeAnnotation(nodeFirstVariable);
+                        }
 
-                    if (startIsEmitted) {
-                        write(startIsEmitted);
+                        if (startIsEmitted) {
+                            write(startIsEmitted);
+                        }
+
+                        emitCommaList(node.declarationList.declarations);
+                        write(";");
                     }
-
-                    emitCommaList(node.declarationList.declarations);
-                    write(";");
                 }
                 else {
                     const atLeastOneItem = emitVariableDeclarationListSkippingUninitializedEntries(node.declarationList);
@@ -6054,6 +6109,10 @@ const _super = (function (geti, seti) {
             }
 
             function getArrayLiteral(node: ArrayLiteralExpression): string {
+                return `Array<${getArrayLiteralElementType(node)}>`;
+            }
+
+            function getArrayLiteralElementType(node: ArrayLiteralExpression): string {
                 let type: string;
                 let typeCounter = 0;
                 let map: { [name: string]: boolean } = {};
@@ -6070,10 +6129,10 @@ const _super = (function (geti, seti) {
                 });
 
                 if (typeCounter !== 1) {
-                    return "Array<*>";
+                    return "*";
                 }
 
-                return `Array<${type}>`;
+                return type;
             }
 
             function getTypeReference(rootNode: Node, typeRef: TypeReferenceNode): string {
@@ -6240,6 +6299,10 @@ const _super = (function (geti, seti) {
 
                 let symbol = typeChecker.getSymbolAtLocation(node);
 
+                return getDeclarationFromSymbol(symbol);
+            }
+
+            function getDeclarationFromSymbol(symbol: Symbol): Declaration {
                 if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
                     return null;
                 }
@@ -6516,6 +6579,14 @@ const _super = (function (geti, seti) {
                         emitComments(currentText, currentLineMap, annotationWriter, comments, false, newLine, writeCommentRange);
                     }
                 }
+            }
+
+            function emitArrayLiteralElementTypeAnnotation(node: ArrayLiteralExpression): void {
+                emitAnnotationIf(() => {
+                    const type = getArrayLiteralElementType(node);
+
+                    write(`/** @type {${type}} */ `);
+                });
             }
 
             function emitArrayTypeAnnotation(node: ParameterDeclaration): void {
