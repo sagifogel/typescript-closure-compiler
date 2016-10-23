@@ -3499,12 +3499,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         write(", ");
                     }
 
-                    if (!ts.isFunctionLike(getSymbolScope(decl))) {
-                        forceWriteLine();
-                    }
+                    if (!isNameBindingPattern(decl)) {
+                        if (!ts.isFunctionLike(getSymbolScope(decl))) {
+                            forceWriteLine();
+                        }
 
-                    if (decl.kind !== SyntaxKind.Parameter && trySetVariableDeclarationInModule(decl)) {
-                        emitVariableTypeAnnotation(decl);
+                        if (decl.kind !== SyntaxKind.Parameter && trySetVariableDeclarationInModule(decl)) {
+                            emitVariableTypeAnnotation(decl);
+                        }
                     }
 
                     emit(decl);
@@ -4816,14 +4818,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                     if (isBindingPattern(target.name)) {
                         let moduleName: string;
-                        const initializer = value;
                         let identifier = <Identifier>value;
                         const pattern = <BindingPattern>target.name;
                         const elements = pattern.elements;
                         const numElements = elements.length;
+                        const firstElement = elements[0];
                         const lastElement = elements[numElements - 1];
+                        const initializerIsIdentifier = target.initializer && target.initializer.kind !== SyntaxKind.Identifier;
 
+                        initializer = value
                         value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0, target);
+
+                        if (initializer !== value) {
+                            write(";");
+                        }
 
                         if (moduleName = getModuleName(target)) {
                             identifier.text = `${moduleName}${identifier.text}`;
@@ -4836,7 +4844,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                                 continue;
                             }
 
-                            forceWriteLine();
+                            if (firstElement !== element || initializerIsIdentifier) {
+                                forceWriteLine();
+                            }
 
                             if (pattern.kind === SyntaxKind.ObjectBindingPattern) {
                                 // Rewrite element to a declaration with an initializer that fetches property
@@ -4863,21 +4873,30 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         let member: VariableDeclaration;
                         const propName = (<Identifier>target.name).text;
 
-                        if (initializer.kind == SyntaxKind.Identifier && initializer.parent) {
-                            var type = typeChecker.getTypeAtLocation(initializer);
+                        if (root.name.kind === SyntaxKind.ArrayBindingPattern && initializer.kind === SyntaxKind.Identifier) {
+                            let emittedNode: Node = root;
+                            let candidate = <VariableDeclaration>getSymbolDeclaration(initializer);
 
+                            if (candidate && candidate.initializer) {
+                                emittedNode = candidate.initializer;
+                            }
+
+                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
+                        }
+                        else if (initializer.kind == SyntaxKind.Identifier && initializer.parent) {
+                            var type = typeChecker.getTypeAtLocation(initializer);
                             var prop = typeChecker.getPropertyOfType(type, propName)
 
                             if (prop) {
                                 emitVariableTypeAnnotation(<VariableDeclaration>getDeclarationFromSymbol(prop));
                             }
                         }
+                        else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
+                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer);
+                        }
                         else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
                             member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
                             emitVariableTypeAnnotation(member);
-                        }
-                        else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
-                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer);
                         }
 
                         if (!emitModuleIfNeeded(root)) {
@@ -5047,6 +5066,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 let shouldEmitVariableAnnotation: boolean;
                 const parentStatements = (<Block>node.parent).statements;
                 const nodeFirstVariable = node.declarationList.declarations[0];
+                const isBindingPattern = isNameBindingPattern(nodeFirstVariable);
 
                 if (parentStatements) {
                     nodeIndex = parentStatements.indexOf(node);
@@ -5105,7 +5125,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
                 else {
-                    if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
+                    if (isNodeDeclaredWithinScope(nodeFirstVariable) || isBindingPattern) {
                         startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                     }
                 }
@@ -5114,7 +5134,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     if (shouldEmitNewLine) {
                         forceWriteLine();
                     }
-                    if (isNameBindingPattern(nodeFirstVariable) && nodeFirstVariable.initializer.kind === SyntaxKind.Identifier) {
+                    if (isBindingPattern && nodeFirstVariable.initializer.kind === SyntaxKind.Identifier) {
                         emitCommaList(node.declarationList.declarations);
                         write(";");
                     }
@@ -5209,12 +5229,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             const hasBindingElements = paramName.elements.length > 0;
                             if (hasBindingElements || initializer) {
                                 writeLine();
-                                write("var ");
 
                                 if (hasBindingElements) {
                                     emitDestructuring(parameter, /*isAssignmentExpressionStatement*/ false, tempParameters[tempIndex]);
                                 }
                                 else {
+                                    write("var ");
                                     emit(tempParameters[tempIndex]);
                                     write(" = ");
                                     emit(initializer);
@@ -5744,7 +5764,7 @@ const _super = (function (geti, seti) {
 
                 // Emit all the directive prologues (like "use strict").  These have to come before
                 // any other preamble code we write (like parameter initializers).
-                const startIndex = emitDirectivePrologues(body.statements, /*startWithNewLine*/ true, !compilerOptions.noImplicitUseStrict);
+                const startIndex = emitDirectivePrologues(body.statements, /*startWithNewLine*/ true);
 
                 emitFunctionBodyPreamble(node);
                 emitLinesStartingAt(body.statements, startIndex);
@@ -6361,7 +6381,7 @@ const _super = (function (geti, seti) {
                         let typeRef = <TypeReferenceNode>node;
                         let declaration = getSymbolAtLocation(typeRef.typeName);
 
-                        if (declaration.kind === SyntaxKind.TypeAliasDeclaration) {
+                        if (declaration && declaration.kind === SyntaxKind.TypeAliasDeclaration) {
                             let typeAlias = declaration;
 
                             if (typeRef.typeArguments) {
@@ -9462,8 +9482,6 @@ const _super = (function (geti, seti) {
                     if (emitOutFile) {
                         useStrictEmitted = true;
                     }
-
-                    writeLine();
                 }
             }
 
