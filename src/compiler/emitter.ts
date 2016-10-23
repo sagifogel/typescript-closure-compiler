@@ -4091,6 +4091,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     const variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length > 0) {
                         const declaration = variableDeclarationList.declarations[0];
+                        const expressionDeclaration = <VariableDeclaration>getSymbolDeclaration(node.expression);
+
+                        if (expressionDeclaration) {
+                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>expressionDeclaration.initializer);
+                        }
+                        else {
+                            emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
+                        }
 
                         if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
                             write("var ");
@@ -4824,7 +4832,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         const numElements = elements.length;
                         const firstElement = elements[0];
                         const lastElement = elements[numElements - 1];
-                        const initializerIsIdentifier = target.initializer && target.initializer.kind !== SyntaxKind.Identifier;
+                        const initializerIsIdentifier = !target.initializer || target.initializer.kind !== SyntaxKind.Identifier;
 
                         initializer = value
                         value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0, target);
@@ -4884,12 +4892,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
                         }
                         else if (initializer.kind == SyntaxKind.Identifier && initializer.parent) {
-                            var type = typeChecker.getTypeAtLocation(initializer);
-                            var prop = typeChecker.getPropertyOfType(type, propName)
-
-                            if (prop) {
-                                emitVariableTypeAnnotation(<VariableDeclaration>getDeclarationFromSymbol(prop));
-                            }
+                            emitMemberAnnotation(initializer, propName);
                         }
                         else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
                             emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer);
@@ -4897,6 +4900,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
                             member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
                             emitVariableTypeAnnotation(member);
+                        }
+                        else if (initializer.kind === SyntaxKind.ElementAccessExpression) {
+                            emitMemberAnnotation(root.name, propName);
+                        }
+                        else {
+                            emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
                         }
 
                         if (!emitModuleIfNeeded(root)) {
@@ -4908,6 +4917,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitAssignment(<Identifier>target.name, cloned, false, target);
                         emitCount++;
                     }
+                }
+
+                function emitMemberAnnotation(node: Node, propName: string) : void {
+                    let emittedNode = node;
+                    let type = typeChecker.getTypeAtLocation(node);
+                    let prop = typeChecker.getPropertyOfType(type, propName)
+
+                    if (prop) {
+                        emittedNode = getDeclarationFromSymbol(prop);
+                    }
+
+                    emitVariableTypeAnnotation(<VariableDeclaration>emittedNode);
                 }
             }
 
