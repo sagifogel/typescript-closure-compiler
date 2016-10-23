@@ -4905,7 +4905,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
                         const cloned = ts.cloneNode(<PropertyAccessExpression>value, value, value.flags);
 
-                        delete cloned.expression.parent;
                         emitAssignment(<Identifier>target.name, cloned, false, target);
                         emitCount++;
                     }
