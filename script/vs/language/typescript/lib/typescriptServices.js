@@ -33754,6 +33754,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 var variableDeclarationList = node.initializer;
                 if (variableDeclarationList.declarations.length > 0) {
                     var declaration = variableDeclarationList.declarations[0];
+                    var elementType = typeChecker.getTypeOfSymbolAtLocation(declaration.symbol, declaration);
+                    if (elementType) {
+                        emitTypeAnnotaion(getSymbolName(declaration, elementType));
+                    }
+                    else {
+                        emitTypeAnnotaion("?");
+                    }
                     if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
                         write("var ");
                     }
@@ -34272,7 +34279,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     }
                 }
             }
-            function emitBindingElement(target, value) {
+            function emitBindingElement(target, value, initializer) {
                 if (target.initializer) {
                     // Combine value and initializer
                     value = value ? createDefaultValueCheck(value, target.initializer) : target.initializer;
@@ -34282,38 +34289,93 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     value = createVoidZero();
                 }
                 if (ts.isBindingPattern(target.name)) {
+                    var moduleName;
+                    var identifier = value;
                     var pattern = target.name;
                     var elements = pattern.elements;
                     var numElements = elements.length;
-                    if (numElements !== 1) {
-                        // For anything other than a single-element destructuring we need to generate a temporary
-                        // to ensure value is evaluated exactly once. Additionally, if we have zero elements
-                        // we need to emit *something* to ensure that in case a 'var' keyword was already emitted,
-                        // so in that case, we'll intentionally create that temporary.
-                        value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0);
+                    var firstElement = elements[0];
+                    var lastElement = elements[numElements - 1];
+                    var initializerIsIdentifier = !target.initializer || target.initializer.kind !== 69 /* Identifier */;
+                    initializer = value;
+                    value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0);
+                    if (initializer !== value) {
+                        write(";");
+                    }
+                    if (moduleName = getModuleName(target)) {
+                        identifier.text = "" + moduleName + identifier.text;
                     }
                     for (var i = 0; i < numElements; i++) {
                         var element = elements[i];
+                        if (pattern.kind !== 161 /* ObjectBindingPattern */ && element.kind === 187 /* OmittedExpression */) {
+                            continue;
+                        }
+                        if (firstElement !== element || initializerIsIdentifier) {
+                            forceWriteLine();
+                        }
                         if (pattern.kind === 161 /* ObjectBindingPattern */) {
                             // Rewrite element to a declaration with an initializer that fetches property
                             var propName = element.propertyName || element.name;
-                            emitBindingElement(element, createPropertyAccessForDestructuringProperty(value, propName));
+                            emitBindingElement(element, createPropertyAccessForDestructuringProperty(value, propName), initializer);
                         }
                         else if (element.kind !== 187 /* OmittedExpression */) {
                             if (!element.dotDotDotToken) {
                                 // Rewrite element to a declaration that accesses array element at index i
-                                emitBindingElement(element, createElementAccessExpression(value, createNumericLiteral(i)));
+                                emitBindingElement(element, createElementAccessExpression(value, createNumericLiteral(i)), initializer);
                             }
                             else if (i === numElements - 1) {
-                                emitBindingElement(element, createSliceCall(value, i));
+                                emitBindingElement(element, createSliceCall(value, i), initializer);
                             }
+                        }
+                        if (element !== lastElement) {
+                            write(";");
                         }
                     }
                 }
                 else {
-                    emitAssignment(target.name, value, /*shouldEmitCommaBeforeAssignment*/ emitCount > 0);
+                    var member;
+                    propName = target.name.text;
+                    var rootDeclaration = root;
+                    if (rootDeclaration.name.kind === 162 /* ArrayBindingPattern */ && initializer.kind === 69 /* Identifier */) {
+                        var emittedNode = root;
+                        var candidate = getSymbolDeclaration(initializer);
+                        if (candidate && candidate.initializer) {
+                            emittedNode = candidate.initializer;
+                        }
+                        emitArrayLiteralElementTypeAnnotation(emittedNode);
+                    }
+                    else if (initializer.kind == 69 /* Identifier */ && initializer.parent) {
+                        emitMemberAnnotation(initializer, propName);
+                    }
+                    else if (initializer.kind === 164 /* ArrayLiteralExpression */) {
+                        emitArrayLiteralElementTypeAnnotation(initializer);
+                    }
+                    else if (initializer.kind === 165 /* ObjectLiteralExpression */) {
+                        member = getDeclarationFromSymbol(initializer.symbol.members[propName]);
+                        emitVariableTypeAnnotation(member);
+                    }
+                    else if (initializer.kind === 167 /* ElementAccessExpression */) {
+                        emitMemberAnnotation(rootDeclaration.name, propName);
+                    }
+                    else {
+                        emitVariableTypeAnnotation(ts.createSynthesizedNode(211 /* VariableDeclaration */));
+                    }
+                    if (!emitModuleIfNeeded(root)) {
+                        write("var ");
+                    }
+                    var cloned = cloneNode(value, value, value.flags);
+                    emitAssignment(target.name, cloned, false);
                     emitCount++;
                 }
+            }
+            function emitMemberAnnotation(node, propName) {
+                var emittedNode = node;
+                var type = typeChecker.getTypeAtLocation(node);
+                var prop = typeChecker.getPropertyOfType(type, propName);
+                if (prop) {
+                    emittedNode = getDeclarationFromSymbol(prop);
+                }
+                emitVariableTypeAnnotation(emittedNode);
             }
         }
         function isStatic(node) {
@@ -34407,6 +34469,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 modulekind === 5 /* ES6 */ &&
                 node.parent.kind === 248 /* SourceFile */;
         }
+        function isNameBindingPattern(variable) {
+            if (variable && variable.name) {
+                return ts.isBindingPattern(variable.name);
+            }
+            return false;
+        }
         function emitVariableStatement(node) {
             if (isAmbientContextDeclaredWithinSourceFile(node)) {
                 return;
@@ -34418,6 +34486,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var shouldEmitVariableAnnotation;
             var parentStatements = node.parent.statements;
             var nodeFirstVariable = node.declarationList.declarations[0];
+            var isBindingPattern = isNameBindingPattern(nodeFirstVariable);
             if (parentStatements) {
                 nodeIndex = parentStatements.indexOf(node);
                 if (nodeIndex === 0) {
@@ -34468,7 +34537,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
             else {
-                if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
+                if (isNodeDeclaredWithinScope(nodeFirstVariable) || isBindingPattern) {
                     startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                 }
             }
@@ -34476,14 +34545,20 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 if (shouldEmitNewLine) {
                     forceWriteLine();
                 }
-                if (nodeFirstVariable.kind !== 138 /* Parameter */) {
-                    emitVariableTypeAnnotation(nodeFirstVariable);
+                if (isBindingPattern && nodeFirstVariable.initializer.kind === 69 /* Identifier */) {
+                    emitCommaList(node.declarationList.declarations);
+                    write(";");
                 }
-                if (startIsEmitted) {
-                    write(startIsEmitted);
+                else {
+                    if (nodeFirstVariable.kind !== 138 /* Parameter */) {
+                        emitVariableTypeAnnotation(nodeFirstVariable);
+                    }
+                    if (startIsEmitted) {
+                        write(startIsEmitted);
+                    }
+                    emitCommaList(node.declarationList.declarations);
+                    write(";");
                 }
-                emitCommaList(node.declarationList.declarations);
-                write(";");
             }
             else {
                 var atLeastOneItem = emitVariableDeclarationListSkippingUninitializedEntries(node.declarationList);
@@ -34550,7 +34625,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         return;
                     }
 
-                    var paramName = parameter.name, initializer = parameter.initializer;
+                    var paramName = parameter.name;
+                    var initializer = parameter.initializer;
                     if (ts.isBindingPattern(paramName)) {
                         // In cases where a binding pattern is simply '[]' or '{}',
                         // we usually don't want to emit a var declaration; however, in the presence
@@ -34558,11 +34634,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         var hasBindingElements = paramName.elements.length > 0;
                         if (hasBindingElements || initializer) {
                             writeLine();
-                            write("var ");
                             if (hasBindingElements) {
                                 emitDestructuring(parameter, /*isAssignmentExpressionStatement*/ false, tempParameters[tempIndex]);
                             }
                             else {
+                                write("var ");
                                 emit(tempParameters[tempIndex]);
                                 write(" = ");
                                 emit(initializer);
@@ -34743,7 +34819,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitDeclarationName(node);
             }
             if (isInterfaceFunctionMemberOrAmbient) {
-                if (node.kind === 140) {
+                if (node.kind === 140 /* PropertySignature */) {
                     emittedNode = node.type;
                 }
                 emitSignatureParameters(emittedNode);
@@ -35336,6 +35412,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             return "(" + mapped.join("|") + ")";
         }
         function getArrayLiteral(node) {
+            return "Array<" + getArrayLiteralElementType(node) + ">";
+        }
+        function getArrayLiteralElementType(node) {
             var type;
             var typeCounter = 0;
             var map = {};
@@ -35348,9 +35427,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 return;
             });
             if (typeCounter !== 1) {
-                return "Array<*>";
+                return "*";
             }
-            return "Array<" + type + ">";
+            return type;
         }
         function getTypeReference(rootNode, typeRef) {
             var text;
@@ -35484,6 +35563,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 return null;
             }
             var symbol = typeChecker.getSymbolAtLocation(node);
+            return getDeclarationFromSymbol(symbol);
+        }
+        function getDeclarationFromSymbol(symbol) {
             if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
                 return null;
             }
@@ -35532,7 +35614,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 151 /* TypeReference */:
                     var typeRef = node;
                     var declaration = getSymbolAtLocation(typeRef.typeName);
-                    if (declaration.kind === 216 /* TypeAliasDeclaration */) {
+                    if (declaration && declaration.kind === 216 /* TypeAliasDeclaration */) {
                         var typeAlias = declaration;
                         if (typeRef.typeArguments) {
                             typeAlias = getMergedTypeAliasDeclaration(typeRef, declaration);
@@ -35635,13 +35717,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         function createGenericsTypeChecker(genericArguments) {
             return function (param) { return genericArguments.indexOf(param) > -1 ? "?" : param; };
         }
-        function emitCallSignatures(interface, members) {
+        function emitCallSignatures(_interface, members) {
             emitAnnotationIf(function () {
-                var genericArguments = getGenericArguments(interface);
+                var genericArguments = getGenericArguments(_interface);
                 var genericsTypeChecker = createGenericsTypeChecker(genericArguments);
-                emitCallOrIndexSignatures(interface, members, function (indexSignature) {
-                    var params = ts.map(indexSignature.parameters, function (param) { return genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, param)); });
-                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(interface, indexSignature.type));
+                emitCallOrIndexSignatures(_interface, members, function (indexSignature) {
+                    var params = ts.map(indexSignature.parameters, function (param) { return genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, param)); });
+                    var returnType = genericsTypeChecker(getParameterOrUnionTypeAnnotation(_interface, indexSignature.type));
                     return "function(" + params.join(", ") + "): " + returnType;
                 });
             });
@@ -35719,6 +35801,14 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     ts.emitComments(currentSourceFile, annotationWriter, comments, false, newLine, ts.writeCommentRange);
                 }
             }
+        }
+        function emitArrayLiteralElementTypeAnnotation(node) {
+            emitTypeAnnotaion(getArrayLiteralElementType(node));
+        }
+        function emitTypeAnnotaion(type) {
+            emitAnnotationIf(function () {
+                write("/** @type {" + type + "} */ ");
+            });
         }
         function emitArrayTypeAnnotation(node) {
             emitAnnotationIf(function () {
@@ -35955,8 +36045,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitConstructorAnnotation(node, ctor, baseTypeElement, interfacesImpl);
             }
             else {
-                var interface = node;
-                emitInterfaceDeclarationAnnotation(interface, interfacesImpl);
+                var _interface = node;
+                emitInterfaceDeclarationAnnotation(_interface, interfacesImpl);
             }
             // For target ES6 and above, if there is no user-defined constructor and there is no property assignment
             // do not emit constructor in class declaration.
@@ -36061,6 +36151,27 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (shouldEmitSemicolon) {
                 write(";");
             }
+        }
+        function cloneNode(node, location, flags, parent) {
+            // We don't use "clone" from core.ts here, as we need to preserve the prototype chain of
+            // the original node. We also need to exclude specific properties and only include own-
+            // properties (to skip members already defined on the shared prototype).
+            var clone = location !== undefined
+                ? ts.createNode(node.kind)
+                : createSynthesizedNode(node.kind);
+            for (var key in node) {
+                if (clone.hasOwnProperty(key) || !node.hasOwnProperty(key)) {
+                    continue;
+                }
+                clone[key] = node[key];
+            }
+            if (flags !== undefined) {
+                clone.flags = flags;
+            }
+            if (parent !== undefined) {
+                clone.parent = parent;
+            }
+            return clone;
         }
         function clone(source, props) {
             var cloned = ts.createSynthesizedNode(source.kind);
@@ -37975,7 +38086,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             emitAMDFactoryHeader(dependencyNames);
         }
         function emitAMDDependencyList(_a) {
-            var aliasedModuleNames = _a.aliasedModuleNames, unaliasedModuleNames = _a.unaliasedModuleNames;
+
+            var aliasedModuleNames = _a.aliasedModuleNames;
+            var unaliasedModuleNames = _a.unaliasedModuleNames;
             write("[\"require\", \"exports\"");
             if (aliasedModuleNames.length) {
                 write(", ");
@@ -37988,6 +38101,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             write("]");
         }
         function emitAMDFactoryHeader(_a) {
+
             var importAliasNames = _a.importAliasNames;
             write("function (require, exports");
             if (importAliasNames.length) {
@@ -39956,7 +40070,9 @@ ts.parseCommandLine = function (commandLine, readFile) {
     var fileNames = [];
     var externFileNames = [];
     var errors = [];
-    var _a = ts.getOptionNameMap(), optionNameMap = _a.optionNameMap, shortOptionNames = _a.shortOptionNames;
+    var _a = ts.getOptionNameMap();
+    var optionNameMap = _a.optionNameMap;
+    var shortOptionNames = _a.shortOptionNames;
     parseStrings(commandLine);
     return {
         errors: errors,
@@ -48284,7 +48400,8 @@ ts.createLanguageService = function (host, documentRegistry) {
                 return undefined;
             }
 
-            var parent_9 = contextToken.parent, kind = contextToken.kind;
+            var parent_9 = contextToken.parent;
+            var kind = contextToken.kind;
             if (kind === 21 /* DotToken */) {
                 if (parent_9.kind === 166 /* PropertyAccessExpression */) {
                     node = contextToken.parent.expression;
@@ -48922,7 +49039,12 @@ ts.createLanguageService = function (host, documentRegistry) {
             return undefined;
         }
 
-        var symbols = completionData.symbols, isMemberCompletion = completionData.isMemberCompletion, isNewIdentifierLocation = completionData.isNewIdentifierLocation, location = completionData.location, isRightOfDot = completionData.isRightOfDot, isJsDocTagName = completionData.isJsDocTagName;
+        var symbols = completionData.symbols;
+        var isMemberCompletion = completionData.isMemberCompletion;
+        var isNewIdentifierLocation = completionData.isNewIdentifierLocation;
+        var location = completionData.location;
+        var isRightOfDot = completionData.isRightOfDot;
+        var isJsDocTagName = completionData.isJsDocTagName;
         var entries;
         if (isJsDocTagName) {
             // If the current position is a jsDoc tag name, only tag names should be provided for completion
@@ -49027,7 +49149,8 @@ ts.createLanguageService = function (host, documentRegistry) {
         var completionData = getCompletionData(fileName, position);
         if (completionData) {
 
-            var symbols = completionData.symbols, location_2 = completionData.location;
+            var symbols = completionData.symbols;
+            var location_2 = completionData.location;
             // Find the symbol with the matching entry name.
             var target = program.getCompilerOptions().target;
             // We don't need to perform character checks here because we're only comparing the
@@ -49036,7 +49159,10 @@ ts.createLanguageService = function (host, documentRegistry) {
             var symbol = ts.forEach(symbols, function (s) { return getCompletionEntryDisplayNameForSymbol(s, target, /*performCharacterChecks:*/ false, location_2) === entryName ? s : undefined; });
             if (symbol) {
 
-                var _a = getSymbolDisplayPartsDocumentationAndSymbolKind(symbol, getValidSourceFile(fileName), location_2, location_2, 7 /* All */), displayParts = _a.displayParts, documentation = _a.documentation, symbolKind = _a.symbolKind;
+                var _a = getSymbolDisplayPartsDocumentationAndSymbolKind(symbol, getValidSourceFile(fileName), location_2, location_2, 7 /* All */);
+                var displayParts = _a.displayParts;
+                var documentation = _a.documentation;
+                var symbolKind = _a.symbolKind;
                 return {
                     name: entryName,
                     kindModifiers: getSymbolModifiers(symbol),
