@@ -3883,7 +3883,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (node.initializer.kind === SyntaxKind.VariableDeclarationList) {
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length > 0) {
-                        let declaration = variableDeclarationList.declarations[0];
+                        const declaration = variableDeclarationList.declarations[0];
+                        const expressionDeclaration = <VariableDeclaration>getSymbolDeclaration(node.expression);
+
+                        if (expressionDeclaration) {
+                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>expressionDeclaration.initializer);
+                        }
+                        else {
+                            emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
+                        }
 
                         if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
                             write("var ");
@@ -4470,7 +4478,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
-                function emitBindingElement(target: BindingElement | VariableDeclaration, value: Expression) {
+                function emitBindingElement(target: BindingElement | VariableDeclaration, value: Expression, initializer?: Expression) {
                     if (target.initializer) {
                         // Combine value and initializer
                         value = value ? createDefaultValueCheck(value, target.initializer) : target.initializer;
@@ -4480,40 +4488,104 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         value = createVoidZero();
                     }
                     if (isBindingPattern(target.name)) {
+                        let moduleName: string;
+                        let identifier = <Identifier>value;
                         const pattern = <BindingPattern>target.name;
                         const elements = pattern.elements;
                         const numElements = elements.length;
+                        const firstElement = elements[0];
+                        const lastElement = elements[numElements - 1];
+                        const initializerIsIdentifier = !target.initializer || target.initializer.kind !== SyntaxKind.Identifier;
 
-                        if (numElements !== 1) {
-                            // For anything other than a single-element destructuring we need to generate a temporary
-                            // to ensure value is evaluated exactly once. Additionally, if we have zero elements
-                            // we need to emit *something* to ensure that in case a 'var' keyword was already emitted,
-                            // so in that case, we'll intentionally create that temporary.
-                            value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0);
+                        initializer = value
+                        value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0);
+
+                        if (initializer !== value) {
+                            write(";");
+                        }
+
+                        if (moduleName = getModuleName(target)) {
+                            identifier.text = `${moduleName}${identifier.text}`;
                         }
 
                         for (let i = 0; i < numElements; i++) {
-                            let element = elements[i];
+                            const element = elements[i];
+                            if (pattern.kind !== SyntaxKind.ObjectBindingPattern && element.kind === SyntaxKind.OmittedExpression) {
+                                continue;
+                            }
+                            if (firstElement !== element || initializerIsIdentifier) {
+                                forceWriteLine();
+                            }
                             if (pattern.kind === SyntaxKind.ObjectBindingPattern) {
                                 // Rewrite element to a declaration with an initializer that fetches property
-                                let propName = element.propertyName || <Identifier>element.name;
-                                emitBindingElement(element, createPropertyAccessForDestructuringProperty(value, propName));
+                                const propName = element.propertyName || <Identifier>element.name;
+                                emitBindingElement(element, createPropertyAccessForDestructuringProperty(value, propName), initializer);
                             }
                             else if (element.kind !== SyntaxKind.OmittedExpression) {
                                 if (!element.dotDotDotToken) {
                                     // Rewrite element to a declaration that accesses array element at index i
-                                    emitBindingElement(element, createElementAccessExpression(value, createNumericLiteral(i)));
+                                    emitBindingElement(element, createElementAccessExpression(value, createNumericLiteral(i)), initializer);
                                 }
                                 else if (i === numElements - 1) {
-                                    emitBindingElement(element, createSliceCall(value, i));
+                                    emitBindingElement(element, createSliceCall(value, i), initializer);
                                 }
+                            }
+                            if (element !== lastElement) {
+                                write(";")
                             }
                         }
                     }
                     else {
-                        emitAssignment(<Identifier>target.name, value, /*shouldEmitCommaBeforeAssignment*/ emitCount > 0);
+                        let member: VariableDeclaration;
+                        const propName = (<Identifier>target.name).text;
+                        let rootDeclaration = (<VariableDeclaration>root);
+
+                        if (rootDeclaration.name.kind === SyntaxKind.ArrayBindingPattern && initializer.kind === SyntaxKind.Identifier) {
+                            let emittedNode: Node = root;
+                            let candidate = <VariableDeclaration>getSymbolDeclaration(initializer);
+
+                            if (candidate && candidate.initializer) {
+                                emittedNode = candidate.initializer;
+                            }
+
+                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
+                        }
+                        else if (initializer.kind == SyntaxKind.Identifier && initializer.parent) {
+                            emitMemberAnnotation(initializer, propName);
+                        }
+                        else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
+                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer);
+                        }
+                        else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
+                            member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
+                            emitVariableTypeAnnotation(member);
+                        }
+                        else if (initializer.kind === SyntaxKind.ElementAccessExpression) {
+                            emitMemberAnnotation(rootDeclaration.name, propName);
+                        }
+                        else {
+                            emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
+                        }
+
+                        if (!emitModuleIfNeeded(root)) {
+                            write("var ");
+                        }
+
+                        const cloned = cloneNode(<PropertyAccessExpression>value, value, value.flags);
+
+                        emitAssignment(<Identifier>target.name, cloned, false);
                         emitCount++;
                     }
+                }
+
+                function emitMemberAnnotation(node: Node, propName: string): void {
+                    let emittedNode = node;
+                    let type = typeChecker.getTypeAtLocation(node);
+                    let prop = typeChecker.getPropertyOfType(type, propName)
+                    if (prop) {
+                        emittedNode = getDeclarationFromSymbol(prop);
+                    }
+                    emitVariableTypeAnnotation(<VariableDeclaration>emittedNode);
                 }
             }
 
@@ -4624,6 +4696,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     node.parent.kind === SyntaxKind.SourceFile;
             }
 
+            function isNameBindingPattern(variable: VariableDeclaration): boolean {
+                if (variable && variable.name) {
+                    return isBindingPattern(variable.name);
+                }
+
+                return false;
+            }
+
             function emitVariableStatement(node: VariableStatement) {
                 if (isAmbientContextDeclaredWithinSourceFile(node)) {
                     return;
@@ -4634,8 +4714,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let shouldEmitNewLine = false;
                 let statement: VariableStatement;
                 let shouldEmitVariableAnnotation: boolean;
-                let parentStatements = (<Block>node.parent).statements;
-                let nodeFirstVariable = node.declarationList.declarations[0];
+                const parentStatements = (<Block>node.parent).statements;
+                const nodeFirstVariable = node.declarationList.declarations[0];
+                const isBindingPattern = isNameBindingPattern(nodeFirstVariable);
 
                 if (parentStatements) {
                     nodeIndex = parentStatements.indexOf(node);
@@ -4644,7 +4725,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         statement = <VariableStatement>parentStatements[0];
                     }
                     else {
-                        let prevStatement = parentStatements[nodeIndex - 1];
+                        const prevStatement = parentStatements[nodeIndex - 1];
 
                         if (prevStatement.kind !== SyntaxKind.VariableStatement) {
                             statement = <VariableStatement>parentStatements[nodeIndex];
@@ -4652,7 +4733,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (statement) {
-                        let firstDeclaration = statement.declarationList.declarations[0];
+                        const firstDeclaration = statement.declarationList.declarations[0];
                         shouldEmitNewLine = !ts.isFunctionLike(getSymbolScope(firstDeclaration));
                     }
                 }
@@ -4694,7 +4775,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
                 else {
-                    if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
+                    if (isNodeDeclaredWithinScope(nodeFirstVariable) || isBindingPattern) {
                         startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                     }
                 }
@@ -4703,17 +4784,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (shouldEmitNewLine) {
                         forceWriteLine();
                     }
-                    if (nodeFirstVariable.kind !== SyntaxKind.Parameter) {
-                        emitVariableTypeAnnotation(nodeFirstVariable);
+                    if (isBindingPattern && nodeFirstVariable.initializer.kind === SyntaxKind.Identifier) {
+                        emitCommaList(node.declarationList.declarations);
+                        write(";");
                     }
-                    if (startIsEmitted) {
-                        write(startIsEmitted);
+                    else {
+                        if (nodeFirstVariable.kind !== SyntaxKind.Parameter) {
+                            emitVariableTypeAnnotation(nodeFirstVariable);
+                        }
+                        if (startIsEmitted) {
+                            write(startIsEmitted);
+                        }
+                        emitCommaList(node.declarationList.declarations);
+                        write(";");
                     }
-                    emitCommaList(node.declarationList.declarations);
-                    write(";");
                 }
                 else {
-                    let atLeastOneItem = emitVariableDeclarationListSkippingUninitializedEntries(node.declarationList);
+                    const atLeastOneItem = emitVariableDeclarationListSkippingUninitializedEntries(node.declarationList);
                     if (atLeastOneItem) {
                         write(";");
                     }
@@ -4790,12 +4877,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             let hasBindingElements = paramName.elements.length > 0;
                             if (hasBindingElements || initializer) {
                                 writeLine();
-                                write("var ");
 
                                 if (hasBindingElements) {
                                     emitDestructuring(parameter, /*isAssignmentExpressionStatement*/ false, tempParameters[tempIndex]);
                                 }
                                 else {
+                                    write("var ");
                                     emit(tempParameters[tempIndex]);
                                     write(" = ");
                                     emit(initializer);
@@ -5663,6 +5750,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getArrayLiteral(node: ArrayLiteralExpression): string {
+                return `Array<${getArrayLiteralElementType(node)}>`;
+            }
+
+            function getArrayLiteralElementType(node: ArrayLiteralExpression): string {
                 let type: string;
                 let typeCounter = 0;
                 let map: { [name: string]: boolean } = {};
@@ -5679,10 +5770,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 });
 
                 if (typeCounter !== 1) {
-                    return "Array<*>";
+                    return "*";
                 }
 
-                return `Array<${type}>`;
+                return type;
             }
 
             function getTypeReference(rootNode: Node, typeRef: TypeReferenceNode): string {
@@ -5849,6 +5940,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 let symbol = typeChecker.getSymbolAtLocation(node);
 
+                return getDeclarationFromSymbol(symbol);
+            }
+
+            function getDeclarationFromSymbol(symbol: Symbol): Declaration {
                 if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
                     return null;
                 }
@@ -5907,7 +6002,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         let typeRef = <TypeReferenceNode>node;
                         let declaration = getSymbolAtLocation(typeRef.typeName);
 
-                        if (declaration.kind === SyntaxKind.TypeAliasDeclaration) {
+                        if (declaration && declaration.kind === SyntaxKind.TypeAliasDeclaration) {
                             let typeAlias = declaration;
 
                             if (typeRef.typeArguments) {
@@ -6120,6 +6215,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitComments(currentSourceFile, annotationWriter, comments, false, newLine, writeCommentRange);
                     }
                 }
+            }
+
+            function emitArrayLiteralElementTypeAnnotation(node: ArrayLiteralExpression): void {
+                emitAnnotationIf(() => {
+                    const type = getArrayLiteralElementType(node);
+                    write(`/** @type {${type}} */ `);
+                });
             }
 
             function emitArrayTypeAnnotation(node: ParameterDeclaration): void {
@@ -6534,6 +6636,33 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             interface Cloned extends Node {
                 [name: string]: any;
+            }
+
+            function cloneNode<T extends Node>(node: T, location?: TextRange, flags?: NodeFlags, parent?: Node): T {
+                // We don't use "clone" from core.ts here, as we need to preserve the prototype chain of
+                // the original node. We also need to exclude specific properties and only include own-
+                // properties (to skip members already defined on the shared prototype).
+                const clone = location !== undefined
+                    ? <T>createNode(node.kind)
+                    : <T>createSynthesizedNode(node.kind);
+
+                for (const key in node) {
+                    if (clone.hasOwnProperty(key) || !node.hasOwnProperty(key)) {
+                        continue;
+                    }
+
+                    (<any>clone)[key] = (<any>node)[key];
+                }
+
+                if (flags !== undefined) {
+                    clone.flags = flags;
+                }
+
+                if (parent !== undefined) {
+                    clone.parent = parent;
+                }
+
+                return clone;
             }
 
             function clone(source: Cloned, props: Array<string>): Cloned {
