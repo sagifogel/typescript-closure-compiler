@@ -33754,12 +33754,20 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 var variableDeclarationList = node.initializer;
                 if (variableDeclarationList.declarations.length > 0) {
                     var declaration = variableDeclarationList.declarations[0];
-                    var elementType = typeChecker.getTypeOfSymbolAtLocation(declaration.symbol, declaration);
-                    if (elementType) {
-                        emitTypeAnnotaion(getSymbolName(declaration, elementType));
+                    if (declaration.symbol) {
+                        var elementType = typeChecker.getTypeOfSymbolAtLocation(declaration.symbol, declaration);
+                        if (elementType) {
+                            emitTypeAnnotaion(getSymbolName(declaration, elementType));
+                        }
                     }
                     else {
-                        emitTypeAnnotaion("?");
+                        var expressionDeclaration = getSymbolDeclaration(node.expression);
+                        if (expressionDeclaration) {
+                            emitVariableTypeAnnotation(expressionDeclaration);
+                        }
+                        else {
+                            emitTypeAnnotaion("?");
+                        }
                     }
                     if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
                         write("var ");
@@ -34363,7 +34371,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     if (!emitModuleIfNeeded(root)) {
                         write("var ");
                     }
-                    var cloned = cloneNode(value, value, value.flags);
+                    var cloned = cloneNode(value, undefined, value.flags);
                     emitAssignment(target.name, cloned, false);
                     emitCount++;
                 }
