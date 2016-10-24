@@ -3884,13 +3884,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length > 0) {
                         const declaration = variableDeclarationList.declarations[0];
-                        const elementType = typeChecker.getTypeOfSymbolAtLocation(declaration.symbol, declaration);
 
-                        if (elementType) {
-                            emitTypeAnnotaion(getSymbolName(declaration, elementType));
+                        if (declaration.symbol) {
+                            const elementType = typeChecker.getTypeOfSymbolAtLocation(declaration.symbol, declaration);
+
+                            if (elementType) {
+                                emitTypeAnnotaion(getSymbolName(declaration, elementType));
+                            }
                         }
                         else {
-                            emitTypeAnnotaion("?");
+                            const expressionDeclaration = getSymbolDeclaration(node.expression);
+
+                            if (expressionDeclaration) {
+                                emitVariableTypeAnnotation(<VariableDeclaration>expressionDeclaration);
+                            }
+                            else {
+                                emitTypeAnnotaion("?");
+                            }
                         }
 
                         if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
@@ -4571,7 +4581,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             write("var ");
                         }
 
-                        const cloned = cloneNode(<PropertyAccessExpression>value, value, value.flags);
+                        const cloned = cloneNode(<PropertyAccessExpression>value, undefined, value.flags);
 
                         emitAssignment(<Identifier>target.name, cloned, false);
                         emitCount++;
