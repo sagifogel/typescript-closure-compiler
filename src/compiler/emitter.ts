@@ -3884,13 +3884,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     let variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length > 0) {
                         const declaration = variableDeclarationList.declarations[0];
-                        const expressionDeclaration = <VariableDeclaration>getSymbolDeclaration(node.expression);
+                        const elementType = typeChecker.getTypeOfSymbolAtLocation(declaration.symbol, declaration);
 
-                        if (expressionDeclaration) {
-                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>expressionDeclaration.initializer);
+                        if (elementType) {
+                            emitTypeAnnotaion(getSymbolName(declaration, elementType));
                         }
                         else {
-                            emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
+                            emitTypeAnnotaion("?");
                         }
 
                         if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
@@ -6218,8 +6218,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitArrayLiteralElementTypeAnnotation(node: ArrayLiteralExpression): void {
+                emitTypeAnnotaion(getArrayLiteralElementType(node));
+            }
+
+            function emitTypeAnnotaion(type :string) : void {
                 emitAnnotationIf(() => {
-                    const type = getArrayLiteralElementType(node);
                     write(`/** @type {${type}} */ `);
                 });
             }
