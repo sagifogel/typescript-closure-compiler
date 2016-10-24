@@ -36835,12 +36835,20 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 var variableDeclarationList = node.initializer;
                 if (variableDeclarationList.declarations.length > 0) {
                     var declaration = variableDeclarationList.declarations[0];
-                    var expressionDeclaration = getSymbolDeclaration(node.expression);
-                    if (expressionDeclaration) {
-                        emitArrayLiteralElementTypeAnnotation(expressionDeclaration.initializer);
+                    if (declaration.symbol) {
+                        var elementType = typeChecker.getTypeOfSymbolAtLocation(declaration.symbol, declaration);
+                        if (elementType) {
+                            emitTypeAnnotaion(getSymbolName(declaration, elementType));
+                        }
                     }
                     else {
-                        emitVariableTypeAnnotation(ts.createSynthesizedNode(214 /* VariableDeclaration */));
+                        var expressionDeclaration = getSymbolDeclaration(node.expression);
+                        if (expressionDeclaration) {
+                            emitVariableTypeAnnotation(expressionDeclaration);
+                        }
+                        else {
+                            emitTypeAnnotaion("?");
+                        }
                     }
                     if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
                         write("var ");
@@ -39028,8 +39036,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function emitArrayLiteralElementTypeAnnotation(node) {
+            emitTypeAnnotaion(getArrayLiteralElementType(node));
+        }
+        function emitTypeAnnotaion(type) {
             emitAnnotationIf(function () {
-                var type = getArrayLiteralElementType(node);
                 write("/** @type {" + type + "} */ ");
             });
         }

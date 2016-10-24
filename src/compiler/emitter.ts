@@ -4091,13 +4091,23 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     const variableDeclarationList = <VariableDeclarationList>node.initializer;
                     if (variableDeclarationList.declarations.length > 0) {
                         const declaration = variableDeclarationList.declarations[0];
-                        const expressionDeclaration = <VariableDeclaration>getSymbolDeclaration(node.expression);
 
-                        if (expressionDeclaration) {
-                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>expressionDeclaration.initializer);
+                        if (declaration.symbol) {
+                            const elementType = typeChecker.getTypeOfSymbolAtLocation(declaration.symbol, declaration);
+
+                            if (elementType) {
+                                emitTypeAnnotaion(getSymbolName(declaration, elementType));
+                            }
                         }
                         else {
-                            emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
+                            const expressionDeclaration = getSymbolDeclaration(node.expression);
+
+                            if (expressionDeclaration) {
+                                emitVariableTypeAnnotation(<VariableDeclaration>expressionDeclaration);
+                            }
+                            else {
+                                emitTypeAnnotaion("?");
+                            }
                         }
 
                         if (!isContainedWithinModule && trySetVariableDeclarationInModule(declaration)) {
@@ -4912,14 +4922,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             write("var ");
                         }
 
-                        const cloned = ts.cloneNode(<PropertyAccessExpression>value, value, value.flags);
+                        const cloned = cloneNode(<PropertyAccessExpression>value, value, value.flags);
 
                         emitAssignment(<Identifier>target.name, cloned, false, target);
                         emitCount++;
                     }
                 }
 
-                function emitMemberAnnotation(node: Node, propName: string) : void {
+                function emitMemberAnnotation(node: Node, propName: string): void {
                     let emittedNode = node;
                     let type = typeChecker.getTypeAtLocation(node);
                     let prop = typeChecker.getPropertyOfType(type, propName)
@@ -6431,7 +6441,7 @@ const _super = (function (geti, seti) {
                     case SyntaxKind.ConstructorType:
                     case SyntaxKind.MethodDeclaration:
                     case SyntaxKind.FunctionExpression:
-                            return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
+                        return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number", isParameterPropertyAssignment);
                     case SyntaxKind.StringLiteral:
@@ -6617,9 +6627,11 @@ const _super = (function (geti, seti) {
             }
 
             function emitArrayLiteralElementTypeAnnotation(node: ArrayLiteralExpression): void {
-                emitAnnotationIf(() => {
-                    const type = getArrayLiteralElementType(node);
+                emitTypeAnnotaion(getArrayLiteralElementType(node));
+            }
 
+            function emitTypeAnnotaion(type: string): void {
+                emitAnnotationIf(() => {
                     write(`/** @type {${type}} */ `);
                 });
             }
