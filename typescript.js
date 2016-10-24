@@ -38866,12 +38866,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 154 /* ConstructorType */:
                 case 144 /* MethodDeclaration */:
                 case 176 /* FunctionExpression */:
-                    try {
-                        return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, node), isParameterPropertyAssignment);
-                    }
-                    catch (e) {
-                        console.log("getFunctionType", node.kind);
-                    }
+                    return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, node), isParameterPropertyAssignment);
                 case 8 /* NumericLiteral */:
                     return addOptionalIfNeeded(node.parent, "number", isParameterPropertyAssignment);
                 case 9 /* StringLiteral */:

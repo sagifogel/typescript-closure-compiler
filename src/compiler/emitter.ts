@@ -6431,12 +6431,7 @@ const _super = (function (geti, seti) {
                     case SyntaxKind.ConstructorType:
                     case SyntaxKind.MethodDeclaration:
                     case SyntaxKind.FunctionExpression:
-                        try {
                             return addOptionalIfNeeded(node.parent, getFunctionType(rootNode, <FunctionLikeDeclaration>node), isParameterPropertyAssignment);
-                        }
-                        catch (e) {
-                            console.log("getFunctionType", node.kind);
-                        }
                     case SyntaxKind.NumericLiteral:
                         return addOptionalIfNeeded(node.parent, "number", isParameterPropertyAssignment);
                     case SyntaxKind.StringLiteral:
