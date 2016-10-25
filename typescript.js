@@ -33386,6 +33386,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     emitExponentiationOperator(node);
                 }
                 else {
+                    if (ts.isFunctionLike(node.right)) {
+                        emitFunctionAnnotation(node.right);
+                    }
                     if (!isLiteral(node.left) && isNotPropertyAccessOrCallExpression(node.left) && !isExpressionIdentifier(node.left)) {
                         emitModuleName(node.left);
                     }

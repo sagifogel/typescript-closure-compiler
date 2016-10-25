@@ -3463,6 +3463,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitExponentiationOperator(node);
                     }
                     else {
+                        if (ts.isFunctionLike(node.right)) {
+                            emitFunctionAnnotation(<FunctionLikeDeclaration><any>node.right);
+                        }
+
                         if (!isLiteral(node.left) && isNotPropertyAccessOrCallExpression(node.left) && !isExpressionIdentifier(node.left)) {
                             emitModuleName(node.left);
                         }
