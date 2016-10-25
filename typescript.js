@@ -37558,7 +37558,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         member = getDeclarationFromSymbol(initializer.symbol.members[propName]);
                         emitVariableTypeAnnotation(member);
                     }
-                    else if (initializer.kind === 170 /* ElementAccessExpression */) {
+                    else if (initializer.kind === 170 /* ElementAccessExpression */ || initializer.kind === 169 /* PropertyAccessExpression */ || initializer.kind === 172 /* NewExpression */) {
                         emitMemberAnnotation(root.name, propName);
                     }
                     else {
