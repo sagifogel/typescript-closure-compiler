@@ -3265,6 +3265,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitExponentiationOperator(node);
                     }
                     else {
+                        if (ts.isFunctionLike(node.right)) {
+                            emitFunctionAnnotation(<FunctionLikeDeclaration><any>node.right);
+                        }
+
                         if (!isLiteral(node.left) && isNotPropertyAccessOrCallExpression(node.left) && !isExpressionIdentifier(node.left)) {
                             emitModuleName(node.left);
                         }
@@ -6151,7 +6155,13 @@ const _super = (function (geti, seti) {
             }
 
             function getTypes(rootNode: Node, types: Array<Node>): string {
-                let mapped = ts.map(types, (type: Node) => {
+                const allAreStringLiterlType = types.every(t => t.kind === SyntaxKind.StringLiteralType);
+
+                if (allAreStringLiterlType) {
+                    return "string";
+                }
+
+                const mapped = ts.map(types, (type: Node) => {
                     return getParameterOrUnionTypeAnnotation(rootNode, type);
                 });
 

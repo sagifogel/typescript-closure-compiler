@@ -36120,6 +36120,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     emitExponentiationOperator(node);
                 }
                 else {
+                    if (ts.isFunctionLike(node.right)) {
+                        emitFunctionAnnotation(node.right);
+                    }
                     if (!isLiteral(node.left) && isNotPropertyAccessOrCallExpression(node.left) && !isExpressionIdentifier(node.left)) {
                         emitModuleName(node.left);
                     }
@@ -38639,6 +38642,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             return getTypes(rootNode, unionType.types);
         }
         function getTypes(rootNode, types) {
+            var allAreStringLiterlType = types.every(function (t) { return t.kind === 163 /* StringLiteralType */; });
+            if (allAreStringLiterlType) {
+                return "string";
+            }
             var mapped = ts.map(types, function (type) {
                 return getParameterOrUnionTypeAnnotation(rootNode, type);
             });
