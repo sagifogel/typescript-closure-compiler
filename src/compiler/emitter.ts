@@ -4574,7 +4574,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
                             emitVariableTypeAnnotation(member);
                         }
-                        else if (initializer.kind === SyntaxKind.ElementAccessExpression) {
+                        else if (initializer.kind === SyntaxKind.ElementAccessExpression || initializer.kind === SyntaxKind.PropertyAccessExpression || initializer.kind === SyntaxKind.NewExpression) {
                             emitMemberAnnotation(rootDeclaration.name, propName);
                         }
                         else {
@@ -6235,7 +6235,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitTypeAnnotaion(getArrayLiteralElementType(node));
             }
 
-            function emitTypeAnnotaion(type :string) : void {
+            function emitTypeAnnotaion(type: string): void {
                 emitAnnotationIf(() => {
                     write(`/** @type {${type}} */ `);
                 });
