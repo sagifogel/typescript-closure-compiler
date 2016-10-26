@@ -1,7 +1,7 @@
 # TypeScript Closure Compiler
 
 This patches the TypeScript compiler to generate JSDoc annotations ready for Google Closure Compiler.<br/> A demo is available online at [http://sagifogel.github.io/typescript-closure-compiler/](http://sagifogel.github.io/typescript-closure-compiler/).<br/>
-The current version is compatible with TypeScript 1.7.5.<br/>
+The current version is compatible with TypeScript 1.8.10.<br/>
 For the purposes of clarity each npm package that will be released will match TypeScript\`s major and minor version.<br/>
 For example each version of `typescript-closure-compiler` that is compatible with TypeScript 1.7.5 will be constructed as 
 `1.7.x` and each version that is compatible with TypeScript 1.8.10 will be constructed as `1.8.x`.<br/><br/>
