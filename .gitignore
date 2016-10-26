@@ -23,9 +23,6 @@ coverage
 # Compiled binary addons (http://nodejs.org/api/addons.html)
 build/Release
 
-# Compiled binary addons (http://nodejs.org/api/addons.html)
-build/Debug
-
 # Dependency directory
 node_modules
 
@@ -40,12 +37,8 @@ node_modules
 \.vs
 
 *.js
-\obj
-\bin
 *.dat
 *.tmp
 !*jakefile.js
 !*typescript.js
-!*tscc.browser.js
-!*compiler.js
 !*gulpfile.js
