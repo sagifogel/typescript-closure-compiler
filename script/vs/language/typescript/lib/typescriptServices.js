@@ -33997,19 +33997,18 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             renamedDependencies = undefined;
             isCurrentFileExternalModule = false;
         }
+        function shouldBeExported(member) {
+            return member.kind !== 137 /* ComputedPropertyName */ &&
+                member.kind !== 145 /* Constructor */ &&
+                member.kind !== 146 /* GetAccessor */ &&
+                member.kind !== 147 /* SetAccessor */ &&
+                isPublicMember(member);
+        }
         function emitExportedTypes() {
             var cahce = {};
             var exportedTypes = {};
             var exportedMembers = [];
-            var sortByLength = function (t1, t2) {
-                if (t1.length === t2.length) {
-                    return 0;
-                }
-                if (t1.length < t2.length) {
-                    return -1;
-                }
-                return 1;
-            };
+            var sortByLength = function (t1, t2) { return t1.length - t2.length; };
             forceWriteLine();
             ts.forEach(resolvedExportedTypes, function (resolvedExportedType) {
                 var exportedType = resolvedExportedType;
@@ -34018,13 +34017,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 var containerName = moduleName + nodeName;
                 exportedTypes[nodeName] = containerName;
                 ts.forEach(exportedType.members, function (member) {
-                    var isEnumMember = member.kind === 250 /* EnumMember */;
-                    if (isEnumMember || (member.kind !== 137 /* ComputedPropertyName */ && member.kind !== 145 /* Constructor */ && isPublicMember(member))) {
+                    if (shouldBeExported(member)) {
                         var result = void 0;
                         var buffer = [];
                         var memberName = getNodeName(member);
                         var nodeName_1 = containerName;
-                        if (!isEnumMember && (member.flags & 64 /* Static */) === 0) {
+                        if (member.kind !== 250 /* EnumMember */ && (member.flags & 64 /* Static */) === 0) {
                             nodeName_1 += ".prototype";
                         }
                         buffer.push(nodeName_1);
