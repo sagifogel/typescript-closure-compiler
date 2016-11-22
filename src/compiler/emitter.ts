@@ -833,15 +833,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 isCurrentFileExternalModule = false;
             }
 
+            function shouldBeExported(member: Node): boolean {
+                return member.kind !== SyntaxKind.ComputedPropertyName &&
+                    member.kind !== SyntaxKind.Constructor &&
+                    member.kind !== SyntaxKind.GetAccessor &&
+                    member.kind !== SyntaxKind.SetAccessor &&
+                    isPublicMember(member);
+            }
+
             function emitExportedTypes(): void {
                 let cahce: Map<boolean> = {};
                 let exportedTypes: Map<string> = {};
                 let exportedMembers: Array<string> = [];
-                let sortByLength = (t1: string, t2: string) => {
-                    if (t1.length === t2.length) { return 0; }
-                    if (t1.length < t2.length) { return -1; }
-                    return 1;
-                };
+                let sortByLength = (t1: string, t2: string) => t1.length - t2.length;
 
                 forceWriteLine();
 
@@ -854,15 +858,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     exportedTypes[nodeName] = containerName;
 
                     ts.forEach(exportedType.members, (member: Declaration) => {
-                        let isEnumMember = member.kind === SyntaxKind.EnumMember;
-
-                        if (isEnumMember || (member.kind !== SyntaxKind.ComputedPropertyName && member.kind !== SyntaxKind.Constructor && isPublicMember(member))) {
+                        if (shouldBeExported(member)) {
                             let result: string;
                             let buffer: Array<string> = [];
                             let memberName = getNodeName(member);
                             let nodeName = containerName;
 
-                            if (!isEnumMember && (member.flags & NodeFlags.Static) === 0) {
+                            if (member.kind !== SyntaxKind.EnumMember && (member.flags & NodeFlags.Static) === 0) {
                                 nodeName += ".prototype";
                             }
 
