@@ -33822,6 +33822,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         return combined;
     }
+    function getDeclarationFromSymbol(symbol) {
+        if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
+            return null;
+        }
+        return symbol.valueDeclaration || symbol.declarations[0];
+    }
     function resolveExportedEntryTypes(entryFile) {
         if (compilerOptions.entry && entryFile) {
             var statements = reduceStatements(entryFile.statements);
@@ -33830,7 +33836,14 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 var declartions;
                 if (statement.kind === 231 /* ExportDeclaration */) {
                     declartions = statement.exportClause.elements.map(function (el) {
-                        return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
+                        var declaration = getDeclarationFromSymbol(typeChecker.getTypeAtLocation(el.name).symbol);
+                        if (declaration.kind === 214 /* VariableDeclaration */) {
+                            return el;
+                        }
+                        else if (ts.isExpression(declaration)) {
+                            return declaration.parent;
+                        }
+                        return declaration;
                     });
                 }
                 else {
@@ -37726,43 +37739,32 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     shouldEmitNewLine = !ts.isFunctionLike(getSymbolScope(firstDeclaration));
                 }
             }
-            if (node.flags & 2 /* Export */) {
-                if (isES6ExportedDeclaration(node)) {
-                    // Exported ES6 module member
-                    write("export ");
-                    startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
-                }
-                else {
-                    if (isAmbientContextDeclaredWithinDefinitionFile(nodeFirstVariable)) {
-                        if (nodeFirstVariable.type && nodeFirstVariable.type.kind === 152 /* TypeReference */) {
-                            var typeRef = nodeFirstVariable.type;
-                            var declaration = getSymbolAtLocation(typeRef.typeName);
-                            if (declaration.kind === 218 /* InterfaceDeclaration */) {
-                                var interfaces = void 0;
-                                if (typeRef.typeArguments) {
-                                    var mergedDeclaration = getMergedDeclarationWithTypeParameters(typeRef, declaration);
-                                    interfaces = [mergedDeclaration];
-                                }
-                                else {
-                                    interfaces = [declaration];
-                                }
-                                forceWriteLine();
-                                emitConstructorWorker(nodeFirstVariable, null, interfaces);
-                            }
-                            else {
-                                shouldEmitVariableAnnotation = true;
-                            }
+            if (node.flags & 2 /* Export */ && isAmbientContextDeclaredWithinDefinitionFile(nodeFirstVariable)) {
+                if (nodeFirstVariable.type && nodeFirstVariable.type.kind === 152 /* TypeReference */) {
+                    var typeRef = nodeFirstVariable.type;
+                    var declaration = getSymbolAtLocation(typeRef.typeName);
+                    if (declaration.kind === 218 /* InterfaceDeclaration */) {
+                        var interfaces = void 0;
+                        if (typeRef.typeArguments) {
+                            var mergedDeclaration = getMergedDeclarationWithTypeParameters(typeRef, declaration);
+                            interfaces = [mergedDeclaration];
                         }
                         else {
-                            shouldEmitVariableAnnotation = true;
+                            interfaces = [declaration];
                         }
+                        forceWriteLine();
+                        emitConstructorWorker(nodeFirstVariable, null, interfaces);
+                    }
+                    else {
+                        shouldEmitVariableAnnotation = true;
                     }
                 }
-            }
-            else {
-                if (isNodeDeclaredWithinScope(nodeFirstVariable) || isBindingPattern) {
-                    startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
+                else {
+                    shouldEmitVariableAnnotation = true;
                 }
+            }
+            else if (isNodeDeclaredWithinScope(nodeFirstVariable) || isBindingPattern) {
+                startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
             }
             if (startIsEmitted || shouldEmitVariableAnnotation) {
                 if (shouldEmitNewLine) {
@@ -38802,12 +38804,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             var symbol = typeChecker.getSymbolAtLocation(node);
             return getDeclarationFromSymbol(symbol);
-        }
-        function getDeclarationFromSymbol(symbol) {
-            if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
-                return null;
-            }
-            return symbol.valueDeclaration || symbol.declarations[0];
         }
         function getTypeOfSymbolAtLocation(node) {
             var symbol = node.symbol;
