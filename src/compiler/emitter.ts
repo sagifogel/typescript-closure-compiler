@@ -441,6 +441,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             return combined;
         }
 
+        function getDeclarationFromSymbol(symbol: Symbol): Declaration {
+            if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
+                return null;
+            }
+            return symbol.valueDeclaration || symbol.declarations[0];
+        }
+
         function resolveExportedEntryTypes(entryFile: SourceFile): Array<Declaration> {
             if (compilerOptions.entry && entryFile) {
                 let statements = reduceStatements(entryFile.statements);
@@ -451,7 +458,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         if (statement.kind === SyntaxKind.ExportDeclaration) {
                             declartions = statement.exportClause.elements.map(el => {
-                                return typeChecker.getTypeAtLocation(el).symbol.valueDeclaration;
+                                const declaration = getDeclarationFromSymbol(typeChecker.getTypeAtLocation(el.name).symbol);
+                                if (declaration.kind === SyntaxKind.VariableDeclaration) {
+                                    return el;
+                                }
+                                else if (ts.isExpression(declaration)) {
+                                    return <Declaration>declaration.parent;
+                                }
+                                return declaration;
                             });
                         }
                         else {
@@ -4754,46 +4768,35 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
                 }
 
-                if (node.flags & NodeFlags.Export) {
-                    if (isES6ExportedDeclaration(node)) {
-                        // Exported ES6 module member
-                        write("export ");
-                        startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
-                    }
-                    else {
-                        if (isAmbientContextDeclaredWithinDefinitionFile(nodeFirstVariable)) {
-                            if (nodeFirstVariable.type && nodeFirstVariable.type.kind === SyntaxKind.TypeReference) {
-                                let typeRef = <TypeReferenceNode>nodeFirstVariable.type;
-                                let declaration = getSymbolAtLocation(typeRef.typeName);
+                if (node.flags & NodeFlags.Export && isAmbientContextDeclaredWithinDefinitionFile(nodeFirstVariable)) {
+                    if (nodeFirstVariable.type && nodeFirstVariable.type.kind === SyntaxKind.TypeReference) {
+                        let typeRef = <TypeReferenceNode>nodeFirstVariable.type;
+                        let declaration = getSymbolAtLocation(typeRef.typeName);
 
-                                if (declaration.kind === SyntaxKind.InterfaceDeclaration) {
-                                    let interfaces: Array<Node>;
+                        if (declaration.kind === SyntaxKind.InterfaceDeclaration) {
+                            let interfaces: Array<Node>;
 
-                                    if (typeRef.typeArguments) {
-                                        let mergedDeclaration = getMergedDeclarationWithTypeParameters(typeRef, <InterfaceDeclaration>declaration);
-                                        interfaces = [mergedDeclaration];
-                                    }
-                                    else {
-                                        interfaces = [<InterfaceDeclaration>declaration];
-                                    }
-
-                                    forceWriteLine();
-                                    emitConstructorWorker(<ClassLikeDeclaration><any>nodeFirstVariable, null, <Array<ExpressionWithTypeArguments>>interfaces);
-                                }
-                                else {
-                                    shouldEmitVariableAnnotation = true;
-                                }
+                            if (typeRef.typeArguments) {
+                                let mergedDeclaration = getMergedDeclarationWithTypeParameters(typeRef, <InterfaceDeclaration>declaration);
+                                interfaces = [mergedDeclaration];
                             }
                             else {
-                                shouldEmitVariableAnnotation = true;
+                                interfaces = [<InterfaceDeclaration>declaration];
                             }
+
+                            forceWriteLine();
+                            emitConstructorWorker(<ClassLikeDeclaration><any>nodeFirstVariable, null, <Array<ExpressionWithTypeArguments>>interfaces);
+                        }
+                        else {
+                            shouldEmitVariableAnnotation = true;
                         }
                     }
-                }
-                else {
-                    if (isNodeDeclaredWithinScope(nodeFirstVariable) || isBindingPattern) {
-                        startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
+                    else {
+                        shouldEmitVariableAnnotation = true;
                     }
+                }
+                else if (isNodeDeclaredWithinScope(nodeFirstVariable) || isBindingPattern) {
+                    startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
                 }
 
                 if (startIsEmitted || shouldEmitVariableAnnotation) {
@@ -5957,14 +5960,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let symbol = typeChecker.getSymbolAtLocation(node);
 
                 return getDeclarationFromSymbol(symbol);
-            }
-
-            function getDeclarationFromSymbol(symbol: Symbol): Declaration {
-                if (!symbol || !symbol.valueDeclaration && !symbol.declarations) {
-                    return null;
-                }
-
-                return symbol.valueDeclaration || symbol.declarations[0];
             }
 
             function getTypeOfSymbolAtLocation(node: Node): string {

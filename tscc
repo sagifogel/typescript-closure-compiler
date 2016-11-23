@@ -56,7 +56,7 @@ function sortFiles(fileNames) {
     return fileNames.filter(function (file) { return path.extname(file) === '.ts'; })
     .sort(function (a, b) {
         if (a === b) { return 0; }
-        if (a.indexOf("d.ts") > -1) { return -1; }
+        if (a.indexOf(".d.ts") > -1) { return -1; }
         return 1;
     });
 }
