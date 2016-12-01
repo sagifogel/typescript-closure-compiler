@@ -1821,7 +1821,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             // This function specifically handles numeric/string literals for enum and accessor 'identifiers'.
             // In a sense, it does not actually emit identifiers as much as it declares a name for a specific property.
             // For example, this is utilized when feeding in a result to Object.defineProperty.
-            function emitExpressionForPropertyName(node: DeclarationName) {
+            function emitExpressionForPropertyName(node: DeclarationName, emitQuotationMark: boolean = false) {
                 Debug.assert(node.kind !== SyntaxKind.BindingElement);
 
                 if (node.kind === SyntaxKind.StringLiteral) {
@@ -1861,11 +1861,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     emit((<ComputedPropertyName>node).expression);
                 }
                 else {
+                    if (emitQuotationMark) {
+                        write("\"");
+                    }
+
                     if (node.kind === SyntaxKind.NumericLiteral) {
                         write((<LiteralExpression>node).text);
                     }
                     else {
                         writeTextOfNode(currentText, node);
+                    }
+
+                    if (emitQuotationMark) {
+                        write("\"");
                     }
                 }
             }
@@ -7418,7 +7426,7 @@ const _super = (function (geti, seti) {
                 const saveComputedPropertyNamesToGeneratedNames = computedPropertyNamesToGeneratedNames;
                 const saveConvertedLoopState = convertedLoopState;
 
-                if (baseTypeNode) {
+                if (baseTypeNode || currentSourceFile.flags & NodeFlags.HasDecorators) {
                     emitEmitHelpers(currentSourceFile);
                 }
 
@@ -7624,7 +7632,7 @@ const _super = (function (geti, seti) {
                     write("], ");
                     emitClassMemberPrefix(node, member);
                     write(", ");
-                    emitExpressionForPropertyName(member.name);
+                    emitExpressionForPropertyName(member.name, true);
 
                     if (languageVersion > ScriptTarget.ES3) {
                         if (member.kind !== SyntaxKind.PropertyDeclaration) {
