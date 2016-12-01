@@ -32024,7 +32024,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         // This function specifically handles numeric/string literals for enum and accessor 'identifiers'.
         // In a sense, it does not actually emit identifiers as much as it declares a name for a specific property.
         // For example, this is utilized when feeding in a result to Object.defineProperty.
-        function emitExpressionForPropertyName(node) {
+        function emitExpressionForPropertyName(node, emitQuotationMark) {
+            if (emitQuotationMark === void 0) { emitQuotationMark = false; }
             ts.Debug.assert(node.kind !== 163 /* BindingElement */);
             if (node.kind === 9 /* StringLiteral */) {
                 emitLiteral(node);
@@ -32061,11 +32062,17 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emit(node.expression);
             }
             else {
+                if (emitQuotationMark) {
+                    write("\"");
+                }
                 if (node.kind === 8 /* NumericLiteral */) {
                     write(node.text);
                 }
                 else {
                     writeTextOfNode(currentSourceFile, node);
+                }
+                if (emitQuotationMark) {
+                    write("\"");
                 }
             }
         }
@@ -36449,7 +36456,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var saveTempVariables = tempVariables;
             var saveTempParameters = tempParameters;
             var saveComputedPropertyNamesToGeneratedNames = computedPropertyNamesToGeneratedNames;
-            if (baseTypeNode) {
+            if (baseTypeNode || resolver.getNodeCheckFlags(currentSourceFile) & 16 /* EmitDecorate */) {
                 emitEmitHelpers(currentSourceFile);
             }
             tempFlags = 0;
@@ -36625,7 +36632,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitStart(member.name);
                 emitClassMemberPrefix(node, member);
                 write(", ");
-                emitExpressionForPropertyName(member.name);
+                emitExpressionForPropertyName(member.name, true);
                 emitEnd(member.name);
                 if (languageVersion > 0 /* ES3 */) {
                     if (member.kind !== 141 /* PropertyDeclaration */) {

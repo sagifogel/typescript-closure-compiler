@@ -1924,7 +1924,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             // This function specifically handles numeric/string literals for enum and accessor 'identifiers'.
             // In a sense, it does not actually emit identifiers as much as it declares a name for a specific property.
             // For example, this is utilized when feeding in a result to Object.defineProperty.
-            function emitExpressionForPropertyName(node: DeclarationName) {
+            function emitExpressionForPropertyName(node: DeclarationName, emitQuotationMark: boolean = false) {
                 Debug.assert(node.kind !== SyntaxKind.BindingElement);
 
                 if (node.kind === SyntaxKind.StringLiteral) {
@@ -1964,11 +1964,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emit((<ComputedPropertyName>node).expression);
                 }
                 else {
+                    if (emitQuotationMark) {
+                        write("\"");
+                    }
+
                     if (node.kind === SyntaxKind.NumericLiteral) {
                         write((<LiteralExpression>node).text);
                     }
                     else {
                         writeTextOfNode(currentSourceFile, node);
+                    }
+
+                    if (emitQuotationMark) {
+                        write("\"");
                     }
                 }
             }
@@ -6983,9 +6991,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 let saveTempParameters = tempParameters;
                 let saveComputedPropertyNamesToGeneratedNames = computedPropertyNamesToGeneratedNames;
 
-                if (baseTypeNode) {
+                if (baseTypeNode || resolver.getNodeCheckFlags(currentSourceFile) & NodeCheckFlags.EmitDecorate) {
                     emitEmitHelpers(currentSourceFile);
                 }
+
                 tempFlags = 0;
                 tempVariables = undefined;
                 tempParameters = undefined;
@@ -7179,7 +7188,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     emitStart(member.name);
                     emitClassMemberPrefix(node, member);
                     write(", ");
-                    emitExpressionForPropertyName(member.name);
+                    emitExpressionForPropertyName(member.name, true);
                     emitEnd(member.name);
 
                     if (languageVersion > ScriptTarget.ES3) {
