@@ -39749,9 +39749,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function emitDecoratorsOfClass(node, decoratedClassAlias) {
-            emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
-            emitDecoratorsOfMembers(node, 64 /* Static */);
-            emitDecoratorsOfConstructor(node, decoratedClassAlias);
+            if (compilerOptions.experimentalDecorators) {
+                emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
+                emitDecoratorsOfMembers(node, 64 /* Static */);
+                emitDecoratorsOfConstructor(node, decoratedClassAlias);
+            }
         }
         function emitDecoratorsOfConstructor(node, decoratedClassAlias) {
             var decorators = node.decorators;
@@ -41587,7 +41589,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     writeLines(assignHelper);
                     assignEmitted = true;
                 }
-                if (!decorateEmitted && node.flags & 8388608 /* HasDecorators */) {
+                if (compilerOptions.experimentalDecorators && !decorateEmitted && node.flags & 8388608 /* HasDecorators */) {
                     writeLines(decorateHelper);
                     if (compilerOptions.emitDecoratorMetadata) {
                         writeLines(metadataHelper);

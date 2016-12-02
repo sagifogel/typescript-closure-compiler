@@ -7481,9 +7481,11 @@ const _super = (function (geti, seti) {
             }
 
             function emitDecoratorsOfClass(node: ClassLikeDeclaration, decoratedClassAlias: string) {
-                emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
-                emitDecoratorsOfMembers(node, NodeFlags.Static);
-                emitDecoratorsOfConstructor(node, decoratedClassAlias);
+                if (compilerOptions.experimentalDecorators) {
+                    emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
+                    emitDecoratorsOfMembers(node, NodeFlags.Static);
+                    emitDecoratorsOfConstructor(node, decoratedClassAlias);
+                }
             }
 
             function emitDecoratorsOfConstructor(node: ClassLikeDeclaration, decoratedClassAlias: string) {
@@ -9580,7 +9582,7 @@ const _super = (function (geti, seti) {
                         assignEmitted = true;
                     }
 
-                    if (!decorateEmitted && node.flags & NodeFlags.HasDecorators) {
+                    if (compilerOptions.experimentalDecorators && !decorateEmitted && node.flags & NodeFlags.HasDecorators) {
                         writeLines(decorateHelper);
                         if (compilerOptions.emitDecoratorMetadata) {
                             writeLines(metadataHelper);
