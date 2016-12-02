@@ -35957,6 +35957,29 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 write(" */");
             });
         }
+        function emitDecorateAnnotation() {
+            emitAnnotationIf(function () {
+                forceWriteLine();
+                emitStartAnnotation();
+                emitCommentedAnnotation("@param {Array<Function>} decorators");
+                emitCommentedAnnotation("@param {*} target");
+                emitCommentedAnnotation("@param {string} key");
+                emitCommentedAnnotation("@param {PropertyDescriptor=} desc");
+                emitCommentedAnnotation("@return {PropertyDescriptor}");
+                write(" */");
+            });
+        }
+        function emitParamDecorateAnnotation() {
+            emitAnnotationIf(function () {
+                forceWriteLine();
+                forceWriteLine();
+                emitStartAnnotation();
+                emitCommentedAnnotation("@param {number} paramIndex");
+                emitCommentedAnnotation("@param {function(*, string, number)} decorator");
+                emitCommentedAnnotation("@return {function(*, string)}");
+                write(" */");
+            });
+        }
         function emitInterfaceDeclarationAnnotation(node, interfacesImpl) {
             emitConstructorOrInterfaceAnnotation(node, false, interfacesImpl);
         }
@@ -38310,6 +38333,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     extendsEmitted = true;
                 }
                 if (compilerOptions.experimentalDecorators && !decorateEmitted && resolver.getNodeCheckFlags(node) & 16 /* EmitDecorate */) {
+                    emitDecorateAnnotation();
                     writeLines(decorateHelper);
                     if (compilerOptions.emitDecoratorMetadata) {
                         writeLines(metadataHelper);
@@ -38317,6 +38341,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     decorateEmitted = true;
                 }
                 if (!paramEmitted && resolver.getNodeCheckFlags(node) & 32 /* EmitParam */) {
+                    emitParamDecorateAnnotation();
                     writeLines(paramHelper);
                     paramEmitted = true;
                 }

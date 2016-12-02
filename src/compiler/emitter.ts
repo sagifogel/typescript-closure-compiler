@@ -6418,6 +6418,31 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 });
             }
 
+            function emitDecorateAnnotation(): void {
+                emitAnnotationIf(() => {
+                    forceWriteLine();
+                    emitStartAnnotation();
+                    emitCommentedAnnotation("@param {Array<Function>} decorators");
+                    emitCommentedAnnotation("@param {*} target");
+                    emitCommentedAnnotation("@param {string} key");
+                    emitCommentedAnnotation("@param {PropertyDescriptor=} desc");
+                    emitCommentedAnnotation("@return {PropertyDescriptor}");
+                    write(" */");
+                });
+            }
+
+            function emitParamDecorateAnnotation() {
+                emitAnnotationIf(() => {
+                    forceWriteLine();
+                    forceWriteLine();
+                    emitStartAnnotation();
+                    emitCommentedAnnotation("@param {number} paramIndex");
+                    emitCommentedAnnotation("@param {function(*, string, number)} decorator");
+                    emitCommentedAnnotation("@return {function(*, string)}");
+                    write(" */");
+                });
+            }
+
             function emitInterfaceDeclarationAnnotation(node: InterfaceDeclaration, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
                 emitConstructorOrInterfaceAnnotation(node, false, interfacesImpl);
             }
@@ -9089,6 +9114,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (compilerOptions.experimentalDecorators && !decorateEmitted && resolver.getNodeCheckFlags(node) & NodeCheckFlags.EmitDecorate) {
+                        emitDecorateAnnotation();
                         writeLines(decorateHelper);
                         if (compilerOptions.emitDecoratorMetadata) {
                             writeLines(metadataHelper);
@@ -9097,6 +9123,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (!paramEmitted && resolver.getNodeCheckFlags(node) & NodeCheckFlags.EmitParam) {
+                        emitParamDecorateAnnotation();
                         writeLines(paramHelper);
                         paramEmitted = true;
                     }
