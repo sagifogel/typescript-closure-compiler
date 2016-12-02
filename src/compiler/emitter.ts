@@ -7039,9 +7039,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function emitDecoratorsOfClass(node: ClassLikeDeclaration) {
-                emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
-                emitDecoratorsOfMembers(node, NodeFlags.Static);
-                emitDecoratorsOfConstructor(node);
+                if (compilerOptions.experimentalDecorators) {
+                    emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
+                    emitDecoratorsOfMembers(node, NodeFlags.Static);
+                    emitDecoratorsOfConstructor(node);
+                }
             }
 
             function emitDecoratorsOfConstructor(node: ClassLikeDeclaration) {
@@ -9086,7 +9088,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         extendsEmitted = true;
                     }
 
-                    if (!decorateEmitted && resolver.getNodeCheckFlags(node) & NodeCheckFlags.EmitDecorate) {
+                    if (compilerOptions.experimentalDecorators && !decorateEmitted && resolver.getNodeCheckFlags(node) & NodeCheckFlags.EmitDecorate) {
                         writeLines(decorateHelper);
                         if (compilerOptions.emitDecoratorMetadata) {
                             writeLines(metadataHelper);

@@ -36501,9 +36501,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function emitDecoratorsOfClass(node) {
-            emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
-            emitDecoratorsOfMembers(node, 128 /* Static */);
-            emitDecoratorsOfConstructor(node);
+            if (compilerOptions.experimentalDecorators) {
+                emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
+                emitDecoratorsOfMembers(node, 128 /* Static */);
+                emitDecoratorsOfConstructor(node);
+            }
         }
         function emitDecoratorsOfConstructor(node) {
             var decorators = node.decorators;
@@ -38307,7 +38309,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     writeLines(extendsHelper);
                     extendsEmitted = true;
                 }
-                if (!decorateEmitted && resolver.getNodeCheckFlags(node) & 16 /* EmitDecorate */) {
+                if (compilerOptions.experimentalDecorators && !decorateEmitted && resolver.getNodeCheckFlags(node) & 16 /* EmitDecorate */) {
                     writeLines(decorateHelper);
                     if (compilerOptions.emitDecoratorMetadata) {
                         writeLines(metadataHelper);
