@@ -55,12 +55,12 @@ All you need to do is specify the list of extern files after the `externs` optio
 tscc app.ts --module commonjs --externs externs/app-extern.d.ts...
 ```
 
-You can also specify the files in a `ts.config` file.<br/>
-use the `project` option to locate the ts.config file:<br/> 
+You can also specify the files in a `tsconfig.json` file.<br/>
+use the `project` option to locate the tsconfig.json file:<br/> 
 ```js
 tscc --project [project specific directory]
 ```
-and declare the options in the `ts.config` file: 
+and declare the options in the `tsconfig.json` file: 
 ```js
 {
   "compilerOptions": {
@@ -130,6 +130,55 @@ var EventType = {
     mousedown: 1
 };
 ```
+
+### experimentalDecorators and ignoreDecoratorsWarning 
+In case you annotate your class/methods/params with decorators without enabling the `experimentalDecorators` option, 
+`TypeScript` will emit all the code that enables this feature, but will output a warning message to enable this option.
+```js
+function f() {
+    console.log("f(): evaluated");
+    return function (target, propertyKey: string, descriptor: PropertyDescriptor) {
+        console.log("f(): called");
+    } 
+}
+
+class C {
+    @f()
+    method() {}
+}
+```
+The output will be:
+>  Experimental support for decorators is a feature that is subject to change in a future release.<br/>
+>  Set the 'experimentalDecorators' option to remove this warning.
+
+`typescript-closure-compiler` changes this behaviour and omits all decorators relevant code when the `experimentalDecorators` is not  enabled, thus ensuring that the generated javascript will not include unnecessary code.<br/>
+In addition `typescript-closure-compiler` enables you to use the `ignoreDecoratorsWarning` option in order to ignore the warning message.<br/>
+These two options enables you to write your code once using decorations, but to omit the decorations related code using configuration, much like choosing the verbosity of a logger using configuration.<br/><br/> 
+A reasonable scenario would be to decorate your class/methods/params with decorators for debug purposes but to omit this code in the final release.<br/>
+All you have to do is create two tsconfig.json files one for debug and one for release.<br/>
+The release file should include the `ignoreDecoratorsWarning`.
+The debug file should include the `experimentalDecorators`.
+
+#### release
+```js
+{
+  "compilerOptions": {
+	"ignoreDecoratorsWarning": true
+  }
+  "files": [
+  ]
+}
+``` 
+#### debug
+```js
+{
+  "compilerOptions": {
+    "experimentalDecorators": true
+  }
+  "files": [
+  ]
+}
+``` 
 
 ### Usage Examples
 

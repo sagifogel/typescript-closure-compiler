@@ -25064,7 +25064,7 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
         if (!ts.nodeCanBeDecorated(node)) {
             return;
         }
-        if (!compilerOptions.experimentalDecorators) {
+        if (!compilerOptions.experimentalDecorators && !compilerOptions.ignoreDecoratorsWarning) {
             error(node, ts.Diagnostics.Experimental_support_for_decorators_is_a_feature_that_is_subject_to_change_in_a_future_release_Specify_experimentalDecorators_to_remove_this_warning);
         }
         if (compilerOptions.emitDecoratorMetadata) {
@@ -36551,6 +36551,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             writeLine();
             emitStart(node);
             emitDeclarationName(node);
+            forceWriteLine();
             write(" = __decorate([");
             increaseIndent();
             writeLine();
@@ -38340,7 +38341,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     }
                     decorateEmitted = true;
                 }
-                if (!paramEmitted && resolver.getNodeCheckFlags(node) & 32 /* EmitParam */) {
+                if (compilerOptions.experimentalDecorators && !paramEmitted && resolver.getNodeCheckFlags(node) & 32 /* EmitParam */) {
                     emitParamDecorateAnnotation();
                     writeLines(paramHelper);
                     paramEmitted = true;
@@ -40083,6 +40084,10 @@ ts.optionDeclarations = [
     },
     {
         name: "emitOneSideEnums",
+        type: "boolean"
+    },
+    {
+        name: "ignoreDecoratorsWarning",
         type: "boolean"
     }
 ];

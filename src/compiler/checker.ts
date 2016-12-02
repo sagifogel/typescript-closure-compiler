@@ -44,7 +44,7 @@ namespace ts {
         let emptyArray: any[] = [];
         let emptySymbols: SymbolTable = {};
         let jsxElementClassType: Type = undefined;
-        let compilerOptions = host.getCompilerOptions();
+        let compilerOptions = <ExtendedCompilerOptions>host.getCompilerOptions();
         let languageVersion = compilerOptions.target || ScriptTarget.ES3;
         let modulekind = compilerOptions.module ? compilerOptions.module : languageVersion === ScriptTarget.ES6 ? ModuleKind.ES6 : ModuleKind.None;
 
@@ -11780,7 +11780,7 @@ namespace ts {
                 return;
             }
 
-            if (!compilerOptions.experimentalDecorators) {
+            if (!compilerOptions.experimentalDecorators && !compilerOptions.ignoreDecoratorsWarning) {
                 error(node, Diagnostics.Experimental_support_for_decorators_is_a_feature_that_is_subject_to_change_in_a_future_release_Specify_experimentalDecorators_to_remove_this_warning);
             }
 
