@@ -39205,7 +39205,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitStartAnnotation();
                 emitCommentedAnnotation("@param {number} paramIndex");
                 emitCommentedAnnotation("@param {function(*, string, number)} decorator");
-                emitCommentedAnnotation("@return {function(*, string)}y");
+                emitCommentedAnnotation("@return {function(*, string)}");
                 write(" */");
             });
         }
