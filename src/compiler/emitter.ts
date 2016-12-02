@@ -6827,6 +6827,31 @@ const _super = (function (geti, seti) {
                 });
             }
 
+            function emitDecorateAnnotation(): void {
+                emitAnnotationIf(() => {
+                    forceWriteLine();
+                    emitStartAnnotation();
+                    emitCommentedAnnotation("@param {Array<Function>} decorators");
+                    emitCommentedAnnotation("@param {*} target");
+                    emitCommentedAnnotation("@param {string} key");
+                    emitCommentedAnnotation("@param {PropertyDescriptor=} desc");
+                    emitCommentedAnnotation("@return {PropertyDescriptor}");
+                    write(" */");
+                });
+            }
+
+            function emitParamDecorateAnnotation() {
+                emitAnnotationIf(() => {
+                    forceWriteLine();
+                    forceWriteLine();
+                    emitStartAnnotation();
+                    emitCommentedAnnotation("@param {number} paramIndex");
+                    emitCommentedAnnotation("@param {function(*, string, number)} decorator");
+                    emitCommentedAnnotation("@return {function(*, string)}y");
+                    write(" */");
+                });
+            }
+
             function emitInterfaceDeclarationAnnotation(node: InterfaceDeclaration, interfacesImpl: Array<ExpressionWithTypeArguments>): void {
                 emitConstructorOrInterfaceAnnotation(node, false, interfacesImpl);
             }
@@ -9583,6 +9608,7 @@ const _super = (function (geti, seti) {
                     }
 
                     if (compilerOptions.experimentalDecorators && !decorateEmitted && node.flags & NodeFlags.HasDecorators) {
+                        emitDecorateAnnotation();
                         writeLines(decorateHelper);
                         if (compilerOptions.emitDecoratorMetadata) {
                             writeLines(metadataHelper);
@@ -9591,6 +9617,7 @@ const _super = (function (geti, seti) {
                     }
 
                     if (!paramEmitted && node.flags & NodeFlags.HasParamDecorators) {
+                        emitParamDecorateAnnotation();
                         writeLines(paramHelper);
                         paramEmitted = true;
                     }
