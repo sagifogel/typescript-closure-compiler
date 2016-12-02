@@ -217,6 +217,7 @@
                 emitAnnotations: true,
                 module: ts.ModuleKind.AMD,
                 target: ts.ScriptTarget.ES5,
+                experimentalDecorators: true,
                 suppressOutputPathCheck: true,
                 emitInterfaces: emitInterfaces.checked,
                 emitOneSideEnums: emitOneSideEnums.checked
