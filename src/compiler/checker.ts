@@ -47,7 +47,7 @@ namespace ts {
         const emptyArray: any[] = [];
         const emptySymbols: SymbolTable = {};
 
-        const compilerOptions = host.getCompilerOptions();
+        const compilerOptions = <ExtendedCompilerOptions>host.getCompilerOptions();
         const languageVersion = compilerOptions.target || ScriptTarget.ES3;
         const modulekind = getEmitModuleKind(compilerOptions);
         const allowSyntheticDefaultImports = typeof compilerOptions.allowSyntheticDefaultImports !== "undefined" ? compilerOptions.allowSyntheticDefaultImports : modulekind === ModuleKind.System;
@@ -12851,7 +12851,7 @@ namespace ts {
                 return;
             }
 
-            if (!compilerOptions.experimentalDecorators) {
+            if (!compilerOptions.experimentalDecorators && !compilerOptions.ignoreDecoratorsWarning) {
                 error(node, Diagnostics.Experimental_support_for_decorators_is_a_feature_that_is_subject_to_change_in_a_future_release_Set_the_experimentalDecorators_option_to_remove_this_warning);
             }
 

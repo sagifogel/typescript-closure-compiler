@@ -42,6 +42,7 @@ namespace ts {
         externsOutFile?: string
         emitAnnotations: boolean;
         emitOneSideEnums: boolean;
+        ignoreDecoratorsWarning: boolean;
     }
 
     export interface ExtendedParsedCommandLine extends ParsedCommandLine {
@@ -7540,6 +7541,9 @@ const _super = (function (geti, seti) {
                 if (decoratedClassAlias !== undefined) {
                     write(` = ${decoratedClassAlias}`);
                 }
+                else {
+                    forceWriteLine();
+                }
 
                 write(" = __decorate([");
                 increaseIndent();
@@ -9616,7 +9620,7 @@ const _super = (function (geti, seti) {
                         decorateEmitted = true;
                     }
 
-                    if (!paramEmitted && node.flags & NodeFlags.HasParamDecorators) {
+                    if (compilerOptions.experimentalDecorators && !paramEmitted && node.flags & NodeFlags.HasParamDecorators) {
                         emitParamDecorateAnnotation();
                         writeLines(paramHelper);
                         paramEmitted = true;

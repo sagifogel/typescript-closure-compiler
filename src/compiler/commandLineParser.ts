@@ -333,6 +333,10 @@ namespace ts {
         {
             name: "emitOneSideEnums",
             type: "boolean"
+        },
+        {
+            name: "ignoreDecoratorsWarning",
+            type: "boolean"
         }
     ];
 
