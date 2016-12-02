@@ -34842,7 +34842,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         // This function specifically handles numeric/string literals for enum and accessor 'identifiers'.
         // In a sense, it does not actually emit identifiers as much as it declares a name for a specific property.
         // For example, this is utilized when feeding in a result to Object.defineProperty.
-        function emitExpressionForPropertyName(node) {
+        function emitExpressionForPropertyName(node, emitQuotationMark) {
+            if (emitQuotationMark === void 0) { emitQuotationMark = false; }
             ts.Debug.assert(node.kind !== 166 /* BindingElement */);
             if (node.kind === 9 /* StringLiteral */) {
                 emitLiteral(node);
@@ -34878,11 +34879,17 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emit(node.expression);
             }
             else {
+                if (emitQuotationMark) {
+                    write("\"");
+                }
                 if (node.kind === 8 /* NumericLiteral */) {
                     write(node.text);
                 }
                 else {
                     writeTextOfNode(currentText, node);
+                }
+                if (emitQuotationMark) {
+                    write("\"");
                 }
             }
         }
@@ -39697,7 +39704,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             var saveTempParameters = tempParameters;
             var saveComputedPropertyNamesToGeneratedNames = computedPropertyNamesToGeneratedNames;
             var saveConvertedLoopState = convertedLoopState;
-            if (baseTypeNode) {
+            if (baseTypeNode || currentSourceFile.flags & 8388608 /* HasDecorators */) {
                 emitEmitHelpers(currentSourceFile);
             }
             convertedLoopState = undefined;
@@ -39742,9 +39749,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function emitDecoratorsOfClass(node, decoratedClassAlias) {
-            emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
-            emitDecoratorsOfMembers(node, 64 /* Static */);
-            emitDecoratorsOfConstructor(node, decoratedClassAlias);
+            if (compilerOptions.experimentalDecorators) {
+                emitDecoratorsOfMembers(node, /*staticFlag*/ 0);
+                emitDecoratorsOfMembers(node, 64 /* Static */);
+                emitDecoratorsOfConstructor(node, decoratedClassAlias);
+            }
         }
         function emitDecoratorsOfConstructor(node, decoratedClassAlias) {
             var decorators = node.decorators;
@@ -39873,7 +39882,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 write("], ");
                 emitClassMemberPrefix(node, member);
                 write(", ");
-                emitExpressionForPropertyName(member.name);
+                emitExpressionForPropertyName(member.name, true);
                 if (languageVersion > 0 /* ES3 */) {
                     if (member.kind !== 142 /* PropertyDeclaration */) {
                         // We emit `null` here to indicate to `__decorate` that it can invoke `Object.getOwnPropertyDescriptor` directly.
@@ -41580,7 +41589,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     writeLines(assignHelper);
                     assignEmitted = true;
                 }
-                if (!decorateEmitted && node.flags & 8388608 /* HasDecorators */) {
+                if (compilerOptions.experimentalDecorators && !decorateEmitted && node.flags & 8388608 /* HasDecorators */) {
                     writeLines(decorateHelper);
                     if (compilerOptions.emitDecoratorMetadata) {
                         writeLines(metadataHelper);
