@@ -130,7 +130,6 @@ var EventType = {
     mousedown: 1
 };
 ```
-Ignore experimentalDecorators warning message
 
 ### experimentalDecorators and ignoreDecoratorsWarning 
 In case you annotate your class/methods/params with decorators without enabling the `experimentalDecorators` option, 
@@ -164,7 +163,7 @@ The debug file should include the `experimentalDecorators`.
 ```js
 {
   "compilerOptions": {
-    "ignoreDecoratorsWarning": true
+ Â   "ignoreDecoratorsWarning": true
   }
   "files": [
   ]
