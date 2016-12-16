@@ -4534,7 +4534,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         const numElements = elements.length;
                         const firstElement = elements[0];
                         const lastElement = elements[numElements - 1];
-                        const initializerIsIdentifier = !target.initializer || target.initializer.kind !== SyntaxKind.Identifier;
+                        const initializerIsIdentifier = target.initializer && target.initializer.kind !== SyntaxKind.Identifier;
 
                         initializer = value
                         value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0);
@@ -4552,7 +4552,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             if (pattern.kind !== SyntaxKind.ObjectBindingPattern && element.kind === SyntaxKind.OmittedExpression) {
                                 continue;
                             }
-                            if (firstElement !== element || initializerIsIdentifier) {
+                            if (firstElement !== element || initializerIsIdentifier || target.kind === SyntaxKind.VariableDeclaration) {
                                 forceWriteLine();
                             }
                             if (pattern.kind === SyntaxKind.ObjectBindingPattern) {
@@ -4581,19 +4581,30 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         if (rootDeclaration.name.kind === SyntaxKind.ArrayBindingPattern && initializer.kind === SyntaxKind.Identifier) {
                             let emittedNode: Node = root;
-                            let candidate = <VariableDeclaration>getSymbolDeclaration(initializer);
+                            let arrayBinding = <BindingPattern>rootDeclaration.name;
 
-                            if (candidate && candidate.initializer) {
-                                emittedNode = candidate.initializer;
+                            if ((<ParameterDeclaration>root).type && arrayBinding.elements.length) {
+                                let filtered = arrayBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+
+                                if (filtered.length === 1) {
+                                    emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
+                                }
                             }
+                            else {
+                                let candidate = <VariableDeclaration>getSymbolDeclaration(initializer);
 
-                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
+                                if (candidate && candidate.initializer) {
+                                    emittedNode = candidate.initializer;
+                                }
+
+                                emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
+                            }
                         }
                         else if (initializer.kind == SyntaxKind.Identifier && initializer.parent) {
                             emitMemberAnnotation(initializer, propName);
                         }
                         else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
-                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer);
+                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer, ts.isRestParameter(target));
                         }
                         else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
                             member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
@@ -5782,12 +5793,20 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
             }
 
             function getArrayLiteralElementType(node: ArrayLiteralExpression): string {
+                return getArrayElementType(node, node.elements);
+            }
+
+            function getTupleElementType(node: Node, tuple: TupleType) {
+                return getArrayElementType(node, tuple.elementTypes);
+            }
+
+            function getArrayElementType(node: Node, elements: Array<Node | Type>): string {
                 let type: string;
                 let typeCounter = 0;
                 let map: { [name: string]: boolean } = {};
 
-                ts.forEach(node.elements, (element) => {
-                    type = getParameterOrUnionTypeAnnotation(node, element);
+                ts.forEach(elements, element => {
+                    type = getParameterOrUnionTypeAnnotation(node, <Node>element);
 
                     if (!map[type]) {
                         typeCounter++;
@@ -6008,6 +6027,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         break;
                     case SyntaxKind.ArrayType:
                         type = getParameterOrUnionTypeAnnotation(rootNode, typeNode.elementType, isParameterPropertyAssignment);
+
+                        if (!ts.isRestParameter(<ParameterDeclaration>node.parent)) {
+                            return `Array<${type}>`;
+                        }
+
+                        return addVarArgs(type);
+                    case SyntaxKind.TupleType:
+                        type = getTupleElementType(rootNode, <TupleType><any>typeNode);
 
                         if (!ts.isRestParameter(<ParameterDeclaration>node.parent)) {
                             return `Array<${type}>`;
@@ -6237,8 +6264,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
-            function emitArrayLiteralElementTypeAnnotation(node: ArrayLiteralExpression): void {
-                emitTypeAnnotaion(getArrayLiteralElementType(node));
+            function emitArrayLiteralElementTypeAnnotation(node: ArrayLiteralExpression, isRestParameter: boolean = false): void {
+                let type = getArrayLiteralElementType(node);
+
+                if (isRestParameter) {
+                    type = `Array<${type}>`;
+                }
+
+                emitTypeAnnotaion(type);
             }
 
             function emitTypeAnnotaion(type: string): void {
@@ -6399,8 +6432,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function emitParametersAnnotations(rootNode: Node, parameters: NodeArray<ParameterDeclaration>): void {
                 ts.forEach(parameters, (parameter) => {
+                    let name: string;
                     let type = getParameterOrUnionTypeAnnotation(rootNode, parameter);
-                    let name = ts.getTextOfNode(parameter.name);
+
+                    if (ts.isBindingPattern(parameter.name)) {
+                        name = makeTempVariableName(TempFlags.Auto);
+                    }
+
+                    name = name || ts.getTextOfNode(parameter.name);
 
                     if (ts.isRestParameter(parameter)) {
                         name += "$rest";

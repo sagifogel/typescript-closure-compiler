@@ -16389,6 +16389,7 @@ ts.createTypeChecker = function (host, produceDiagnostics) {
         if (resolutionCycleStartIndex >= 0) {
             // A cycle was found
 
+            
             var length_2 = resolutionTargets.length;
             for (var i = resolutionCycleStartIndex; i < length_2; i++) {
                 resolutionResults[i] = false;
@@ -34325,7 +34326,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     var numElements = elements.length;
                     var firstElement = elements[0];
                     var lastElement = elements[numElements - 1];
-                    var initializerIsIdentifier = !target.initializer || target.initializer.kind !== 69 /* Identifier */;
+                    var initializerIsIdentifier = target.initializer && target.initializer.kind !== 69 /* Identifier */;
                     initializer = value;
                     value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ numElements !== 0);
                     if (initializer !== value) {
@@ -34339,7 +34340,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         if (pattern.kind !== 161 /* ObjectBindingPattern */ && element.kind === 187 /* OmittedExpression */) {
                             continue;
                         }
-                        if (firstElement !== element || initializerIsIdentifier) {
+                        if (firstElement !== element || initializerIsIdentifier || target.kind === 211 /* VariableDeclaration */) {
                             forceWriteLine();
                         }
                         if (pattern.kind === 161 /* ObjectBindingPattern */) {
@@ -34367,17 +34368,26 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     var rootDeclaration = root;
                     if (rootDeclaration.name.kind === 162 /* ArrayBindingPattern */ && initializer.kind === 69 /* Identifier */) {
                         var emittedNode = root;
-                        var candidate = getSymbolDeclaration(initializer);
-                        if (candidate && candidate.initializer) {
-                            emittedNode = candidate.initializer;
+                        var arrayBinding = rootDeclaration.name;
+                        if (root.type && arrayBinding.elements.length) {
+                            var filtered = arrayBinding.elements.filter(function (e) { return e.name.text === propName; });
+                            if (filtered.length === 1) {
+                                emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
+                            }
                         }
-                        emitArrayLiteralElementTypeAnnotation(emittedNode);
+                        else {
+                            var candidate = getSymbolDeclaration(initializer);
+                            if (candidate && candidate.initializer) {
+                                emittedNode = candidate.initializer;
+                            }
+                            emitArrayLiteralElementTypeAnnotation(emittedNode);
+                        }
                     }
                     else if (initializer.kind == 69 /* Identifier */ && initializer.parent) {
                         emitMemberAnnotation(initializer, propName);
                     }
                     else if (initializer.kind === 164 /* ArrayLiteralExpression */) {
-                        emitArrayLiteralElementTypeAnnotation(initializer);
+                        emitArrayLiteralElementTypeAnnotation(initializer, ts.isRestParameter(target));
                     }
                     else if (initializer.kind === 165 /* ObjectLiteralExpression */) {
                         member = getDeclarationFromSymbol(initializer.symbol.members[propName]);
@@ -34643,6 +34653,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         return;
                     }
 
+                    
                     var paramName = parameter.name;
                     var initializer = parameter.initializer;
                     if (ts.isBindingPattern(paramName)) {
@@ -35433,10 +35444,16 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             return "Array<" + getArrayLiteralElementType(node) + ">";
         }
         function getArrayLiteralElementType(node) {
+            return getArrayElementType(node, node.elements);
+        }
+        function getTupleElementType(node, tuple) {
+            return getArrayElementType(node, tuple.elementTypes);
+        }
+        function getArrayElementType(node, elements) {
             var type;
             var typeCounter = 0;
             var map = {};
-            ts.forEach(node.elements, function (element) {
+            ts.forEach(elements, function (element) {
                 type = getParameterOrUnionTypeAnnotation(node, element);
                 if (!map[type]) {
                     typeCounter++;
@@ -35615,6 +35632,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     break;
                 case 156 /* ArrayType */:
                     type = getParameterOrUnionTypeAnnotation(rootNode, typeNode.elementType, isParameterPropertyAssignment);
+                    if (!ts.isRestParameter(node.parent)) {
+                        return "Array<" + type + ">";
+                    }
+                    return addVarArgs(type);
+                case 157 /* TupleType */:
+                    type = getTupleElementType(rootNode, typeNode);
                     if (!ts.isRestParameter(node.parent)) {
                         return "Array<" + type + ">";
                     }
@@ -35814,8 +35837,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
         }
-        function emitArrayLiteralElementTypeAnnotation(node) {
-            emitTypeAnnotaion(getArrayLiteralElementType(node));
+        function emitArrayLiteralElementTypeAnnotation(node, isRestParameter) {
+            if (isRestParameter === void 0) { isRestParameter = false; }
+            var type = getArrayLiteralElementType(node);
+            if (isRestParameter) {
+                type = "Array<" + type + ">";
+            }
+            emitTypeAnnotaion(type);
         }
         function emitTypeAnnotaion(type) {
             emitAnnotationIf(function () {
@@ -35941,8 +35969,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
         }
         function emitParametersAnnotations(rootNode, parameters) {
             ts.forEach(parameters, function (parameter) {
+                var name;
                 var type = getParameterOrUnionTypeAnnotation(rootNode, parameter);
-                var name = ts.getTextOfNode(parameter.name);
+                if (ts.isBindingPattern(parameter.name)) {
+                    name = makeTempVariableName(0 /* Auto */);
+                }
+                name = name || ts.getTextOfNode(parameter.name);
                 if (ts.isRestParameter(parameter)) {
                     name += "$rest";
                 }
@@ -38124,7 +38156,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             emitAMDFactoryHeader(dependencyNames);
         }
         function emitAMDDependencyList(_a) {
-
             var aliasedModuleNames = _a.aliasedModuleNames;
             var unaliasedModuleNames = _a.unaliasedModuleNames;
             write("[\"require\", \"exports\"");
@@ -38139,7 +38170,6 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             write("]");
         }
         function emitAMDFactoryHeader(_a) {
-
             var importAliasNames = _a.importAliasNames;
             write("function (require, exports");
             if (importAliasNames.length) {
@@ -48444,6 +48474,7 @@ ts.createLanguageService = function (host, documentRegistry) {
                 return undefined;
             }
 
+            
             var parent_9 = contextToken.parent;
             var kind = contextToken.kind;
             if (kind === 21 /* DotToken */) {
@@ -49083,6 +49114,7 @@ ts.createLanguageService = function (host, documentRegistry) {
             return undefined;
         }
 
+        
         var symbols = completionData.symbols;
         var isMemberCompletion = completionData.isMemberCompletion;
         var isNewIdentifierLocation = completionData.isNewIdentifierLocation;
@@ -49193,6 +49225,7 @@ ts.createLanguageService = function (host, documentRegistry) {
         var completionData = getCompletionData(fileName, position);
         if (completionData) {
 
+            
             var symbols = completionData.symbols;
             var location_2 = completionData.location;
             // Find the symbol with the matching entry name.
