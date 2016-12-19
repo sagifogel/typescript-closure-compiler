@@ -3271,9 +3271,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
             }
 
+            function isBinaryExpressionDestruction(node: Node): boolean {
+                return node.kind === SyntaxKind.BinaryExpression && ((<BinaryExpression>node).left.kind === SyntaxKind.ObjectLiteralExpression || (<BinaryExpression>node).left.kind === SyntaxKind.ArrayLiteralExpression);
+            }
+
             function emitBinaryExpression(node: BinaryExpression) {
-                if (languageVersion < ScriptTarget.ES6 && node.operatorToken.kind === SyntaxKind.EqualsToken &&
-                    (node.left.kind === SyntaxKind.ObjectLiteralExpression || node.left.kind === SyntaxKind.ArrayLiteralExpression)) {
+                if (languageVersion < ScriptTarget.ES6 && node.operatorToken.kind === SyntaxKind.EqualsToken && isBinaryExpressionDestruction(node)) {
                     emitDestructuring(node, node.parent.kind === SyntaxKind.ExpressionStatement);
                 }
                 else {
@@ -4616,7 +4619,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitModuleMemberName(<Declaration>name.parent);
                     }
                     else {
-                        emitModuleIfNeeded(value.parent);
+                        if (value.parent) {
+                            emitModuleIfNeeded(value.parent);
+                        }
+
                         emit(name);
                     }
 
@@ -4637,7 +4643,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
              * @param shouldEmitCommaBeforeAssignment a boolean indicating whether an assignment should prefix with comma
              */
             function emitTempVariableAssignment(expression: Expression, canDefineTempVariablesInPlace: boolean, shouldEmitCommaBeforeAssignment: boolean, sourceMapNode?: Node): Identifier {
+                const container = getImmediateContainerNode(expression);
+                const moduleName = getGeneratedPathForModule(expression);
                 const identifier = createTempVariable(TempFlags.Auto);
+
+                identifier.text = `${moduleName}${identifier.text}`;
+
                 if (!canDefineTempVariablesInPlace) {
                     recordTempDeclaration(identifier);
                 }
@@ -4822,6 +4833,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitArrayLiteralAssignment(<ArrayLiteralExpression>target, value, sourceMapNode);
                     }
                     else {
+                        var declaration: VariableDeclaration;
+
+                        write(";");
+                        forceWriteLine();
+
+                        if (declaration = <VariableDeclaration>getSymbolDeclaration(target)) {
+                            emitVariableTypeAnnotation(declaration);
+                        }
+
+                        if (!isInModule(value)) {
+                            write("var ");
+                        }
+
                         emitAssignment(<Identifier>target, value, false, sourceMapNode);
                         emitCount++;
                     }
@@ -4842,18 +4866,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitDestructuringAssignment(target, value, nodeIsSynthesized(root) ? target : root);
                     }
                     else {
-                        if (root.parent.kind !== SyntaxKind.ParenthesizedExpression) {
-                            write("(");
-                        }
                         // Temporary assignment needed to emit root should highlight whole binary expression
                         value = ensureIdentifier(value, /*reuseIdentifierExpressions*/ true, root);
                         // Source map node for root.left = root.right is root
                         emitDestructuringAssignment(target, value, root);
-                        write(", ");
-                        emit(value);
-                        if (root.parent.kind !== SyntaxKind.ParenthesizedExpression) {
-                            write(")");
-                        }
                     }
                 }
 
@@ -5011,7 +5027,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
                 else {
+                    let shouldNotSkipDeclaration = true;
                     let initializer = node.initializer;
+
                     if (!initializer &&
                         languageVersion < ScriptTarget.ES6 &&
                         // for names - binding patterns that lack initializer there is no point to emit explicit initializer
@@ -5078,22 +5096,28 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         if (initializer.kind === SyntaxKind.ObjectLiteralExpression && !isNodeDeclaredWithinScope(node)) {
                             forceWriteLine();
                         }
+
                         if (ts.isFunctionLike(initializer) && initializer.kind !== SyntaxKind.ArrowFunction && initializer.kind !== SyntaxKind.FunctionExpression) {
                             emitFunctionAnnotation(<FunctionExpression>initializer);
                         }
+
+                        shouldNotSkipDeclaration = !isBinaryExpressionDestruction(initializer);
                     }
 
-                    emitModuleIfNeeded(node);
-                    emitModuleMemberName(node);
+                    if (shouldNotSkipDeclaration) {
+                        emitModuleIfNeeded(node);
+                        emitModuleMemberName(node);
 
-                    if (initializer) {
-                        write(" = ");
+                        if (initializer) {
+                            write(" = ");
 
-                        if (!isLiteral(initializer) && !isExpressionIdentifier(initializer)) {
-                            emitModuleName(initializer);
+                            if (!isLiteral(initializer) && !isExpressionIdentifier(initializer)) {
+                                emitModuleName(initializer);
+                            }
                         }
-                        emit(initializer);
                     }
+
+                    emit(initializer);
 
                     if (exportChanged) {
                         write(")");
@@ -6210,13 +6234,15 @@ const _super = (function (geti, seti) {
             }
 
             function getArrayElementType(node: Node, elements: Array<Node | Type>): string {
+                return reduceTypes(ts.map(elements, element => getParameterOrUnionTypeAnnotation(node, <Node>element)));
+
+            }
+            function reduceTypes(types: Array<string>): string {
                 let type: string;
                 let typeCounter = 0;
                 let map: { [name: string]: boolean } = {};
 
-                ts.forEach(elements, element => {
-                    type = getParameterOrUnionTypeAnnotation(node, <Node>element);
-
+                ts.forEach(types, type => {
                     if (!map[type]) {
                         typeCounter++;
                     }
@@ -6406,6 +6432,10 @@ const _super = (function (geti, seti) {
                     let type = typeChecker.getTypeOfSymbolAtLocation(symbol, node);
 
                     if (type) {
+                        if ((<TupleType>type).elementTypes) {
+                            return `Array<${reduceTypes((<TupleType>type).elementTypes.map(t => getSymbolName(node, t)))}>`;
+                        }
+
                         return getSymbolName(node, type);
                     }
                 }
@@ -8256,10 +8286,16 @@ const _super = (function (geti, seti) {
             }
 
             function getModuleName(node: Node): string {
-                let scope = getSymbolScope(node)
+                return generateModuleName(getSymbolScope(node));
+            }
 
+            function isInModule(node: Node): boolean {
+                return !!getModuleName(node);
+            }
+
+            function generateModuleName(scope: Node): string {
                 if (scope && !isScopeLike(scope)) {
-                    let generatedPath: string;
+                    let generatedPath :string;
 
                     if (generatedPath = getGeneratedPathForModule(scope)) {
                         return generatedPath + ".";
@@ -9697,7 +9733,6 @@ const _super = (function (geti, seti) {
                     hasExportStarsToExportValues = false;
                     emitCaptureThisForNodeIfNecessary(node);
                     emitLinesStartingAt(node.statements, startIndex);
-                    emitTempDeclarations(/*newLine*/ true);
                 }
 
                 emitLeadingComments(node.endOfFileToken);
