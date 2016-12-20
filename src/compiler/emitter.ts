@@ -2835,7 +2835,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 write("[");
 
                 if (ts.nodeIsSynthesized(node)) {
-                    let parent : Node;
+                    let parent: Node;
 
                     if (parent = node.expression.parent) {
                         if (!isNodeDeclaredWithinFunction(parent) && !ts.isBindingPattern((<VariableDeclaration>parent).name)) {
@@ -4941,31 +4941,50 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                     else {
                         let member: VariableDeclaration;
-                        const propName = (<Identifier>target.name).text;
+                        let propName = (<Identifier>target.name).text;
 
-                        if (root.name.kind === SyntaxKind.ArrayBindingPattern && initializer.kind === SyntaxKind.Identifier) {
-                            let emittedNode: Node = root;
-                            let arrayBinding = <ArrayBindingPattern>root.name;
+                        if (initializer.kind == SyntaxKind.Identifier) {
+                            if (root.name.kind === SyntaxKind.ArrayBindingPattern) {
+                                let emittedNode: Node = root;
+                                let arrayBinding = <ArrayBindingPattern>root.name;
 
-                            if (arrayBinding.elements.length) {
-                                let filtered = arrayBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+                                if (arrayBinding.elements.length) {
+                                    let filtered = arrayBinding.elements.filter(e => (<Identifier>e.name).text === propName);
 
-                                if (filtered.length === 1) {
-                                    emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
+                                    if (filtered.length === 1) {
+                                        emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
+                                    }
+                                }
+                                else {
+                                    let candidate = <VariableDeclaration>getSymbolDeclaration(initializer);
+
+                                    if (candidate && candidate.initializer) {
+                                        emittedNode = candidate.initializer;
+                                    }
+
+                                    emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
                                 }
                             }
-                            else {
-                                let candidate = <VariableDeclaration>getSymbolDeclaration(initializer);
+                            else if (initializer.parent) {
+                                if (root.name.kind === SyntaxKind.ObjectBindingPattern) {
+                                    let emittedNode: Node = root;
+                                    let objectBinding = <ObjectBindingPattern>root.name;
 
-                                if (candidate && candidate.initializer) {
-                                    emittedNode = candidate.initializer;
+                                    if (objectBinding.elements.length) {
+                                        let filtered = objectBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+
+                                        if (filtered.length === 1) {
+                                            const filteredItem = filtered[0];
+
+                                            if (filteredItem.propertyName) {
+                                                propName = (<Identifier>filteredItem.propertyName).text;
+                                            }
+                                        }
+                                    }
                                 }
 
-                                emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
+                                emitMemberAnnotation(initializer, propName);
                             }
-                        }
-                        else if (initializer.kind == SyntaxKind.Identifier && initializer.parent) {
-                            emitMemberAnnotation(initializer, propName);
                         }
                         else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
                             emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer, ts.isRestParameter(target));
@@ -5230,12 +5249,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
                 else if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
-                    if (isBindingPattern && isInModule(nodeFirstVariable) && !isNodeDeclaredWithinFunction(nodeFirstVariable)) {
-                        shouldEmitVariableAnnotation = true;
-                    }
-                    else {
-                        startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
-                    }
+                    startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
+                }
+                else if (isBindingPattern && isInModule(nodeFirstVariable) && !isNodeDeclaredWithinFunction(nodeFirstVariable)) {
+                    shouldEmitVariableAnnotation = true;
                 }
 
                 if (startIsEmitted || shouldEmitVariableAnnotation) {

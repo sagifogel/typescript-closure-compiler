@@ -37573,25 +37573,40 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 else {
                     var member = void 0;
                     var propName_1 = target.name.text;
-                    if (root.name.kind === 165 /* ArrayBindingPattern */ && initializer.kind === 69 /* Identifier */) {
-                        var emittedNode = root;
-                        var arrayBinding = root.name;
-                        if (arrayBinding.elements.length) {
-                            var filtered = arrayBinding.elements.filter(function (e) { return e.name.text === propName_1; });
-                            if (filtered.length === 1) {
-                                emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
+                    if (initializer.kind == 69 /* Identifier */) {
+                        if (root.name.kind === 165 /* ArrayBindingPattern */) {
+                            var emittedNode = root;
+                            var arrayBinding = root.name;
+                            if (arrayBinding.elements.length) {
+                                var filtered = arrayBinding.elements.filter(function (e) { return e.name.text === propName_1; });
+                                if (filtered.length === 1) {
+                                    emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
+                                }
+                            }
+                            else {
+                                var candidate = getSymbolDeclaration(initializer);
+                                if (candidate && candidate.initializer) {
+                                    emittedNode = candidate.initializer;
+                                }
+                                emitArrayLiteralElementTypeAnnotation(emittedNode);
                             }
                         }
-                        else {
-                            var candidate = getSymbolDeclaration(initializer);
-                            if (candidate && candidate.initializer) {
-                                emittedNode = candidate.initializer;
+                        else if (initializer.parent) {
+                            if (root.name.kind === 164 /* ObjectBindingPattern */) {
+                                emittedNode = root;
+                                var objectBinding = root.name;
+                                if (objectBinding.elements.length) {
+                                    filtered = objectBinding.elements.filter(function (e) { return e.name.text === propName_1; });
+                                    if (filtered.length === 1) {
+                                        var filteredItem = filtered[0];
+                                        if (filteredItem.propertyName) {
+                                            propName_1 = filteredItem.propertyName.text;
+                                        }
+                                    }
+                                }
                             }
-                            emitArrayLiteralElementTypeAnnotation(emittedNode);
+                            emitMemberAnnotation(initializer, propName_1);
                         }
-                    }
-                    else if (initializer.kind == 69 /* Identifier */ && initializer.parent) {
-                        emitMemberAnnotation(initializer, propName_1);
                     }
                     else if (initializer.kind === 167 /* ArrayLiteralExpression */) {
                         emitArrayLiteralElementTypeAnnotation(initializer, ts.isRestParameter(target));
@@ -37810,12 +37825,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
             else if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
-                if (isBindingPattern && isInModule(nodeFirstVariable) && !isNodeDeclaredWithinFunction(nodeFirstVariable)) {
-                    shouldEmitVariableAnnotation = true;
-                }
-                else {
-                    startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
-                }
+                startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
+            }
+            else if (isBindingPattern && isInModule(nodeFirstVariable) && !isNodeDeclaredWithinFunction(nodeFirstVariable)) {
+                shouldEmitVariableAnnotation = true;
             }
             if (startIsEmitted || shouldEmitVariableAnnotation) {
                 if (shouldEmitNewLine) {
