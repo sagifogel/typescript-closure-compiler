@@ -1165,19 +1165,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             }
 
             function emitTempDeclarations(newLine: boolean) {
-                if (tempVariables) {
+                if (tempVariables && tempVariables.length) {
                     if (newLine) {
                         writeLine();
                     }
                     else {
                         write(" ");
                     }
+
                     write("var ");
                     emitCommaList(tempVariables);
                     write(";");
                 }
             }
-
             /** Emit the text for the given token that comes after startPos
               * This by default writes the text provided with the given tokenKind
               * but if optional emitFn callback is provided the text is emitted using the callback instead of default text
@@ -2834,8 +2834,14 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 emit(node.expression);
                 write("[");
 
-                if (!node.parent && node.expression.parent && !isNodeDeclaredWithinFunction(node.expression.parent)) {
-                    tryEmitModuleForIdentifier(node.expression);
+                if (ts.nodeIsSynthesized(node)) {
+                    let parent : Node;
+
+                    if (parent = node.expression.parent) {
+                        if (!isNodeDeclaredWithinFunction(parent) && !ts.isBindingPattern((<VariableDeclaration>parent).name)) {
+                            tryEmitModuleForIdentifier(node.expression);
+                        }
+                    }
                 }
 
                 emit(node.argumentExpression);
@@ -3272,7 +3278,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             }
 
             function isBinaryExpressionDestruction(node: Node): boolean {
-                return node.kind === SyntaxKind.BinaryExpression && ((<BinaryExpression>node).left.kind === SyntaxKind.ObjectLiteralExpression || (<BinaryExpression>node).left.kind === SyntaxKind.ArrayLiteralExpression);
+                return node && node.kind === SyntaxKind.BinaryExpression && ((<BinaryExpression>node).left.kind === SyntaxKind.ObjectLiteralExpression || (<BinaryExpression>node).left.kind === SyntaxKind.ArrayLiteralExpression);
             }
 
             function emitBinaryExpression(node: BinaryExpression) {
@@ -4467,7 +4473,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
             function getContainingModule(node: Node): ModuleDeclaration {
                 do {
                     node = node.parent;
-                } while (node && node.kind !== SyntaxKind.ModuleDeclaration);
+                }
+                while (node && node.kind !== SyntaxKind.ModuleDeclaration);
+
                 return <ModuleDeclaration>node;
             }
 
@@ -4619,10 +4627,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         emitModuleMemberName(<Declaration>name.parent);
                     }
                     else {
-                        if (value.parent) {
-                            emitModuleIfNeeded(value.parent);
-                        }
-
                         emit(name);
                     }
 
@@ -4644,10 +4648,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
              */
             function emitTempVariableAssignment(expression: Expression, canDefineTempVariablesInPlace: boolean, shouldEmitCommaBeforeAssignment: boolean, sourceMapNode?: Node): Identifier {
                 const container = getImmediateContainerNode(expression);
-                const moduleName = getGeneratedPathForModule(expression);
                 const identifier = createTempVariable(TempFlags.Auto);
 
-                identifier.text = `${moduleName}${identifier.text}`;
+                if (!ts.isFunctionLike(container)) {
+                    const moduleName = getGeneratedPathForModule(expression);
+
+                    identifier.text = `${moduleName}${identifier.text}`;
+                }
 
                 if (!canDefineTempVariablesInPlace) {
                     recordTempDeclaration(identifier);
@@ -4842,7 +4849,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             emitVariableTypeAnnotation(declaration);
                         }
 
-                        if (!isInModule(value)) {
+                        if (!isInModule(target)) {
                             write("var ");
                         }
 
@@ -4900,10 +4907,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             write(";");
                         }
 
-                        if (moduleName = getModuleName(target)) {
-                            identifier.text = `${moduleName}${identifier.text}`;
-                        }
-
                         for (let i = 0; i < numElements; i++) {
                             const element = elements[i];
 
@@ -4944,7 +4947,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             let emittedNode: Node = root;
                             let arrayBinding = <ArrayBindingPattern>root.name;
 
-                            if ((<ParameterDeclaration>root).type && arrayBinding.elements.length) {
+                            if (arrayBinding.elements.length) {
                                 let filtered = arrayBinding.elements.filter(e => (<Identifier>e.name).text === propName);
 
                                 if (filtered.length === 1) {
@@ -5027,7 +5030,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     }
                 }
                 else {
-                    let shouldNotSkipDeclaration = true;
                     let initializer = node.initializer;
 
                     if (!initializer &&
@@ -5100,11 +5102,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         if (ts.isFunctionLike(initializer) && initializer.kind !== SyntaxKind.ArrowFunction && initializer.kind !== SyntaxKind.FunctionExpression) {
                             emitFunctionAnnotation(<FunctionExpression>initializer);
                         }
-
-                        shouldNotSkipDeclaration = !isBinaryExpressionDestruction(initializer);
                     }
 
-                    if (shouldNotSkipDeclaration) {
+                    if (!isBinaryExpressionDestruction(initializer)) {
                         emitModuleIfNeeded(node);
                         emitModuleMemberName(node);
 
@@ -5114,10 +5114,26 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             if (!isLiteral(initializer) && !isExpressionIdentifier(initializer)) {
                                 emitModuleName(initializer);
                             }
+
+                            emit(initializer);
                         }
                     }
+                    else {
+                        emit(initializer);
+                        forceWriteLine();
+                        emitVariableTypeAnnotation(node);
 
-                    emit(initializer);
+                        if (!emitModuleIfNeeded(node)) {
+                            write("var ");
+                        }
+
+                        emitModuleMemberName(node);
+                        write(" = ");
+
+                        if (tempVariables && tempVariables.length) {
+                            write(tempVariables.pop().text);
+                        }
+                    }
 
                     if (exportChanged) {
                         write(")");
@@ -5213,8 +5229,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         shouldEmitVariableAnnotation = true;
                     }
                 }
-                else if (isNodeDeclaredWithinScope(nodeFirstVariable) || isBindingPattern) {
-                    startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
+                else if (isNodeDeclaredWithinScope(nodeFirstVariable)) {
+                    if (isBindingPattern && isInModule(nodeFirstVariable) && !isNodeDeclaredWithinFunction(nodeFirstVariable)) {
+                        shouldEmitVariableAnnotation = true;
+                    }
+                    else {
+                        startIsEmitted = tryGetStartOfVariableDeclarationList(node.declarationList);
+                    }
                 }
 
                 if (startIsEmitted || shouldEmitVariableAnnotation) {
@@ -5831,7 +5852,6 @@ const _super = (function (geti, seti) {
                     emitEnd(body);
                     write(";");
                     emitTrailingComments(node.body);
-
                     emitTempDeclarations(/*newLine*/ true);
                     decreaseIndent();
                     writeLine();
@@ -6238,8 +6258,8 @@ const _super = (function (geti, seti) {
 
             }
             function reduceTypes(types: Array<string>): string {
-                let type: string;
                 let typeCounter = 0;
+                let type: string = types[0];
                 let map: { [name: string]: boolean } = {};
 
                 ts.forEach(types, type => {
@@ -6875,6 +6895,7 @@ const _super = (function (geti, seti) {
                     let type = getParameterOrUnionTypeAnnotation(rootNode, parameter);
 
                     if (ts.isBindingPattern(parameter.name)) {
+                        tempFlags = 0;
                         name = makeTempVariableName(TempFlags.Auto);
                     }
 
@@ -8290,12 +8311,12 @@ const _super = (function (geti, seti) {
             }
 
             function isInModule(node: Node): boolean {
-                return !!getModuleName(node);
+                return !!getContainingModule(node);
             }
 
             function generateModuleName(scope: Node): string {
                 if (scope && !isScopeLike(scope)) {
-                    let generatedPath :string;
+                    let generatedPath: string;
 
                     if (generatedPath = getGeneratedPathForModule(scope)) {
                         return generatedPath + ".";
