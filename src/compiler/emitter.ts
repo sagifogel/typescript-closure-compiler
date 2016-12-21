@@ -4714,7 +4714,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         return expr;
                     }
 
-                    const identifier = emitTempVariableAssignment(expr, canDefineTempVariablesInPlace, emitCount > 0, sourceMapNode);
+                    const identifier = emitTempVariableAssignment(expr, canDefineTempVariablesInPlace, false, sourceMapNode);
                     emitCount++;
                     return identifier;
                 }
@@ -4884,7 +4884,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     // Any temporary assignments needed to emit target = value should point to target
                     if (target.initializer) {
                         // Combine value and initializer
-                        value = value ? createDefaultValueCheck(value, target.initializer, target) : target.initializer;
+                        if (value) {
+                            resolveDestructionAnnotation(target, value, initializer);
+
+                            if (!emitModuleIfNeeded(target)) {
+                                write("var ");
+                            }
+
+                            value = createDefaultValueCheck(value, target.initializer, target);
+                            writeValueAndNewLine(";");
+                        }
+                        else {
+                            value = target.initializer;
+                        }
                     }
                     else if (!value) {
                         // Use 'void 0' in absence of value and initializer
@@ -4914,7 +4926,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                                 continue;
                             }
 
-                            if (firstElement !== element || initializerIsIdentifier || target.kind === SyntaxKind.VariableDeclaration) {
+                            if (firstElement !== element || initializerIsIdentifier || (!target.initializer && target.kind === SyntaxKind.VariableDeclaration)) {
                                 forceWriteLine();
                             }
 
@@ -4940,65 +4952,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         }
                     }
                     else {
-                        let member: VariableDeclaration;
-                        let propName = (<Identifier>target.name).text;
-
-                        if (initializer.kind == SyntaxKind.Identifier) {
-                            if (root.name.kind === SyntaxKind.ArrayBindingPattern) {
-                                let emittedNode: Node = root;
-                                let arrayBinding = <ArrayBindingPattern>root.name;
-
-                                if (arrayBinding.elements.length) {
-                                    let filtered = arrayBinding.elements.filter(e => (<Identifier>e.name).text === propName);
-
-                                    if (filtered.length === 1) {
-                                        emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
-                                    }
-                                }
-                                else {
-                                    let candidate = <VariableDeclaration>getSymbolDeclaration(initializer);
-
-                                    if (candidate && candidate.initializer) {
-                                        emittedNode = candidate.initializer;
-                                    }
-
-                                    emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
-                                }
-                            }
-                            else if (initializer.parent) {
-                                if (root.name.kind === SyntaxKind.ObjectBindingPattern) {
-                                    let emittedNode: Node = root;
-                                    let objectBinding = <ObjectBindingPattern>root.name;
-
-                                    if (objectBinding.elements.length) {
-                                        let filtered = objectBinding.elements.filter(e => (<Identifier>e.name).text === propName);
-
-                                        if (filtered.length === 1) {
-                                            const filteredItem = filtered[0];
-
-                                            if (filteredItem.propertyName) {
-                                                propName = (<Identifier>filteredItem.propertyName).text;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                emitMemberAnnotation(initializer, propName);
-                            }
-                        }
-                        else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
-                            emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer, ts.isRestParameter(target));
-                        }
-                        else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
-                            member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
-                            emitVariableTypeAnnotation(member);
-                        }
-                        else if (initializer.kind === SyntaxKind.ElementAccessExpression || initializer.kind === SyntaxKind.PropertyAccessExpression || initializer.kind === SyntaxKind.NewExpression) {
-                            emitMemberAnnotation(root.name, propName);
-                        }
-                        else {
-                            emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
-                        }
+                        resolveDestructionAnnotation(target, value, initializer);
 
                         if (!emitModuleIfNeeded(root)) {
                             write("var ");
@@ -5008,6 +4962,71 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
                         emitAssignment(<Identifier>target.name, cloned, false, target);
                         emitCount++;
+                    }
+                }
+
+                function resolveDestructionAnnotation(target: BindingElement | VariableDeclaration, value: Expression, initializer?: Expression): void {
+                    let member: VariableDeclaration;
+                    let propName = (<Identifier>target.name).text;
+
+                    if (initializer.kind == SyntaxKind.Identifier) {
+                        if (root.name.kind === SyntaxKind.ArrayBindingPattern) {
+                            let emittedNode: Node = root;
+                            let arrayBinding = <ArrayBindingPattern>root.name;
+
+                            if (arrayBinding.elements.length) {
+                                let filtered = arrayBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+
+                                if (filtered.length === 1) {
+                                    emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
+                                }
+                            }
+                            else {
+                                let candidate = <VariableDeclaration>getSymbolDeclaration(initializer);
+
+                                if (candidate && candidate.initializer) {
+                                    emittedNode = candidate.initializer;
+                                }
+
+                                emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>emittedNode);
+                            }
+                        }
+                        else if (value.kind === SyntaxKind.ConditionalExpression) {
+                            emitMemberAnnotation(target, propName);
+                        }
+                        else if (initializer.parent) {
+                            if (root.name.kind === SyntaxKind.ObjectBindingPattern) {
+                                let emittedNode: Node = root;
+                                let objectBinding = <ObjectBindingPattern>root.name;
+
+                                if (objectBinding.elements.length) {
+                                    let filtered = objectBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+
+                                    if (filtered.length === 1) {
+                                        const filteredItem = filtered[0];
+
+                                        if (filteredItem.propertyName) {
+                                            propName = (<Identifier>filteredItem.propertyName).text;
+                                        }
+                                    }
+                                }
+                            }
+
+                            emitMemberAnnotation(initializer, propName);
+                        }
+                    }
+                    else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
+                        emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer, ts.isRestParameter(target));
+                    }
+                    else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
+                        member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
+                        emitVariableTypeAnnotation(member);
+                    }
+                    else if (initializer.kind === SyntaxKind.ElementAccessExpression || initializer.kind === SyntaxKind.PropertyAccessExpression || initializer.kind === SyntaxKind.NewExpression) {
+                        emitMemberAnnotation(root.name, propName);
+                    }
+                    else {
+                        emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
                     }
                 }
 
