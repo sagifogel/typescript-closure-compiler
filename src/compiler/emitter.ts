@@ -4659,6 +4659,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 if (!canDefineTempVariablesInPlace) {
                     recordTempDeclaration(identifier);
                 }
+
                 emitAssignment(identifier, expression, shouldEmitCommaBeforeAssignment, sourceMapNode || expression.parent);
                 return identifier;
             }
@@ -6291,8 +6292,8 @@ const _super = (function (geti, seti) {
 
             function getArrayElementType(node: Node, elements: Array<Node | Type>): string {
                 return reduceTypes(ts.map(elements, element => getParameterOrUnionTypeAnnotation(node, <Node>element)));
-
             }
+
             function reduceTypes(types: Array<string>): string {
                 let typeCounter = 0;
                 let type: string = types[0];
@@ -6638,6 +6639,8 @@ const _super = (function (geti, seti) {
                         }
 
                         return type;
+                    case SyntaxKind.SpreadElementExpression:
+                        return getParameterOrUnionTypeAnnotation(rootNode, (<SpreadElementExpression>node).expression);
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");
