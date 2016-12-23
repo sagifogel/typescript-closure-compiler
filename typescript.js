@@ -38993,6 +38993,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     return buffer.reverse().join(".");
                 case 97 /* ThisKeyword */:
                     return getThis(rootNode, node);
+                case 249 /* ShorthandPropertyAssignment */:
+                    node = node.name;
                 case 169 /* PropertyAccessExpression */:
                 case 170 /* ElementAccessExpression */:
                 case 171 /* CallExpression */:
@@ -39021,6 +39023,14 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                         type += "<" + args.join(", ") + ">";
                     }
                     return type;
+                case 188 /* SpreadElementExpression */:
+                    var variableDeclaration = getSymbolAtLocation(node.expression);
+                    if (variableDeclaration && variableDeclaration.initializer) {
+                        if (variableDeclaration.initializer.elements) {
+                            return getArrayLiteralElementType(variableDeclaration.initializer);
+                        }
+                        return getParameterOrUnionTypeAnnotation(rootNode, node.expression);
+                    }
             }
             return addVarArgsIfNeeded(node, "?");
         }
