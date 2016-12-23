@@ -6218,6 +6218,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         return buffer.reverse().join(".");
                     case SyntaxKind.ThisKeyword:
                         return getThis(rootNode, node);
+                    case SyntaxKind.ShorthandPropertyAssignment:
+                        node = (<ShorthandPropertyAssignment>node).name;
                     case SyntaxKind.PropertyAccessExpression:
                     case SyntaxKind.ElementAccessExpression:
                     case SyntaxKind.CallExpression:
@@ -6251,7 +6253,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         return type;
                     case SyntaxKind.SpreadElementExpression:
-                        return getParameterOrUnionTypeAnnotation(rootNode, (<SpreadElementExpression>node).expression);
+                        const variableDeclaration = <VariableDeclaration>getSymbolAtLocation((<SpreadElementExpression>node).expression);
+
+                        if (variableDeclaration && variableDeclaration.initializer) {
+                            if ((<ArrayLiteralExpression>variableDeclaration.initializer).elements) {
+                                return getArrayLiteralElementType(<ArrayLiteralExpression>variableDeclaration.initializer);
+                            }
+
+                            return getParameterOrUnionTypeAnnotation(rootNode, (<SpreadElementExpression>node).expression);
+                        }
                 }
 
                 return addVarArgsIfNeeded(<ParameterDeclaration>node, "?");

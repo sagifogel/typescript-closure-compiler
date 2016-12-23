@@ -35711,6 +35711,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     return buffer.reverse().join(".");
                 case 97 /* ThisKeyword */:
                     return getThis(rootNode, node);
+                case 246 /* ShorthandPropertyAssignment */:
+                    node = node.name;
                 case 166 /* PropertyAccessExpression */:
                 case 167 /* ElementAccessExpression */:
                 case 168 /* CallExpression */:
@@ -35740,7 +35742,13 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     }
                     return type;
                 case 185 /* SpreadElementExpression */:
-                    return getParameterOrUnionTypeAnnotation(rootNode, node.expression);
+                    var variableDeclaration = getSymbolAtLocation(node.expression);
+                    if (variableDeclaration && variableDeclaration.initializer) {
+                        if (variableDeclaration.initializer.elements) {
+                            return getArrayLiteralElementType(variableDeclaration.initializer);
+                        }
+                        return getParameterOrUnionTypeAnnotation(rootNode, node.expression);
+                    }
             }
             return addVarArgsIfNeeded(node, "?");
         }
