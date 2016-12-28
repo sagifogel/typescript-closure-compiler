@@ -4972,7 +4972,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 function resolveDestructionAnnotation(target: BindingElement | VariableDeclaration, value: Expression, initializer?: Expression): void {
                     if (shouldEmitAnnotations()) {
                         let propName = (<Identifier>target.name).text;
-                        let filter = (e: BindingElement) => e.kind === SyntaxKind.BindingElement && (<Identifier>e.name).text === propName;
+                        const filter = (e: BindingElement) => e.kind === SyntaxKind.BindingElement && (<Identifier>e.name).text === propName;
 
                         if (root.name.kind === SyntaxKind.ArrayBindingPattern) {
                             let emittedNode: Node = root;
@@ -5002,8 +5002,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             let node: Node = root.kind === SyntaxKind.VariableDeclaration ? initializer : root;
 
                             if (root.name.kind === SyntaxKind.ObjectBindingPattern) {
-                                let emittedNode: Node = root;
-                                let objectBinding = <ObjectBindingPattern>root.name;
+                                const emittedNode: Node = root;
+                                const objectBinding = <ObjectBindingPattern>root.name;
 
                                 if (objectBinding.elements.length) {
                                     let filtered = objectBinding.elements.filter(filter);
@@ -5016,7 +5016,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                                         }
                                     }
                                     else if ((<ParameterDeclaration>root).initializer && (<ParameterDeclaration>root).initializer.kind === SyntaxKind.ObjectLiteralExpression) {
-                                        let parameter = <ParameterDeclaration>root;
+                                        const parameter = <ParameterDeclaration>root;
 
                                         emitTypeAnnotaion(getTypeLiteral(parameter.initializer, (<ObjectLiteralExpression>parameter.initializer).properties));
                                         return;
@@ -5031,8 +5031,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 
                 function emitMemberAnnotation(node: Node, propName: string): void {
                     let emittedNode = node;
-                    let type = typeChecker.getTypeAtLocation(node);
-                    let prop = typeChecker.getPropertyOfType(type, propName)
+                    const type = typeChecker.getTypeAtLocation(node);
+                    const prop = typeChecker.getPropertyOfType(type, propName)
 
                     if (prop) {
                         emittedNode = getDeclarationFromSymbol(prop);
