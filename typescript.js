@@ -34279,7 +34279,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                             write("var ");
                         }
                         value = createDefaultValueCheck(value, target.initializer);
-                        writeValueAndNewLine(";");
+                        if (target.initializer.kind !== 165 /* ObjectLiteralExpression */) {
+                            writeValueAndNewLine(";");
+                        }
                     }
                     else {
                         value = target.initializer;
@@ -34341,15 +34343,15 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
             function resolveDestructionAnnotation(target, value, initializer) {
-                var member;
-                var propName = target.name.text;
-                var rootDeclaration = root;
-                if (initializer.kind == 69 /* Identifier */) {
+                if (shouldEmitAnnotations()) {
+                    var propName = target.name.text;
+                    var rootDeclaration = root;
+                    var filter_1 = function (e) { return e.kind === 163 /* BindingElement */ && e.name.text === propName; };
                     if (rootDeclaration.name.kind === 162 /* ArrayBindingPattern */) {
                         var emittedNode = root;
                         var arrayBinding = rootDeclaration.name;
                         if (arrayBinding.elements.length) {
-                            var filtered = arrayBinding.elements.filter(function (e) { return e.name.text === propName; });
+                            var filtered = arrayBinding.elements.filter(filter_1);
                             if (filtered.length === 1) {
                                 emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
                             }
@@ -34365,35 +34367,28 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     else if (value.kind === 182 /* ConditionalExpression */) {
                         emitMemberAnnotation(target, propName);
                     }
-                    else if (initializer.parent) {
+                    else {
+                        var node = root.kind === 211 /* VariableDeclaration */ ? initializer : root;
                         if (rootDeclaration.name.kind === 161 /* ObjectBindingPattern */) {
                             emittedNode = root;
                             var objectBinding = rootDeclaration.name;
                             if (objectBinding.elements.length) {
-                                filtered = objectBinding.elements.filter(function (e) { return e.name.text === propName; });
+                                filtered = objectBinding.elements.filter(filter_1);
                                 if (filtered.length === 1) {
                                     var filteredItem = filtered[0];
                                     if (filteredItem.propertyName) {
                                         propName = filteredItem.propertyName.text;
                                     }
                                 }
+                                else if (root.initializer && root.initializer.kind === 165 /* ObjectLiteralExpression */) {
+                                    var parameter = root;
+                                    emitTypeAnnotaion(getTypeLiteral(parameter.initializer, parameter.initializer.properties));
+                                    return;
+                                }
                             }
                         }
-                        emitMemberAnnotation(initializer, propName);
+                        emitMemberAnnotation(node, propName);
                     }
-                }
-                else if (initializer.kind === 164 /* ArrayLiteralExpression */) {
-                    emitArrayLiteralElementTypeAnnotation(initializer, ts.isRestParameter(target));
-                }
-                else if (initializer.kind === 165 /* ObjectLiteralExpression */) {
-                    member = getDeclarationFromSymbol(initializer.symbol.members[propName]);
-                    emitVariableTypeAnnotation(member);
-                }
-                else if (initializer.kind === 167 /* ElementAccessExpression */ || initializer.kind === 166 /* PropertyAccessExpression */ || initializer.kind === 169 /* NewExpression */) {
-                    emitMemberAnnotation(rootDeclaration.name, propName);
-                }
-                else {
-                    emitVariableTypeAnnotation(ts.createSynthesizedNode(211 /* VariableDeclaration */));
                 }
             }
             function emitMemberAnnotation(node, propName) {

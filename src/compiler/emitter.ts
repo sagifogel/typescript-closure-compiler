@@ -4569,7 +4569,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             }
 
                             value = createDefaultValueCheck(value, target.initializer);
-                            writeValueAndNewLine(";");
+
+                            if (target.initializer.kind !== SyntaxKind.ObjectLiteralExpression) {
+                                writeValueAndNewLine(";");
+                            }
                         }
                         else {
                             value = target.initializer;
@@ -4641,17 +4644,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
 
                 function resolveDestructionAnnotation(target: BindingElement | VariableDeclaration, value: Expression, initializer?: Expression): void {
-                    let member: VariableDeclaration;
-                    let propName = (<Identifier>target.name).text;
-                    let rootDeclaration = (<VariableDeclaration>root);
+                    if (shouldEmitAnnotations()) {
+                        let propName = (<Identifier>target.name).text;
+                        const rootDeclaration = (<VariableDeclaration>root);
+                        const filter = (e: BindingElement) => e.kind === SyntaxKind.BindingElement && (<Identifier>e.name).text === propName;
 
-                    if (initializer.kind == SyntaxKind.Identifier) {
                         if (rootDeclaration.name.kind === SyntaxKind.ArrayBindingPattern) {
                             let emittedNode: Node = root;
                             let arrayBinding = <BindingPattern>rootDeclaration.name;
 
                             if (arrayBinding.elements.length) {
-                                let filtered = arrayBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+                                let filtered = arrayBinding.elements.filter(filter);
 
                                 if (filtered.length === 1) {
                                     emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
@@ -4670,48 +4673,46 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         else if (value.kind === SyntaxKind.ConditionalExpression) {
                             emitMemberAnnotation(target, propName);
                         }
-                        else if (initializer.parent) {
+                        else {
+                            let node: Node = root.kind === SyntaxKind.VariableDeclaration ? initializer : root;
+
                             if (rootDeclaration.name.kind === SyntaxKind.ObjectBindingPattern) {
-                                let emittedNode: Node = root;
-                                let objectBinding = <BindingPattern>rootDeclaration.name;
+                                const emittedNode: Node = root;
+                                const objectBinding = <BindingPattern>rootDeclaration.name;
 
                                 if (objectBinding.elements.length) {
-                                    let filtered = objectBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+                                    let filtered = objectBinding.elements.filter(filter);
 
                                     if (filtered.length === 1) {
                                         const filteredItem = filtered[0];
+
                                         if (filteredItem.propertyName) {
                                             propName = (<Identifier>filteredItem.propertyName).text;
                                         }
                                     }
+                                    else if ((<ParameterDeclaration>root).initializer && (<ParameterDeclaration>root).initializer.kind === SyntaxKind.ObjectLiteralExpression) {
+                                        const parameter = <ParameterDeclaration>root;
+
+                                        emitTypeAnnotaion(getTypeLiteral(parameter.initializer, (<ObjectLiteralExpression>parameter.initializer).properties));
+                                        return;
+                                    }
                                 }
                             }
 
-                            emitMemberAnnotation(initializer, propName);
+                            emitMemberAnnotation(node, propName);
                         }
-                    }
-                    else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
-                        emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer, ts.isRestParameter(target));
-                    }
-                    else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
-                        member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
-                        emitVariableTypeAnnotation(member);
-                    }
-                    else if (initializer.kind === SyntaxKind.ElementAccessExpression || initializer.kind === SyntaxKind.PropertyAccessExpression || initializer.kind === SyntaxKind.NewExpression) {
-                        emitMemberAnnotation(rootDeclaration.name, propName);
-                    }
-                    else {
-                        emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
                     }
                 }
 
                 function emitMemberAnnotation(node: Node, propName: string): void {
                     let emittedNode = node;
-                    let type = typeChecker.getTypeAtLocation(node);
-                    let prop = typeChecker.getPropertyOfType(type, propName)
+                    const type = typeChecker.getTypeAtLocation(node);
+                    const prop = typeChecker.getPropertyOfType(type, propName)
+
                     if (prop) {
                         emittedNode = getDeclarationFromSymbol(prop);
                     }
+
                     emitVariableTypeAnnotation(<VariableDeclaration>emittedNode);
                 }
             }
