@@ -4893,7 +4893,10 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             }
 
                             value = createDefaultValueCheck(value, target.initializer, target);
-                            writeValueAndNewLine(";");
+
+                            if (target.initializer.kind !== SyntaxKind.ObjectLiteralExpression) {
+                                writeValueAndNewLine(";");
+                            }
                         }
                         else {
                             value = target.initializer;
@@ -4967,16 +4970,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                 }
 
                 function resolveDestructionAnnotation(target: BindingElement | VariableDeclaration, value: Expression, initializer?: Expression): void {
-                    let member: VariableDeclaration;
-                    let propName = (<Identifier>target.name).text;
+                    if (shouldEmitAnnotations()) {
+                        let propName = (<Identifier>target.name).text;
+                        let filter = (e: BindingElement) => e.kind === SyntaxKind.BindingElement && (<Identifier>e.name).text === propName;
 
-                    if (initializer.kind == SyntaxKind.Identifier) {
                         if (root.name.kind === SyntaxKind.ArrayBindingPattern) {
                             let emittedNode: Node = root;
                             let arrayBinding = <ArrayBindingPattern>root.name;
 
                             if (arrayBinding.elements.length) {
-                                let filtered = arrayBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+                                let filtered = arrayBinding.elements.filter(filter);
 
                                 if (filtered.length === 1) {
                                     emitTypeAnnotaion(getTypeOfSymbolAtLocation(filtered[0]));
@@ -4995,13 +4998,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         else if (value.kind === SyntaxKind.ConditionalExpression) {
                             emitMemberAnnotation(target, propName);
                         }
-                        else if (initializer.parent) {
+                        else {
+                            let node: Node = root.kind === SyntaxKind.VariableDeclaration ? initializer : root;
+
                             if (root.name.kind === SyntaxKind.ObjectBindingPattern) {
                                 let emittedNode: Node = root;
                                 let objectBinding = <ObjectBindingPattern>root.name;
 
                                 if (objectBinding.elements.length) {
-                                    let filtered = objectBinding.elements.filter(e => (<Identifier>e.name).text === propName);
+                                    let filtered = objectBinding.elements.filter(filter);
 
                                     if (filtered.length === 1) {
                                         const filteredItem = filtered[0];
@@ -5010,24 +5015,17 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                                             propName = (<Identifier>filteredItem.propertyName).text;
                                         }
                                     }
+                                    else if ((<ParameterDeclaration>root).initializer && (<ParameterDeclaration>root).initializer.kind === SyntaxKind.ObjectLiteralExpression) {
+                                        let parameter = <ParameterDeclaration>root;
+
+                                        emitTypeAnnotaion(getTypeLiteral(parameter.initializer, (<ObjectLiteralExpression>parameter.initializer).properties));
+                                        return;
+                                    }
                                 }
                             }
 
-                            emitMemberAnnotation(initializer, propName);
+                            emitMemberAnnotation(node, propName);
                         }
-                    }
-                    else if (initializer.kind === SyntaxKind.ArrayLiteralExpression) {
-                        emitArrayLiteralElementTypeAnnotation(<ArrayLiteralExpression>initializer, ts.isRestParameter(target));
-                    }
-                    else if (initializer.kind === SyntaxKind.ObjectLiteralExpression) {
-                        member = <VariableDeclaration>getDeclarationFromSymbol(initializer.symbol.members[propName]);
-                        emitVariableTypeAnnotation(member);
-                    }
-                    else if (initializer.kind === SyntaxKind.ElementAccessExpression || initializer.kind === SyntaxKind.PropertyAccessExpression || initializer.kind === SyntaxKind.NewExpression) {
-                        emitMemberAnnotation(root.name, propName);
-                    }
-                    else {
-                        emitVariableTypeAnnotation(<VariableDeclaration>ts.createSynthesizedNode(SyntaxKind.VariableDeclaration));
                     }
                 }
 
