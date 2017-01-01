@@ -5975,9 +5975,17 @@ const _super = (function (geti, seti) {
             }
 
             function getProperties(node: ClassLikeDeclaration, isStatic: boolean) {
+                return getPropertiesInternal(node, isStatic, SyntaxKind.PropertyDeclaration);
+            }
+
+            function getPropertiesSignatures(node: ClassLikeDeclaration, isStatic: boolean) {
+                return getPropertiesInternal(node, isStatic, SyntaxKind.PropertySignature);
+            }
+
+            function getPropertiesInternal(node: ClassLikeDeclaration, isStatic: boolean, kind: SyntaxKind) {
                 const properties: PropertyDeclaration[] = [];
                 for (const member of node.members) {
-                    if (member.kind === SyntaxKind.PropertyDeclaration && isStatic === ((member.flags & NodeFlags.Static) !== 0)) {
+                    if (member.kind === kind && isStatic === ((member.flags & NodeFlags.Static) !== 0)) {
                         properties.push(<PropertyDeclaration>member);
                     }
                 }
@@ -7204,7 +7212,30 @@ const _super = (function (geti, seti) {
                 }
 
                 if (node.members) {
-                    emitPropertyDeclarations(node, getProperties(node, /*static:*/ false));
+                    const symbol = typeChecker.getSymbolAtLocation(node.name);
+
+                    /** probably a merged declaration of class and interface with the same name */
+                    if (symbol.declarations.length > 1) {
+                        forEach(symbol.declarations, (decl: ClassLikeDeclaration) => {
+                            let props : PropertyDeclaration[];
+
+                            if (decl.kind === SyntaxKind.InterfaceDeclaration) {
+                                props = getPropertiesSignatures(decl, false).map(prop => {
+                                    return cloneNode(prop, undefined, prop.flags, node);
+                                });
+
+                                decl = node;
+                            }
+                            else {
+                                props = getProperties(decl, false);
+                            }
+
+                            emitPropertyDeclarations(decl, props);
+                        });
+                    }
+                    else {
+                        emitPropertyDeclarations(node, getProperties(node, false));
+                    }
                 }
 
                 if (ctor) {
@@ -8150,6 +8181,13 @@ const _super = (function (geti, seti) {
             }
 
             function emitInterfaceDeclaration(node: InterfaceDeclaration) {
+                const symbol = typeChecker.getSymbolAtLocation(node.name);
+
+                /** probably a merged declaration of class and interface with the same name */
+                if (symbol.declarations.length > 1) {
+                    return;
+                }
+
                 let anyNode = <any>node;
                 let classLikeDeclaration = <ClassLikeDeclaration>anyNode;
                 let callOrIndexSignatures = <SignatureDeclaration[]><any>ts.filter(node.members, member => member.kind === SyntaxKind.CallSignature);
