@@ -5974,15 +5974,15 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function getProperties(node: ClassLikeDeclaration, isStatic: boolean) {
+            function getProperties(node: ClassLikeDeclaration, isStatic: boolean): PropertyDeclaration[] {
                 return getPropertiesInternal(node, isStatic, SyntaxKind.PropertyDeclaration);
             }
 
-            function getPropertiesSignatures(node: ClassLikeDeclaration, isStatic: boolean) {
+            function getPropertiesSignatures(node: ClassLikeDeclaration, isStatic: boolean): PropertyDeclaration[] {
                 return getPropertiesInternal(node, isStatic, SyntaxKind.PropertySignature);
             }
 
-            function getPropertiesInternal(node: ClassLikeDeclaration, isStatic: boolean, kind: SyntaxKind) {
+            function getPropertiesInternal(node: ClassLikeDeclaration, isStatic: boolean, kind: SyntaxKind): PropertyDeclaration[] {
                 const properties: PropertyDeclaration[] = [];
                 for (const member of node.members) {
                     if (member.kind === kind && isStatic === ((member.flags & NodeFlags.Static) !== 0)) {
@@ -6531,7 +6531,7 @@ const _super = (function (geti, seti) {
                         type = getParameterOrUnionTypeAnnotation(rootNode, typeNode.elementType, isParameterPropertyAssignment);
 
                         if (!ts.isRestParameter(<ParameterDeclaration>node.parent)) {
-                            return `Array<${type}>`;
+                            return addOptionalIfNeeded(node.parent, `Array<${type}>`, isParameterPropertyAssignment);
                         }
 
                         return addVarArgs(type);
@@ -7217,7 +7217,7 @@ const _super = (function (geti, seti) {
                     /** probably a merged declaration of class and interface with the same name */
                     if (symbol.declarations.length > 1) {
                         forEach(symbol.declarations, (decl: ClassLikeDeclaration) => {
-                            let props : PropertyDeclaration[];
+                            let props: PropertyDeclaration[];
 
                             if (decl.kind === SyntaxKind.InterfaceDeclaration) {
                                 props = getPropertiesSignatures(decl, false).map(prop => {
