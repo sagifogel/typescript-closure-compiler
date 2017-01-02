@@ -35641,7 +35641,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 case 156 /* ArrayType */:
                     type = getParameterOrUnionTypeAnnotation(rootNode, typeNode.elementType, isParameterPropertyAssignment);
                     if (!ts.isRestParameter(node.parent)) {
-                        return "Array<" + type + ">";
+                        return addOptionalIfNeeded(node.parent, "Array<" + type + ">", isParameterPropertyAssignment);
                     }
                     return addVarArgs(type);
                 case 157 /* TupleType */:

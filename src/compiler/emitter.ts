@@ -6145,7 +6145,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         type = getParameterOrUnionTypeAnnotation(rootNode, typeNode.elementType, isParameterPropertyAssignment);
 
                         if (!ts.isRestParameter(<ParameterDeclaration>node.parent)) {
-                            return `Array<${type}>`;
+                            return addOptionalIfNeeded(node.parent, `Array<${type}>`, isParameterPropertyAssignment);
                         }
 
                         return addVarArgs(type);
