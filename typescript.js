@@ -35181,10 +35181,16 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
         }
         function getProperties(node, isStatic) {
+            return getPropertiesInternal(node, isStatic, 141 /* PropertyDeclaration */);
+        }
+        function getPropertiesSignatures(node, isStatic) {
+            return getPropertiesInternal(node, isStatic, 140 /* PropertySignature */);
+        }
+        function getPropertiesInternal(node, isStatic, kind) {
             var properties = [];
             for (var _a = 0, _b = node.members; _a < _b.length; _a++) {
                 var member = _b[_a];
-                if (member.kind === 141 /* PropertyDeclaration */ && isStatic === ((member.flags & 128 /* Static */) !== 0)) {
+                if (member.kind === kind && isStatic === ((member.flags & 128 /* Static */) !== 0)) {
                     properties.push(member);
                 }
             }
@@ -36207,7 +36213,26 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
             if (node.members) {
-                emitPropertyDeclarations(node, getProperties(node, /*static:*/ false));
+                var symbol = typeChecker.getSymbolAtLocation(node.name);
+                /** probably a merged declaration of class and interface with the same name */
+                if (symbol.declarations.length > 1) {
+                    ts.forEach(symbol.declarations, function (decl) {
+                        var props;
+                        if (decl.kind === 215 /* InterfaceDeclaration */) {
+                            props = getPropertiesSignatures(decl, false).map(function (prop) {
+                                return cloneNode(prop, undefined, prop.flags, node);
+                            });
+                            decl = node;
+                        }
+                        else {
+                            props = getProperties(decl, false);
+                        }
+                        emitPropertyDeclarations(decl, props);
+                    });
+                }
+                else {
+                    emitPropertyDeclarations(node, getProperties(node, false));
+                }
             }
             if (ctor) {
                 var statements = ctor.body.statements;
@@ -37008,6 +37033,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             return argumentsWritten;
         }
         function emitInterfaceDeclaration(node) {
+            var symbol = typeChecker.getSymbolAtLocation(node.name);
+            /** probably a merged declaration of class and interface with the same name */
+            if (symbol.declarations.length > 1) {
+                return;
+            }
             var anyNode = node;
             var classLikeDeclaration = anyNode;
             var callOrIndexSignatures = ts.filter(node.members, function (member) { return member.kind === 147 /* CallSignature */; });
