@@ -38474,15 +38474,16 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             return properties;
         }
-        function emitPropertyDeclarations(node, properties) {
+        function emitPropertyDeclarations(node, properties, emitAsPrototype) {
+            if (emitAsPrototype === void 0) { emitAsPrototype = false; }
             for (var _a = 0, properties_6 = properties; _a < properties_6.length; _a++) {
                 var property = properties_6[_a];
-                emitPropertyDeclaration(node, property);
+                emitPropertyDeclaration(node, property, undefined, undefined, emitAsPrototype);
             }
         }
-        function emitPropertyDeclaration(node, property, receiver, isExpression) {
+        function emitPropertyDeclaration(node, property, receiver, isExpression, asPrototype) {
             var isStaticProperty = property.flags & 64 /* Static */;
-            var nodeIsInterface = node.kind === 218 /* InterfaceDeclaration */;
+            var emitAsPrototype = node.kind === 218 /* InterfaceDeclaration */ || asPrototype;
             writeLine();
             if (!compilerOptions.emitAnnotations) {
                 emitLeadingComments(property);
@@ -38499,7 +38500,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     emitModuleIfNeeded(node);
                     emitDeclarationName(node);
                 }
-                else {
+                else if (emitAsPrototype) {
                     if (property.kind === 150 /* IndexSignature */) {
                         return;
                     }
@@ -38507,12 +38508,16 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     emitPropertyOrParamterAnnotation(property);
                     emitClassMemberPrefix(node, property);
                 }
+                else {
+                    emitPropertyOrParamterAnnotation(property);
+                    write("this");
+                }
             }
             if (property.name) {
                 emitMemberAccessForPropertyName(property.name);
             }
             emitEnd(property.name);
-            if (!nodeIsInterface && property.initializer) {
+            if (!emitAsPrototype && property.initializer) {
                 write(" = ");
                 emit(property.initializer);
             }
@@ -39398,6 +39403,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             // If there is no property assignment, we can omit constructor if users do not define it
             var hasInstancePropertyWithInitializer = false;
             var nodeIsInterface = node.kind === 218 /* InterfaceDeclaration */;
+            var symbol = typeChecker.getSymbolAtLocation(node.name);
+            var isMergedDeclaration = symbol.declarations.length > 1;
             // Emit the constructor overload pinned comments
             ts.forEach(node.members, function (member) {
                 if (member.kind === 145 /* Constructor */ && !member.body) {
@@ -39493,6 +39500,10 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     emitEnd(baseTypeElement);
                 }
             }
+            if (node.members) {
+                var initializedMembers = node.members.filter(function (member) { return !!member.initializer && !isStatic(member); });
+                initializedMembers.forEach(function (prop) { return emitPropertyDeclaration(node, prop); });
+            }
             if (ctor) {
                 var statements = ctor.body.statements;
                 if (superCall) {
@@ -39515,14 +39526,12 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 write(";");
             }
             if (node.members) {
-                var symbol = typeChecker.getSymbolAtLocation(node.name);
-                /** probably a merged declaration of class and interface with the same name */
-                if (symbol.declarations.length > 1) {
+                if (isMergedDeclaration) {
                     var cache = [];
                     emitMergedTypePropertyDeclarations(node, node, cache);
                 }
                 else {
-                    emitPropertyDeclarations(node, getProperties(node, false));
+                    emitPropertyDeclarations(node, getProperties(node, false), true);
                 }
             }
         }
@@ -39571,7 +39580,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 return false;
             })
                 .map(function (prop) { return prop.node; });
-            emitPropertyDeclarations(root, props);
+            emitPropertyDeclarations(node, props, true);
         }
         function clone(source, props) {
             var cloned = ts.createSynthesizedNode(source.kind);
@@ -57915,6 +57924,8 @@ ts.ScriptSnapshotShimAdapter.prototype.dispose = function () {
 ts.LanguageServiceShimHostAdapter = function (shimHost) {
     var _this = this;
     this.shimHost = shimHost;
+    this.loggingEnabled = false;
+    this.tracingEnabled = false;
     // if shimHost is a COM object then property check will become method call with no arguments.
     // 'in' does not have this effect. 
     if ("getModuleResolutionsForFile" in this.shimHost) {
@@ -57933,9 +57944,9 @@ ts.LanguageServiceShimHostAdapter = function (shimHost) {
 
 ts.LanguageServiceShimHostAdapter.prototype.files;
 
-ts.LanguageServiceShimHostAdapter.prototype.loggingEnabled = false;
+ts.LanguageServiceShimHostAdapter.prototype.loggingEnabled;
 
-ts.LanguageServiceShimHostAdapter.prototype.tracingEnabled = false;
+ts.LanguageServiceShimHostAdapter.prototype.tracingEnabled;
 
 ts.LanguageServiceShimHostAdapter.prototype.resolveModuleNames;
 
@@ -58031,12 +58042,16 @@ ts.LanguageServiceShimHostAdapter.prototype.getDefaultLibFileName = function (op
 
 ts.ThrottledCancellationToken = function (hostCancellationToken) {
     this.hostCancellationToken = hostCancellationToken;
+    // Store when we last tried to cancel.  Checking cancellation can be expensive (as we have
+    // to marshall over to the host layer).  So we only bother actually checking once enough
+    // time has passed.
+    this.lastCancellationCheckTime = 0;
 };
 // Store when we last tried to cancel.  Checking cancellation can be expensive (as we have
 // to marshall over to the host layer).  So we only bother actually checking once enough
 // time has passed.
 
-ts.ThrottledCancellationToken.prototype.lastCancellationCheckTime = 0;
+ts.ThrottledCancellationToken.prototype.lastCancellationCheckTime;
 
 ts.ThrottledCancellationToken.prototype.isCancellationRequested = function () {
     var time = Date.now();
@@ -58144,12 +58159,13 @@ ts.LanguageServiceShimObject = function (factory, host, languageService) {
     ts.ShimBase.call(this, factory);
     this.host = host;
     this.languageService = languageService;
+    this.logPerformance = false;
     this.logger = this.host;
 };
 
 ts.LanguageServiceShimObject.prototype.logger;
 
-ts.LanguageServiceShimObject.prototype.logPerformance = false;
+ts.LanguageServiceShimObject.prototype.logPerformance;
 
 __extends(ts.LanguageServiceShimObject, ts.ShimBase);
 
@@ -58448,12 +58464,13 @@ ts.convertClassifications = function (classifications) {
 ts.ClassifierShimObject = function (factory, logger) {
     ts.ShimBase.call(this, factory);
     this.logger = logger;
+    this.logPerformance = false;
     this.classifier = ts.createClassifier();
 };
 
 ts.ClassifierShimObject.prototype.classifier;
 
-ts.ClassifierShimObject.prototype.logPerformance = false;
+ts.ClassifierShimObject.prototype.logPerformance;
 
 __extends(ts.ClassifierShimObject, ts.ShimBase);
 
@@ -58480,9 +58497,10 @@ ts.CoreServicesShimObject = function (factory, logger, host) {
     ts.ShimBase.call(this, factory);
     this.logger = logger;
     this.host = host;
+    this.logPerformance = false;
 };
 
-ts.CoreServicesShimObject.prototype.logPerformance = false;
+ts.CoreServicesShimObject.prototype.logPerformance;
 
 __extends(ts.CoreServicesShimObject, ts.ShimBase);
 
@@ -58570,9 +58588,10 @@ ts.CoreServicesShimObject.prototype.discoverTypings = function (discoverTypingsJ
 };
 
 ts.TypeScriptServicesFactory = function () {
+    this._shims = [];
 };
 
-ts.TypeScriptServicesFactory.prototype._shims = [];
+ts.TypeScriptServicesFactory.prototype._shims;
 
 ts.TypeScriptServicesFactory.prototype.documentRegistry;
 

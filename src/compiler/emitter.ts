@@ -5993,15 +5993,15 @@ const _super = (function (geti, seti) {
                 return properties;
             }
 
-            function emitPropertyDeclarations(node: ClassLikeDeclaration, properties: PropertyDeclaration[]) {
+            function emitPropertyDeclarations(node: ClassLikeDeclaration, properties: PropertyDeclaration[], emitAsPrototype: boolean = false) {
                 for (const property of properties) {
-                    emitPropertyDeclaration(node, property);
+                    emitPropertyDeclaration(node, property, undefined, undefined, emitAsPrototype);
                 }
             }
 
-            function emitPropertyDeclaration(node: ClassLikeDeclaration, property: PropertyDeclaration, receiver?: Identifier, isExpression?: boolean) {
+            function emitPropertyDeclaration(node: ClassLikeDeclaration, property: PropertyDeclaration, receiver?: Identifier, isExpression?: boolean, asPrototype?: boolean) {
                 const isStaticProperty = property.flags & NodeFlags.Static;
-                const nodeIsInterface = node.kind === SyntaxKind.InterfaceDeclaration;
+                const emitAsPrototype = node.kind === SyntaxKind.InterfaceDeclaration || asPrototype;
 
                 writeLine();
 
@@ -6021,7 +6021,7 @@ const _super = (function (geti, seti) {
                         emitModuleIfNeeded(node);
                         emitDeclarationName(node);
                     }
-                    else {
+                    else if (emitAsPrototype) {
                         if (property.kind === SyntaxKind.IndexSignature) {
                             return;
                         }
@@ -6029,6 +6029,10 @@ const _super = (function (geti, seti) {
                         forceWriteLine();
                         emitPropertyOrParamterAnnotation(property);
                         emitClassMemberPrefix(node, property);
+                    }
+                    else {
+                        emitPropertyOrParamterAnnotation(property);
+                        write("this");
                     }
                 }
 
@@ -6038,7 +6042,7 @@ const _super = (function (geti, seti) {
 
                 emitEnd(property.name);
 
-                if (!nodeIsInterface && property.initializer) {
+                if (!emitAsPrototype && property.initializer) {
                     write(" = ");
                     emit(property.initializer);
                 }
@@ -7105,6 +7109,8 @@ const _super = (function (geti, seti) {
                 // If there is no property assignment, we can omit constructor if users do not define it
                 let hasInstancePropertyWithInitializer = false;
                 const nodeIsInterface = node.kind === SyntaxKind.InterfaceDeclaration;
+                const symbol = typeChecker.getSymbolAtLocation(node.name);
+                const isMergedDeclaration = symbol.declarations.length > 1;
 
                 // Emit the constructor overload pinned comments
                 forEach(node.members, member => {
@@ -7213,6 +7219,12 @@ const _super = (function (geti, seti) {
                     }
                 }
 
+                if (node.members) {
+                    const initializedMembers = <PropertyDeclaration[]>node.members.filter((member: PropertyDeclaration) => !!member.initializer && !isStatic(member));
+
+                    initializedMembers.forEach(prop => emitPropertyDeclaration(node, prop));
+                }
+
                 if (ctor) {
                     let statements: Node[] = (<Block>ctor.body).statements;
 
@@ -7243,15 +7255,12 @@ const _super = (function (geti, seti) {
                 }
 
                 if (node.members) {
-                    const symbol = typeChecker.getSymbolAtLocation(node.name);
-
-                    /** probably a merged declaration of class and interface with the same name */
-                    if (symbol.declarations.length > 1) {
+                    if (isMergedDeclaration) {
                         const cache: Array<string> = [];
                         emitMergedTypePropertyDeclarations(node, node, cache);
                     }
                     else {
-                        emitPropertyDeclarations(node, getProperties(node, false));
+                        emitPropertyDeclarations(node, getProperties(node, false), true);
                     }
                 }
             }
@@ -7287,7 +7296,7 @@ const _super = (function (geti, seti) {
                 }
             }
 
-            function emitPropertyDeclarationsInternal(root: ClassLikeDeclaration, node: Node, cache: string[]): void {
+            function emitPropertyDeclarationsInternal(root: ClassLikeDeclaration, node: ClassLikeDeclaration, cache: string[]): void {
                 let props: PropertyDeclaration[];
 
                 if (node.kind === SyntaxKind.InterfaceDeclaration) {
@@ -7312,7 +7321,7 @@ const _super = (function (geti, seti) {
                     })
                     .map(prop => prop.node);
 
-                emitPropertyDeclarations(root, props);
+                emitPropertyDeclarations(root, props, true);
             }
 
             type Primitive = number | string | boolean;
