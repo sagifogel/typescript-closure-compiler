@@ -5615,15 +5615,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 return properties;
             }
 
-            function emitPropertyDeclarations(node: ClassLikeDeclaration, properties: PropertyDeclaration[]) {
+            function emitPropertyDeclarations(node: ClassLikeDeclaration, properties: PropertyDeclaration[], emitAsPrototype: boolean = false) {
                 for (let property of properties) {
-                    emitPropertyDeclaration(node, property);
+                    emitPropertyDeclaration(node, property, undefined, undefined, emitAsPrototype);
                 }
             }
 
-            function emitPropertyDeclaration(node: ClassLikeDeclaration, property: PropertyDeclaration, receiver?: Identifier, isExpression?: boolean) {
+            function emitPropertyDeclaration(node: ClassLikeDeclaration, property: PropertyDeclaration, receiver?: Identifier, isExpression?: boolean, asPrototype?: boolean) {
                 let isStaticProperty = property.flags & NodeFlags.Static;
-                let nodeIsInterface = node.kind === SyntaxKind.InterfaceDeclaration;
+                const emitAsPrototype = node.kind === SyntaxKind.InterfaceDeclaration || asPrototype;
 
                 writeLine();
 
@@ -5643,7 +5643,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitModuleIfNeeded(node);
                         emitDeclarationName(node);
                     }
-                    else if (nodeIsInterface) {
+                    else if (emitAsPrototype) {
                         if (property.kind === SyntaxKind.IndexSignature) {
                             return;
                         }
@@ -5662,7 +5662,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 emitEnd(property.name);
 
-                if (!nodeIsInterface && property.initializer) {
+                if (!emitAsPrototype && property.initializer) {
                     write(" = ");
                     emit(property.initializer);
                 }
@@ -6433,6 +6433,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 emitAnnotationIf(() => {
                     let type = "?";
                     let annotation: string;
+                    const accessModifierKind = getAccessModifier(node);
 
                     if (node.type || node.initializer) {
                         type = getParameterOrUnionTypeAnnotation(node, node.type || node.initializer, isParameterPropertyAssignment);
@@ -6442,6 +6443,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     if (shouldEmitLeadingComments(node)) {
                         emitStartAnnotation();
                         emitCombinedLeadingComments(node);
+
+                        if (accessModifierKind === SyntaxKind.PrivateKeyword) {
+                            emitCommentedAnnotation(`@${ts.tokenToString(accessModifierKind)}`);
+                        }
+
                         emitCommentedAnnotation(`${annotation} {${type}}`);
                         emitEndAnnotation();
                     }
@@ -6716,6 +6722,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 // If there is no property assignment, we can omit constructor if users do not define it
                 let hasInstancePropertyWithInitializer = false;
                 let nodeIsInterface = node.kind === SyntaxKind.InterfaceDeclaration;
+                const symbol = typeChecker.getSymbolAtLocation(node.name);
+                const isMergedDeclaration = symbol.declarations.length > 1;
 
                 // Emit the constructor overload pinned comments
                 forEach(node.members, member => {
@@ -6820,32 +6828,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         emitEnd(baseTypeElement);
                     }
                 }
+
                 if (node.members) {
-                    const symbol = typeChecker.getSymbolAtLocation(node.name);
+                    const initializedMembers = <PropertyDeclaration[]>node.members.filter((member: PropertyDeclaration) => !!member.initializer && !isStatic(member));
 
-                    /** probably a merged declaration of class and interface with the same name */
-                    if (symbol.declarations.length > 1) {
-                        forEach(symbol.declarations, (decl: ClassLikeDeclaration) => {
-                            let props: PropertyDeclaration[];
-
-                            if (decl.kind === SyntaxKind.InterfaceDeclaration) {
-                                props = getPropertiesSignatures(decl, false).map(prop => {
-                                    return cloneNode(prop, undefined, prop.flags, node);
-                                });
-
-                                decl = node;
-                            }
-                            else {
-                                props = getProperties(decl, false);
-                            }
-
-                            emitPropertyDeclarations(decl, props);
-                        });
-                    }
-                    else {
-                        emitPropertyDeclarations(node, getProperties(node, false));
-                    }
+                    initializedMembers.forEach(prop => emitPropertyDeclaration(node, prop));
                 }
+
                 if (ctor) {
                     let statements: Node[] = (<Block>ctor.body).statements;
                     if (superCall) {
@@ -6869,6 +6858,75 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 if (shouldEmitSemicolon) {
                     write(";");
                 }
+
+                if (node.members) {
+                    if (isMergedDeclaration) {
+                        const cache: Array<string> = [];
+                        emitMergedTypePropertyDeclarations(node, node, cache);
+                    }
+                    else {
+                        emitPropertyDeclarations(node, getProperties(node, false), true);
+                    }
+                }
+            }
+
+            function emitMergedTypePropertyDeclarations(root: ClassLikeDeclaration, node: Node, cache: string[]): void {
+                emitPropertyDeclarationsInternal(root, root, cache);
+
+                if ((<ClassLikeDeclaration>node).name) {
+                    let symbol = typeChecker.getSymbolAtLocation((<ClassLikeDeclaration>node).name);
+
+                    if (symbol) {
+                        const filtered = node.symbol.declarations.filter(d => d !== node);
+
+                        /** probably a merged declaration of class and interface with the same name */
+                        forEach(filtered, (el: Node) => {
+                            const heritage = getClassExtendsHeritageClauseElement(<ClassLikeDeclaration>el);
+                            let interfaces = [].concat(getInterfaceBaseTypeNodes(<InterfaceDeclaration>el));
+
+                            if (heritage) {
+                                interfaces = interfaces.concat([heritage]);
+                            }
+
+                            interfaces = interfaces.filter(i => !!i).map(e => {
+                                const symbol = typeChecker.getSymbolAtLocation(e.expression);
+
+                                return getDeclarationFromSymbol(symbol);
+                            });
+
+                            interfaces.splice(0, 0, el);
+                            interfaces.forEach(e => emitPropertyDeclarationsInternal(root, e, cache));
+                        });
+                    }
+                }
+            }
+
+            function emitPropertyDeclarationsInternal(root: ClassLikeDeclaration, node: ClassLikeDeclaration, cache: string[]): void {
+                let props: PropertyDeclaration[];
+
+                if (node.kind === SyntaxKind.InterfaceDeclaration) {
+                    props = getPropertiesSignatures(<ClassLikeDeclaration>node, false).map(prop => cloneNode(prop, undefined, prop.flags, root));
+                }
+                else {
+                    props = getProperties(<ClassLikeDeclaration>node, false);
+                }
+                props = props.map(prop => {
+                    return {
+                        node: prop,
+                        name: ts.getTextOfNode(prop.name)
+                    };
+                })
+                    .filter(prop => {
+                        if (cache.indexOf(prop.name) === -1) {
+                            cache.push(prop.name);
+                            return true;
+                        }
+
+                        return false;
+                    })
+                    .map(prop => prop.node);
+
+                emitPropertyDeclarations(root, props, true);
             }
 
             type Primitive = number | string | boolean;
