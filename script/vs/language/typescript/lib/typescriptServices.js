@@ -38474,15 +38474,16 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             }
             return properties;
         }
-        function emitPropertyDeclarations(node, properties) {
+        function emitPropertyDeclarations(node, properties, emitAsPrototype) {
+            if (emitAsPrototype === void 0) { emitAsPrototype = false; }
             for (var _a = 0, properties_6 = properties; _a < properties_6.length; _a++) {
                 var property = properties_6[_a];
-                emitPropertyDeclaration(node, property);
+                emitPropertyDeclaration(node, property, undefined, undefined, emitAsPrototype);
             }
         }
-        function emitPropertyDeclaration(node, property, receiver, isExpression) {
+        function emitPropertyDeclaration(node, property, receiver, isExpression, asPrototype) {
             var isStaticProperty = property.flags & 64 /* Static */;
-            var nodeIsInterface = node.kind === 218 /* InterfaceDeclaration */;
+            var emitAsPrototype = node.kind === 218 /* InterfaceDeclaration */ || asPrototype;
             writeLine();
             if (!compilerOptions.emitAnnotations) {
                 emitLeadingComments(property);
@@ -38499,7 +38500,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                     emitModuleIfNeeded(node);
                     emitDeclarationName(node);
                 }
-                else if (nodeIsInterface) {
+                else if (emitAsPrototype) {
                     if (property.kind === 150 /* IndexSignature */) {
                         return;
                     }
@@ -38516,7 +38517,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 emitMemberAccessForPropertyName(property.name);
             }
             emitEnd(property.name);
-            if (!nodeIsInterface && property.initializer) {
+            if (!emitAsPrototype && property.initializer) {
                 write(" = ");
                 emit(property.initializer);
             }
@@ -39170,6 +39171,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             emitAnnotationIf(function () {
                 var type = "?";
                 var annotation;
+                var accessModifierKind = getAccessModifier(node);
                 if (node.type || node.initializer) {
                     type = getParameterOrUnionTypeAnnotation(node, node.type || node.initializer, isParameterPropertyAssignment);
                 }
@@ -39177,6 +39179,9 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 if (shouldEmitLeadingComments(node)) {
                     emitStartAnnotation();
                     emitCombinedLeadingComments(node);
+                    if (accessModifierKind === 110 /* PrivateKeyword */) {
+                        emitCommentedAnnotation("@" + ts.tokenToString(accessModifierKind));
+                    }
                     emitCommentedAnnotation(annotation + " {" + type + "}");
                     emitEndAnnotation();
                 }
@@ -39398,6 +39403,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             // If there is no property assignment, we can omit constructor if users do not define it
             var hasInstancePropertyWithInitializer = false;
             var nodeIsInterface = node.kind === 218 /* InterfaceDeclaration */;
+            var symbol = typeChecker.getSymbolAtLocation(node.name);
+            var isMergedDeclaration = symbol.declarations.length > 1;
             // Emit the constructor overload pinned comments
             ts.forEach(node.members, function (member) {
                 if (member.kind === 145 /* Constructor */ && !member.body) {
@@ -39494,26 +39501,8 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 }
             }
             if (node.members) {
-                var symbol = typeChecker.getSymbolAtLocation(node.name);
-                /** probably a merged declaration of class and interface with the same name */
-                if (symbol.declarations.length > 1) {
-                    ts.forEach(symbol.declarations, function (decl) {
-                        var props;
-                        if (decl.kind === 218 /* InterfaceDeclaration */) {
-                            props = getPropertiesSignatures(decl, false).map(function (prop) {
-                                return ts.cloneNode(prop, undefined, prop.flags, node);
-                            });
-                            decl = node;
-                        }
-                        else {
-                            props = getProperties(decl, false);
-                        }
-                        emitPropertyDeclarations(decl, props);
-                    });
-                }
-                else {
-                    emitPropertyDeclarations(node, getProperties(node, false));
-                }
+                var initializedMembers = node.members.filter(function (member) { return !!member.initializer && !isStatic(member); });
+                initializedMembers.forEach(function (prop) { return emitPropertyDeclaration(node, prop); });
             }
             if (ctor) {
                 var statements = ctor.body.statements;
@@ -39536,6 +39525,62 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
             if (shouldEmitSemicolon) {
                 write(";");
             }
+            if (node.members) {
+                if (isMergedDeclaration) {
+                    var cache = [];
+                    emitMergedTypePropertyDeclarations(node, node, cache);
+                }
+                else {
+                    emitPropertyDeclarations(node, getProperties(node, false), true);
+                }
+            }
+        }
+        function emitMergedTypePropertyDeclarations(root, node, cache) {
+            emitPropertyDeclarationsInternal(root, root, cache);
+            if (node.name) {
+                var symbol = typeChecker.getSymbolAtLocation(node.name);
+                if (symbol) {
+                    var filtered = node.symbol.declarations.filter(function (d) { return d !== node; });
+                    /** probably a merged declaration of class and interface with the same name */
+                    ts.forEach(filtered, function (el) {
+                        var heritage = ts.getClassExtendsHeritageClauseElement(el);
+                        var interfaces = [].concat(ts.getInterfaceBaseTypeNodes(el));
+                        if (heritage) {
+                            interfaces = interfaces.concat([heritage]);
+                        }
+                        interfaces = interfaces.filter(function (i) { return !!i; }).map(function (e) {
+                            var symbol = typeChecker.getSymbolAtLocation(e.expression);
+                            return getDeclarationFromSymbol(symbol);
+                        });
+                        interfaces.splice(0, 0, el);
+                        interfaces.forEach(function (e) { return emitPropertyDeclarationsInternal(root, e, cache); });
+                    });
+                }
+            }
+        }
+        function emitPropertyDeclarationsInternal(root, node, cache) {
+            var props;
+            if (node.kind === 218 /* InterfaceDeclaration */) {
+                props = getPropertiesSignatures(node, false).map(function (prop) { return ts.cloneNode(prop, undefined, prop.flags, root); });
+            }
+            else {
+                props = getProperties(node, false);
+            }
+            props = props.map(function (prop) {
+                return {
+                    node: prop,
+                    name: ts.getTextOfNode(prop.name)
+                };
+            })
+                .filter(function (prop) {
+                if (cache.indexOf(prop.name) === -1) {
+                    cache.push(prop.name);
+                    return true;
+                }
+                return false;
+            })
+                .map(function (prop) { return prop.node; });
+            emitPropertyDeclarations(root, props, true);
         }
         function clone(source, props) {
             var cloned = ts.createSynthesizedNode(source.kind);
@@ -47558,17 +47603,27 @@ ts.formatting.getFormattingScanner = function (sourceFile, startPos, endPos) {
 ts.formatting.FormattingContext = function (sourceFile, formattingRequestKind) {
     this.sourceFile = sourceFile;
     this.formattingRequestKind = formattingRequestKind;
-    this.currentTokenSpan;
-    this.nextTokenSpan;
-    this.contextNode;
-    this.currentTokenParent;
-    this.nextTokenParent;
-    this.contextNodeAllOnSameLine;
-    this.nextNodeAllOnSameLine;
-    this.tokensAreOnSameLine;
-    this.contextNodeBlockIsOnOneLine;
-    this.nextNodeBlockIsOnOneLine;
 };
+
+ts.formatting.FormattingContext.prototype.currentTokenSpan;
+
+ts.formatting.FormattingContext.prototype.nextTokenSpan;
+
+ts.formatting.FormattingContext.prototype.contextNode;
+
+ts.formatting.FormattingContext.prototype.currentTokenParent;
+
+ts.formatting.FormattingContext.prototype.nextTokenParent;
+
+ts.formatting.FormattingContext.prototype.contextNodeAllOnSameLine;
+
+ts.formatting.FormattingContext.prototype.nextNodeAllOnSameLine;
+
+ts.formatting.FormattingContext.prototype.tokensAreOnSameLine;
+
+ts.formatting.FormattingContext.prototype.contextNodeBlockIsOnOneLine;
+
+ts.formatting.FormattingContext.prototype.nextNodeBlockIsOnOneLine;
 
 ts.formatting.FormattingContext.prototype.updateContext = function (currentRange, currentTokenParent, nextRange, nextTokenParent, commonParent) {
     ts.Debug.assert(currentRange !== undefined, "currentTokenSpan is null");
@@ -47744,11 +47799,13 @@ ts.formatting.RuleFlags = {
 
 
 ts.formatting.RuleOperation = function () {
-    this.Context;
-    this.Action;
     this.Context = null;
     this.Action = null;
 };
+
+ts.formatting.RuleOperation.prototype.Context;
+
+ts.formatting.RuleOperation.prototype.Action;
 
 ts.formatting.RuleOperation.prototype.toString = function () {
     return "[context=" + this.Context + "," +
@@ -47776,9 +47833,10 @@ ts.formatting.RuleOperationContext = function (funcs$rest) {
     for (var _i = 0; _i < arguments.length; _i++) {
         funcs[_i - 0] = arguments[_i];
     }
-    this.customContextChecks;
     this.customContextChecks = funcs;
 };
+
+ts.formatting.RuleOperationContext.prototype.customContextChecks;
 
 ts.formatting.RuleOperationContext.prototype.IsAny = function () {
     return this === ts.formatting.RuleOperationContext.Any;
@@ -47808,171 +47866,6 @@ ts.formatting.Rules = function () {
     ///
     /// Common Rules
     ///
-    this.IgnoreBeforeComment;
-    this.IgnoreAfterLineComment;
-    // Space after keyword but not before ; or : or ?
-    this.NoSpaceBeforeSemicolon;
-    this.NoSpaceBeforeColon;
-    this.NoSpaceBeforeQuestionMark;
-    this.SpaceAfterColon;
-    // insert space after '?' only when it is used in conditional operator
-    this.SpaceAfterQuestionMarkInConditionalOperator;
-    // in other cases there should be no space between '?' and next token
-    this.NoSpaceAfterQuestionMark;
-    this.SpaceAfterSemicolon;
-    // Space/new line after }.
-    this.SpaceAfterCloseBrace;
-    // Special case for (}, else) and (}, while) since else & while tokens are not part of the tree which makes SpaceAfterCloseBrace rule not applied
-    // Also should not apply to })
-    this.SpaceBetweenCloseBraceAndElse;
-    this.SpaceBetweenCloseBraceAndWhile;
-    this.NoSpaceAfterCloseBrace;
-    // No space for dot
-    this.NoSpaceBeforeDot;
-    this.NoSpaceAfterDot;
-    // No space before and after indexer
-    this.NoSpaceBeforeOpenBracket;
-    this.NoSpaceAfterCloseBracket;
-    // Insert a space after { and before } in single-line contexts, but remove space from empty object literals {}.
-    this.SpaceAfterOpenBrace;
-    this.SpaceBeforeCloseBrace;
-    this.NoSpaceBetweenEmptyBraceBrackets;
-    // Insert new line after { and before } in multi-line contexts.
-    this.NewLineAfterOpenBraceInBlockContext;
-    // For functions and control block place } on a new line    [multi-line rule]
-    this.NewLineBeforeCloseBraceInBlockContext;
-    // Special handling of unary operators.
-    // Prefix operators generally shouldn't have a space between
-    // them and their target unary expression.
-    this.NoSpaceAfterUnaryPrefixOperator;
-    this.NoSpaceAfterUnaryPreincrementOperator;
-    this.NoSpaceAfterUnaryPredecrementOperator;
-    this.NoSpaceBeforeUnaryPostincrementOperator;
-    this.NoSpaceBeforeUnaryPostdecrementOperator;
-    // More unary operator special-casing.
-    // DevDiv 181814:  Be careful when removing leading whitespace
-    // around unary operators.  Examples:
-    //      1 - -2  --X-->  1--2
-    //      a + ++b --X-->  a+++b
-    this.SpaceAfterPostincrementWhenFollowedByAdd;
-    this.SpaceAfterAddWhenFollowedByUnaryPlus;
-    this.SpaceAfterAddWhenFollowedByPreincrement;
-    this.SpaceAfterPostdecrementWhenFollowedBySubtract;
-    this.SpaceAfterSubtractWhenFollowedByUnaryMinus;
-    this.SpaceAfterSubtractWhenFollowedByPredecrement;
-    this.NoSpaceBeforeComma;
-    this.SpaceAfterCertainKeywords;
-    this.SpaceAfterLetConstInVariableDeclaration;
-    this.NoSpaceBeforeOpenParenInFuncCall;
-    this.SpaceAfterFunctionInFuncDecl;
-    this.NoSpaceBeforeOpenParenInFuncDecl;
-    this.SpaceAfterVoidOperator;
-    this.NoSpaceBetweenReturnAndSemicolon;
-    // Add a space between statements. All keywords except (do,else,case) has open/close parens after them.
-    // So, we have a rule to add a space for [),Any], [do,Any], [else,Any], and [case,Any]
-    this.SpaceBetweenStatements;
-    // This low-pri rule takes care of "try {" and "finally {" in case the rule SpaceBeforeOpenBraceInControl didn't execute on FormatOnEnter.
-    this.SpaceAfterTryFinally;
-    // For get/set members, we check for (identifier,identifier) since get/set don't have tokens and they are represented as just an identifier token.
-    // Though, we do extra check on the context to make sure we are dealing with get/set node. Example:
-    //      get x() {}
-    //      set x(val) {}
-    this.SpaceAfterGetSetInMember;
-    // Special case for binary operators (that are keywords). For these we have to add a space and shouldn't follow any user options.
-    this.SpaceBeforeBinaryKeywordOperator;
-    this.SpaceAfterBinaryKeywordOperator;
-    // TypeScript-specific rules
-    // Treat constructor as an identifier in a function declaration, and remove spaces between constructor and following left parentheses
-    this.NoSpaceAfterConstructor;
-    // Use of module as a function call. e.g.: import m2 = module("m2");
-    this.NoSpaceAfterModuleImport;
-    // Add a space around certain TypeScript keywords
-    this.SpaceAfterCertainTypeScriptKeywords;
-    this.SpaceBeforeCertainTypeScriptKeywords;
-    // Treat string literals in module names as identifiers, and add a space between the literal and the opening Brace braces, e.g.: module "m2" {
-    this.SpaceAfterModuleName;
-    // Lambda expressions
-    this.SpaceBeforeArrow;
-    this.SpaceAfterArrow;
-    // Optional parameters and let args
-    this.NoSpaceAfterEllipsis;
-    this.NoSpaceAfterOptionalParameters;
-    // generics
-    this.NoSpaceBeforeOpenAngularBracket;
-    this.NoSpaceBetweenCloseParenAndAngularBracket;
-    this.NoSpaceAfterOpenAngularBracket;
-    this.NoSpaceBeforeCloseAngularBracket;
-    this.NoSpaceAfterCloseAngularBracket;
-    this.NoSpaceAfterTypeAssertion;
-    // Remove spaces in empty interface literals. e.g.: x: {}
-    this.NoSpaceBetweenEmptyInterfaceBraceBrackets;
-    // These rules are higher in priority than user-configurable rules.
-    this.HighPriorityCommonRules;
-    // These rules are lower in priority than user-configurable rules.
-    this.LowPriorityCommonRules;
-    ///
-    /// Rules controlled by user options
-    ///
-    // Insert space after comma delimiter
-    this.SpaceAfterComma;
-    this.NoSpaceAfterComma;
-    // Insert space before and after binary operators
-    this.SpaceBeforeBinaryOperator;
-    this.SpaceAfterBinaryOperator;
-    this.NoSpaceBeforeBinaryOperator;
-    this.NoSpaceAfterBinaryOperator;
-    // Insert space after keywords in control flow statements
-    this.SpaceAfterKeywordInControl;
-    this.NoSpaceAfterKeywordInControl;
-    // Open Brace braces after function
-    //TypeScript: Function can have return types, which can be made of tons of different token kinds
-    this.FunctionOpenBraceLeftTokenRange;
-    this.SpaceBeforeOpenBraceInFunction;
-    this.NewLineBeforeOpenBraceInFunction;
-    // Open Brace braces after TypeScript module/class/interface
-    this.TypeScriptOpenBraceLeftTokenRange;
-    this.SpaceBeforeOpenBraceInTypeScriptDeclWithBlock;
-    this.NewLineBeforeOpenBraceInTypeScriptDeclWithBlock;
-    // Open Brace braces after control block
-    this.ControlOpenBraceLeftTokenRange;
-    this.SpaceBeforeOpenBraceInControl;
-    this.NewLineBeforeOpenBraceInControl;
-    // Insert space after semicolon in for statement
-    this.SpaceAfterSemicolonInFor;
-    this.NoSpaceAfterSemicolonInFor;
-    // Insert space after opening and before closing nonempty parenthesis
-    this.SpaceAfterOpenParen;
-    this.SpaceBeforeCloseParen;
-    this.NoSpaceBetweenParens;
-    this.NoSpaceAfterOpenParen;
-    this.NoSpaceBeforeCloseParen;
-    // Insert space after opening and before closing nonempty brackets
-    this.SpaceAfterOpenBracket;
-    this.SpaceBeforeCloseBracket;
-    this.NoSpaceBetweenBrackets;
-    this.NoSpaceAfterOpenBracket;
-    this.NoSpaceBeforeCloseBracket;
-    // Insert space after function keyword for anonymous functions
-    this.SpaceAfterAnonymousFunctionKeyword;
-    this.NoSpaceAfterAnonymousFunctionKeyword;
-    // Insert space after @ in decorator
-    this.SpaceBeforeAt;
-    this.NoSpaceAfterAt;
-    this.SpaceAfterDecorator;
-    // Generator: function*
-    this.NoSpaceBetweenFunctionKeywordAndStar;
-    this.SpaceAfterStarInGeneratorDeclaration;
-    this.NoSpaceBetweenYieldKeywordAndStar;
-    this.SpaceBetweenYieldOrYieldStarAndOperand;
-    // Async functions
-    this.SpaceBetweenAsyncAndOpenParen;
-    this.SpaceBetweenAsyncAndFunctionKeyword;
-    // Template strings
-    this.NoSpaceBetweenTagAndTemplateString;
-    this.NoSpaceAfterTemplateHeadAndMiddle;
-    this.SpaceAfterTemplateHeadAndMiddle;
-    this.NoSpaceBeforeTemplateMiddleAndTail;
-    this.SpaceBeforeTemplateMiddleAndTail;
     // Leave comments alone
     this.IgnoreBeforeComment = new ts.formatting.Rule(ts.formatting.RuleDescriptor.create4(ts.formatting.Shared.TokenRange.Any, ts.formatting.Shared.TokenRange.Comments), ts.formatting.RuleOperation.create1(1 /* Ignore */));
     this.IgnoreAfterLineComment = new ts.formatting.Rule(ts.formatting.RuleDescriptor.create3(2 /* SingleLineCommentTrivia */, ts.formatting.Shared.TokenRange.Any), ts.formatting.RuleOperation.create1(1 /* Ignore */));
@@ -48190,6 +48083,280 @@ ts.formatting.Rules = function () {
     this.SpaceAfterAnonymousFunctionKeyword = new ts.formatting.Rule(ts.formatting.RuleDescriptor.create1(87 /* FunctionKeyword */, 17 /* OpenParenToken */), ts.formatting.RuleOperation.create2(new ts.formatting.RuleOperationContext(ts.formatting.Rules.IsFunctionDeclContext), 2 /* Space */));
     this.NoSpaceAfterAnonymousFunctionKeyword = new ts.formatting.Rule(ts.formatting.RuleDescriptor.create1(87 /* FunctionKeyword */, 17 /* OpenParenToken */), ts.formatting.RuleOperation.create2(new ts.formatting.RuleOperationContext(ts.formatting.Rules.IsFunctionDeclContext), 8 /* Delete */));
 };
+
+ts.formatting.Rules.prototype.IgnoreBeforeComment;
+
+ts.formatting.Rules.prototype.IgnoreAfterLineComment;
+// Space after keyword but not before ; or : or ?
+
+ts.formatting.Rules.prototype.NoSpaceBeforeSemicolon;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeColon;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeQuestionMark;
+
+ts.formatting.Rules.prototype.SpaceAfterColon;
+// insert space after '?' only when it is used in conditional operator
+
+ts.formatting.Rules.prototype.SpaceAfterQuestionMarkInConditionalOperator;
+// in other cases there should be no space between '?' and next token
+
+ts.formatting.Rules.prototype.NoSpaceAfterQuestionMark;
+
+ts.formatting.Rules.prototype.SpaceAfterSemicolon;
+// Space/new line after }.
+
+ts.formatting.Rules.prototype.SpaceAfterCloseBrace;
+// Special case for (}, else) and (}, while) since else & while tokens are not part of the tree which makes SpaceAfterCloseBrace rule not applied
+// Also should not apply to })
+
+ts.formatting.Rules.prototype.SpaceBetweenCloseBraceAndElse;
+
+ts.formatting.Rules.prototype.SpaceBetweenCloseBraceAndWhile;
+
+ts.formatting.Rules.prototype.NoSpaceAfterCloseBrace;
+// No space for dot
+
+ts.formatting.Rules.prototype.NoSpaceBeforeDot;
+
+ts.formatting.Rules.prototype.NoSpaceAfterDot;
+// No space before and after indexer
+
+ts.formatting.Rules.prototype.NoSpaceBeforeOpenBracket;
+
+ts.formatting.Rules.prototype.NoSpaceAfterCloseBracket;
+// Insert a space after { and before } in single-line contexts, but remove space from empty object literals {}.
+
+ts.formatting.Rules.prototype.SpaceAfterOpenBrace;
+
+ts.formatting.Rules.prototype.SpaceBeforeCloseBrace;
+
+ts.formatting.Rules.prototype.NoSpaceBetweenEmptyBraceBrackets;
+// Insert new line after { and before } in multi-line contexts.
+
+ts.formatting.Rules.prototype.NewLineAfterOpenBraceInBlockContext;
+// For functions and control block place } on a new line    [multi-line rule]
+
+ts.formatting.Rules.prototype.NewLineBeforeCloseBraceInBlockContext;
+// Special handling of unary operators.
+// Prefix operators generally shouldn't have a space between
+// them and their target unary expression.
+
+ts.formatting.Rules.prototype.NoSpaceAfterUnaryPrefixOperator;
+
+ts.formatting.Rules.prototype.NoSpaceAfterUnaryPreincrementOperator;
+
+ts.formatting.Rules.prototype.NoSpaceAfterUnaryPredecrementOperator;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeUnaryPostincrementOperator;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeUnaryPostdecrementOperator;
+// More unary operator special-casing.
+// DevDiv 181814:  Be careful when removing leading whitespace
+// around unary operators.  Examples:
+//      1 - -2  --X-->  1--2
+//      a + ++b --X-->  a+++b
+
+ts.formatting.Rules.prototype.SpaceAfterPostincrementWhenFollowedByAdd;
+
+ts.formatting.Rules.prototype.SpaceAfterAddWhenFollowedByUnaryPlus;
+
+ts.formatting.Rules.prototype.SpaceAfterAddWhenFollowedByPreincrement;
+
+ts.formatting.Rules.prototype.SpaceAfterPostdecrementWhenFollowedBySubtract;
+
+ts.formatting.Rules.prototype.SpaceAfterSubtractWhenFollowedByUnaryMinus;
+
+ts.formatting.Rules.prototype.SpaceAfterSubtractWhenFollowedByPredecrement;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeComma;
+
+ts.formatting.Rules.prototype.SpaceAfterCertainKeywords;
+
+ts.formatting.Rules.prototype.SpaceAfterLetConstInVariableDeclaration;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeOpenParenInFuncCall;
+
+ts.formatting.Rules.prototype.SpaceAfterFunctionInFuncDecl;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeOpenParenInFuncDecl;
+
+ts.formatting.Rules.prototype.SpaceAfterVoidOperator;
+
+ts.formatting.Rules.prototype.NoSpaceBetweenReturnAndSemicolon;
+// Add a space between statements. All keywords except (do,else,case) has open/close parens after them.
+// So, we have a rule to add a space for [),Any], [do,Any], [else,Any], and [case,Any]
+
+ts.formatting.Rules.prototype.SpaceBetweenStatements;
+// This low-pri rule takes care of "try {" and "finally {" in case the rule SpaceBeforeOpenBraceInControl didn't execute on FormatOnEnter.
+
+ts.formatting.Rules.prototype.SpaceAfterTryFinally;
+// For get/set members, we check for (identifier,identifier) since get/set don't have tokens and they are represented as just an identifier token.
+// Though, we do extra check on the context to make sure we are dealing with get/set node. Example:
+//      get x() {}
+//      set x(val) {}
+
+ts.formatting.Rules.prototype.SpaceAfterGetSetInMember;
+// Special case for binary operators (that are keywords). For these we have to add a space and shouldn't follow any user options.
+
+ts.formatting.Rules.prototype.SpaceBeforeBinaryKeywordOperator;
+
+ts.formatting.Rules.prototype.SpaceAfterBinaryKeywordOperator;
+// TypeScript-specific rules
+// Treat constructor as an identifier in a function declaration, and remove spaces between constructor and following left parentheses
+
+ts.formatting.Rules.prototype.NoSpaceAfterConstructor;
+// Use of module as a function call. e.g.: import m2 = module("m2");
+
+ts.formatting.Rules.prototype.NoSpaceAfterModuleImport;
+// Add a space around certain TypeScript keywords
+
+ts.formatting.Rules.prototype.SpaceAfterCertainTypeScriptKeywords;
+
+ts.formatting.Rules.prototype.SpaceBeforeCertainTypeScriptKeywords;
+// Treat string literals in module names as identifiers, and add a space between the literal and the opening Brace braces, e.g.: module "m2" {
+
+ts.formatting.Rules.prototype.SpaceAfterModuleName;
+// Lambda expressions
+
+ts.formatting.Rules.prototype.SpaceBeforeArrow;
+
+ts.formatting.Rules.prototype.SpaceAfterArrow;
+// Optional parameters and let args
+
+ts.formatting.Rules.prototype.NoSpaceAfterEllipsis;
+
+ts.formatting.Rules.prototype.NoSpaceAfterOptionalParameters;
+// generics
+
+ts.formatting.Rules.prototype.NoSpaceBeforeOpenAngularBracket;
+
+ts.formatting.Rules.prototype.NoSpaceBetweenCloseParenAndAngularBracket;
+
+ts.formatting.Rules.prototype.NoSpaceAfterOpenAngularBracket;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeCloseAngularBracket;
+
+ts.formatting.Rules.prototype.NoSpaceAfterCloseAngularBracket;
+
+ts.formatting.Rules.prototype.NoSpaceAfterTypeAssertion;
+// Remove spaces in empty interface literals. e.g.: x: {}
+
+ts.formatting.Rules.prototype.NoSpaceBetweenEmptyInterfaceBraceBrackets;
+// These rules are higher in priority than user-configurable rules.
+
+ts.formatting.Rules.prototype.HighPriorityCommonRules;
+// These rules are lower in priority than user-configurable rules.
+
+ts.formatting.Rules.prototype.LowPriorityCommonRules;
+///
+/// Rules controlled by user options
+///
+// Insert space after comma delimiter
+
+ts.formatting.Rules.prototype.SpaceAfterComma;
+
+ts.formatting.Rules.prototype.NoSpaceAfterComma;
+// Insert space before and after binary operators
+
+ts.formatting.Rules.prototype.SpaceBeforeBinaryOperator;
+
+ts.formatting.Rules.prototype.SpaceAfterBinaryOperator;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeBinaryOperator;
+
+ts.formatting.Rules.prototype.NoSpaceAfterBinaryOperator;
+// Insert space after keywords in control flow statements
+
+ts.formatting.Rules.prototype.SpaceAfterKeywordInControl;
+
+ts.formatting.Rules.prototype.NoSpaceAfterKeywordInControl;
+// Open Brace braces after function
+//TypeScript: Function can have return types, which can be made of tons of different token kinds
+
+ts.formatting.Rules.prototype.FunctionOpenBraceLeftTokenRange;
+
+ts.formatting.Rules.prototype.SpaceBeforeOpenBraceInFunction;
+
+ts.formatting.Rules.prototype.NewLineBeforeOpenBraceInFunction;
+// Open Brace braces after TypeScript module/class/interface
+
+ts.formatting.Rules.prototype.TypeScriptOpenBraceLeftTokenRange;
+
+ts.formatting.Rules.prototype.SpaceBeforeOpenBraceInTypeScriptDeclWithBlock;
+
+ts.formatting.Rules.prototype.NewLineBeforeOpenBraceInTypeScriptDeclWithBlock;
+// Open Brace braces after control block
+
+ts.formatting.Rules.prototype.ControlOpenBraceLeftTokenRange;
+
+ts.formatting.Rules.prototype.SpaceBeforeOpenBraceInControl;
+
+ts.formatting.Rules.prototype.NewLineBeforeOpenBraceInControl;
+// Insert space after semicolon in for statement
+
+ts.formatting.Rules.prototype.SpaceAfterSemicolonInFor;
+
+ts.formatting.Rules.prototype.NoSpaceAfterSemicolonInFor;
+// Insert space after opening and before closing nonempty parenthesis
+
+ts.formatting.Rules.prototype.SpaceAfterOpenParen;
+
+ts.formatting.Rules.prototype.SpaceBeforeCloseParen;
+
+ts.formatting.Rules.prototype.NoSpaceBetweenParens;
+
+ts.formatting.Rules.prototype.NoSpaceAfterOpenParen;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeCloseParen;
+// Insert space after opening and before closing nonempty brackets
+
+ts.formatting.Rules.prototype.SpaceAfterOpenBracket;
+
+ts.formatting.Rules.prototype.SpaceBeforeCloseBracket;
+
+ts.formatting.Rules.prototype.NoSpaceBetweenBrackets;
+
+ts.formatting.Rules.prototype.NoSpaceAfterOpenBracket;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeCloseBracket;
+// Insert space after function keyword for anonymous functions
+
+ts.formatting.Rules.prototype.SpaceAfterAnonymousFunctionKeyword;
+
+ts.formatting.Rules.prototype.NoSpaceAfterAnonymousFunctionKeyword;
+// Insert space after @ in decorator
+
+ts.formatting.Rules.prototype.SpaceBeforeAt;
+
+ts.formatting.Rules.prototype.NoSpaceAfterAt;
+
+ts.formatting.Rules.prototype.SpaceAfterDecorator;
+// Generator: function*
+
+ts.formatting.Rules.prototype.NoSpaceBetweenFunctionKeywordAndStar;
+
+ts.formatting.Rules.prototype.SpaceAfterStarInGeneratorDeclaration;
+
+ts.formatting.Rules.prototype.NoSpaceBetweenYieldKeywordAndStar;
+
+ts.formatting.Rules.prototype.SpaceBetweenYieldOrYieldStarAndOperand;
+// Async functions
+
+ts.formatting.Rules.prototype.SpaceBetweenAsyncAndOpenParen;
+
+ts.formatting.Rules.prototype.SpaceBetweenAsyncAndFunctionKeyword;
+// Template strings
+
+ts.formatting.Rules.prototype.NoSpaceBetweenTagAndTemplateString;
+
+ts.formatting.Rules.prototype.NoSpaceAfterTemplateHeadAndMiddle;
+
+ts.formatting.Rules.prototype.SpaceAfterTemplateHeadAndMiddle;
+
+ts.formatting.Rules.prototype.NoSpaceBeforeTemplateMiddleAndTail;
+
+ts.formatting.Rules.prototype.SpaceBeforeTemplateMiddleAndTail;
 
 ts.formatting.Rules.prototype.getRuleName = function (rule) {
     var o = this;
@@ -48506,11 +48673,13 @@ ts.formatting.Rules.IsYieldOrYieldStarWithOperand = function (context) {
 
 
 ts.formatting.RulesMap = function () {
-    this.map;
-    this.mapRowLength;
     this.map = [];
     this.mapRowLength = 0;
 };
+
+ts.formatting.RulesMap.prototype.map;
+
+ts.formatting.RulesMap.prototype.mapRowLength;
 
 ts.formatting.RulesMap.create = function (rules) {
     var result = new ts.formatting.RulesMap();
@@ -48590,7 +48759,6 @@ ts.formatting.RulesPosition = {
 };
 
 ts.formatting.RulesBucketConstructionState = function () {
-    this.rulesInsertionIndexBitmap;
     //// The Rules list contains all the inserted rules into a rulebucket in the following order:
     ////    1- Ignore rules with specific token combination
     ////    2- Ignore rules with any token combination
@@ -48608,6 +48776,8 @@ ts.formatting.RulesBucketConstructionState = function () {
     //// the values in the bitmap segments 3rd, 2nd, and 1st.
     this.rulesInsertionIndexBitmap = 0;
 };
+
+ts.formatting.RulesBucketConstructionState.prototype.rulesInsertionIndexBitmap;
 
 ts.formatting.RulesBucketConstructionState.prototype.GetInsertionIndex = function (maskPosition) {
     var index = 0;
@@ -48631,9 +48801,10 @@ ts.formatting.RulesBucketConstructionState.prototype.IncreaseInsertionIndex = fu
 };
 
 ts.formatting.RulesBucket = function () {
-    this.rules;
     this.rules = [];
 };
+
+ts.formatting.RulesBucket.prototype.rules;
 
 ts.formatting.RulesBucket.prototype.Rules = function () {
     return this.rules;
@@ -48673,7 +48844,6 @@ ts.formatting.RulesBucket.prototype.AddRule = function (rule, specificTokens, co
 ts.formatting.Shared = {};
 
 ts.formatting.Shared.TokenRangeAccess = function (from, to, except) {
-    this.tokens;
     this.tokens = [];
     for (var token = from; token <= to; token++) {
         if (ts.indexOf(except, token) < 0) {
@@ -48681,6 +48851,8 @@ ts.formatting.Shared.TokenRangeAccess = function (from, to, except) {
         }
     }
 };
+
+ts.formatting.Shared.TokenRangeAccess.prototype.tokens;
 
 ts.formatting.Shared.TokenRangeAccess.prototype.GetTokens = function () {
     return this.tokens;
@@ -48691,9 +48863,10 @@ ts.formatting.Shared.TokenRangeAccess.prototype.Contains = function (token) {
 };
 
 ts.formatting.Shared.TokenValuesAccess = function (tks) {
-    this.tokens;
     this.tokens = tks && tks.length ? tks : [];
 };
+
+ts.formatting.Shared.TokenValuesAccess.prototype.tokens;
 
 ts.formatting.Shared.TokenValuesAccess.prototype.GetTokens = function () {
     return this.tokens;
@@ -48811,12 +48984,16 @@ ts.formatting.Shared.TokenRange.TypeNames = ts.formatting.Shared.TokenRange.From
 
 
 ts.formatting.RulesProvider = function () {
-    this.globalRules;
-    this.options;
-    this.activeRules;
-    this.rulesMap;
     this.globalRules = new ts.formatting.Rules();
 };
+
+ts.formatting.RulesProvider.prototype.globalRules;
+
+ts.formatting.RulesProvider.prototype.options;
+
+ts.formatting.RulesProvider.prototype.activeRules;
+
+ts.formatting.RulesProvider.prototype.rulesMap;
 
 ts.formatting.RulesProvider.prototype.getRuleName = function (rule) {
     return this.globalRules.getRuleName(rule);
@@ -50365,18 +50542,24 @@ ts.createNode = function (kind, pos, end, flags, parent) {
 };
 
 ts.NodeObject = function (kind, pos, end) {
-    this.kind;
-    this.pos;
-    this.end;
-    this.flags;
-    this.parent;
-    this._children;
     this.kind = kind;
     this.pos = pos;
     this.end = end;
     this.flags = 0 /* None */;
     this.parent = undefined;
 };
+
+ts.NodeObject.prototype.kind;
+
+ts.NodeObject.prototype.pos;
+
+ts.NodeObject.prototype.end;
+
+ts.NodeObject.prototype.flags;
+
+ts.NodeObject.prototype.parent;
+
+ts.NodeObject.prototype._children;
 
 ts.NodeObject.prototype.getSourceFile = function () {
     return ts.getSourceFileOfNode(this);
@@ -50510,15 +50693,19 @@ ts.NodeObject.prototype.getLastToken = function (sourceFile) {
 };
 
 ts.SymbolObject = function (flags, name) {
-    this.flags;
-    this.name;
-    this.declarations;
-    // Undefined is used to indicate the value has not been computed. If, after computing, the
-    // symbol has no doc comment, then the empty string will be returned.
-    this.documentationComment;
     this.flags = flags;
     this.name = name;
 };
+
+ts.SymbolObject.prototype.flags;
+
+ts.SymbolObject.prototype.name;
+
+ts.SymbolObject.prototype.declarations;
+// Undefined is used to indicate the value has not been computed. If, after computing, the
+// symbol has no doc comment, then the empty string will be returned.
+
+ts.SymbolObject.prototype.documentationComment;
 
 ts.SymbolObject.prototype.getFlags = function () {
     return this.flags;
@@ -50818,13 +51005,17 @@ ts.getJsDocCommentsFromDeclarations = function (declarations, name, canUseParsed
 };
 
 ts.TypeObject = function (checker, flags) {
-    this.checker;
-    this.flags;
-    this.id;
-    this.symbol;
     this.checker = checker;
     this.flags = flags;
 };
+
+ts.TypeObject.prototype.checker;
+
+ts.TypeObject.prototype.flags;
+
+ts.TypeObject.prototype.id;
+
+ts.TypeObject.prototype.symbol;
 
 ts.TypeObject.prototype.getFlags = function () {
     return this.flags;
@@ -50869,19 +51060,28 @@ ts.TypeObject.prototype.getBaseTypes = function () {
 };
 
 ts.SignatureObject = function (checker) {
-    this.checker;
-    this.declaration;
-    this.typeParameters;
-    this.parameters;
-    this.resolvedReturnType;
-    this.minArgumentCount;
-    this.hasRestParameter;
-    this.hasStringLiterals;
-    // Undefined is used to indicate the value has not been computed. If, after computing, the
-    // symbol has no doc comment, then the empty string will be returned.
-    this.documentationComment;
     this.checker = checker;
 };
+
+ts.SignatureObject.prototype.checker;
+
+ts.SignatureObject.prototype.declaration;
+
+ts.SignatureObject.prototype.typeParameters;
+
+ts.SignatureObject.prototype.parameters;
+
+ts.SignatureObject.prototype.resolvedReturnType;
+
+ts.SignatureObject.prototype.minArgumentCount;
+
+ts.SignatureObject.prototype.hasRestParameter;
+
+ts.SignatureObject.prototype.hasStringLiterals;
+// Undefined is used to indicate the value has not been computed. If, after computing, the
+// symbol has no doc comment, then the empty string will be returned.
+
+ts.SignatureObject.prototype.documentationComment;
 
 ts.SignatureObject.prototype.getDeclaration = function () {
     return this.declaration;
@@ -50910,39 +51110,71 @@ ts.SignatureObject.prototype.getDocumentationComment = function () {
 
 ts.SourceFileObject = function (kind, pos, end) {
     ts.NodeObject.call(this, kind, pos, end);
-    this._declarationBrand;
-    this.fileName;
-    this.path;
-    this.text;
-    this.scriptSnapshot;
-    this.lineMap;
-    this.statements;
-    this.endOfFileToken;
-    this.amdDependencies;
-    this.moduleName;
-    this.referencedFiles;
-    this.syntacticDiagnostics;
-    this.referenceDiagnostics;
-    this.parseDiagnostics;
-    this.bindDiagnostics;
-    this.isDefaultLib;
-    this.hasNoDefaultLib;
-    this.externalModuleIndicator; // The first node that causes this file to be an external module
-    this.commonJsModuleIndicator; // The first node that causes this file to be a CommonJS module
-    this.nodeCount;
-    this.identifierCount;
-    this.symbolCount;
-    this.version;
-    this.scriptKind;
-    this.languageVersion;
-    this.languageVariant;
-    this.identifiers;
-    this.nameTable;
-    this.resolvedModules;
-    this.imports;
-    this.moduleAugmentations;
-    this.namedDeclarations;
 };
+
+ts.SourceFileObject.prototype._declarationBrand;
+
+ts.SourceFileObject.prototype.fileName;
+
+ts.SourceFileObject.prototype.path;
+
+ts.SourceFileObject.prototype.text;
+
+ts.SourceFileObject.prototype.scriptSnapshot;
+
+ts.SourceFileObject.prototype.lineMap;
+
+ts.SourceFileObject.prototype.statements;
+
+ts.SourceFileObject.prototype.endOfFileToken;
+
+ts.SourceFileObject.prototype.amdDependencies;
+
+ts.SourceFileObject.prototype.moduleName;
+
+ts.SourceFileObject.prototype.referencedFiles;
+
+ts.SourceFileObject.prototype.syntacticDiagnostics;
+
+ts.SourceFileObject.prototype.referenceDiagnostics;
+
+ts.SourceFileObject.prototype.parseDiagnostics;
+
+ts.SourceFileObject.prototype.bindDiagnostics;
+
+ts.SourceFileObject.prototype.isDefaultLib;
+
+ts.SourceFileObject.prototype.hasNoDefaultLib;
+
+ts.SourceFileObject.prototype.externalModuleIndicator; // The first node that causes this file to be an external module
+
+ts.SourceFileObject.prototype.commonJsModuleIndicator; // The first node that causes this file to be a CommonJS module
+
+ts.SourceFileObject.prototype.nodeCount;
+
+ts.SourceFileObject.prototype.identifierCount;
+
+ts.SourceFileObject.prototype.symbolCount;
+
+ts.SourceFileObject.prototype.version;
+
+ts.SourceFileObject.prototype.scriptKind;
+
+ts.SourceFileObject.prototype.languageVersion;
+
+ts.SourceFileObject.prototype.languageVariant;
+
+ts.SourceFileObject.prototype.identifiers;
+
+ts.SourceFileObject.prototype.nameTable;
+
+ts.SourceFileObject.prototype.resolvedModules;
+
+ts.SourceFileObject.prototype.imports;
+
+ts.SourceFileObject.prototype.moduleAugmentations;
+
+ts.SourceFileObject.prototype.namedDeclarations;
 
 __extends(ts.SourceFileObject, ts.NodeObject);
 
@@ -51112,9 +51344,11 @@ ts.SourceFileObject.prototype.computeNamedDeclarations = function () {
 };
 
 ts.TextChange = function () {
-    this.span;
-    this.newText;
 };
+
+ts.TextChange.prototype.span;
+
+ts.TextChange.prototype.newText;
 
 ts.HighlightSpanKind = {};
 
@@ -51476,9 +51710,6 @@ ts.getDefaultCompilerOptions = function () {
 ts.HostCache = function (host, getCanonicalFileName) {
     this.host = host;
     this.getCanonicalFileName = getCanonicalFileName;
-    this.fileNameToEntry;
-    this._compilationSettings;
-    this.currentDirectory;
     // script id => script index
     this.currentDirectory = host.getCurrentDirectory();
     this.fileNameToEntry = ts.createFileMap();
@@ -51491,6 +51722,12 @@ ts.HostCache = function (host, getCanonicalFileName) {
     // store the compilation settings
     this._compilationSettings = host.getCompilationSettings() || ts.getDefaultCompilerOptions();
 };
+
+ts.HostCache.prototype.fileNameToEntry;
+
+ts.HostCache.prototype._compilationSettings;
+
+ts.HostCache.prototype.currentDirectory;
 
 ts.HostCache.prototype.compilationSettings = function () {
     return this._compilationSettings;
@@ -51549,13 +51786,17 @@ ts.HostCache.prototype.getScriptSnapshot = function (path) {
 
 ts.SyntaxTreeCache = function (host) {
     this.host = host;
-    // For our syntactic only features, we also keep a cache of the syntax tree for the
-    // currently edited file.
-    this.currentFileName;
-    this.currentFileVersion;
-    this.currentFileScriptSnapshot;
-    this.currentSourceFile;
 };
+// For our syntactic only features, we also keep a cache of the syntax tree for the
+// currently edited file.
+
+ts.SyntaxTreeCache.prototype.currentFileName;
+
+ts.SyntaxTreeCache.prototype.currentFileVersion;
+
+ts.SyntaxTreeCache.prototype.currentFileScriptSnapshot;
+
+ts.SyntaxTreeCache.prototype.currentSourceFile;
 
 ts.SyntaxTreeCache.prototype.getCurrentSourceFile = function (fileName) {
     var scriptSnapshot = this.host.getScriptSnapshot(fileName);
@@ -57683,11 +57924,8 @@ ts.ScriptSnapshotShimAdapter.prototype.dispose = function () {
 ts.LanguageServiceShimHostAdapter = function (shimHost) {
     var _this = this;
     this.shimHost = shimHost;
-    this.files;
     this.loggingEnabled = false;
     this.tracingEnabled = false;
-    this.resolveModuleNames;
-    this.directoryExists;
     // if shimHost is a COM object then property check will become method call with no arguments.
     // 'in' does not have this effect. 
     if ("getModuleResolutionsForFile" in this.shimHost) {
@@ -57703,6 +57941,16 @@ ts.LanguageServiceShimHostAdapter = function (shimHost) {
         this.directoryExists = function (directoryName) { return _this.shimHost.directoryExists(directoryName); };
     }
 };
+
+ts.LanguageServiceShimHostAdapter.prototype.files;
+
+ts.LanguageServiceShimHostAdapter.prototype.loggingEnabled;
+
+ts.LanguageServiceShimHostAdapter.prototype.tracingEnabled;
+
+ts.LanguageServiceShimHostAdapter.prototype.resolveModuleNames;
+
+ts.LanguageServiceShimHostAdapter.prototype.directoryExists;
 
 ts.LanguageServiceShimHostAdapter.prototype.log = function (s) {
     if (this.loggingEnabled) {
@@ -57799,6 +58047,11 @@ ts.ThrottledCancellationToken = function (hostCancellationToken) {
     // time has passed.
     this.lastCancellationCheckTime = 0;
 };
+// Store when we last tried to cancel.  Checking cancellation can be expensive (as we have
+// to marshall over to the host layer).  So we only bother actually checking once enough
+// time has passed.
+
+ts.ThrottledCancellationToken.prototype.lastCancellationCheckTime;
 
 ts.ThrottledCancellationToken.prototype.isCancellationRequested = function () {
     var time = Date.now();
@@ -57814,11 +58067,12 @@ ts.ThrottledCancellationToken.prototype.isCancellationRequested = function () {
 ts.CoreServicesShimHostAdapter = function (shimHost) {
     var _this = this;
     this.shimHost = shimHost;
-    this.directoryExists;
     if ("directoryExists" in this.shimHost) {
         this.directoryExists = function (directoryName) { return _this.shimHost.directoryExists(directoryName); };
     }
 };
+
+ts.CoreServicesShimHostAdapter.prototype.directoryExists;
 
 ts.CoreServicesShimHostAdapter.prototype.readDirectory = function (rootDir, extension, exclude, depth) {
     // Wrap the API changes for 2.0 release. This try/catch
@@ -57905,10 +58159,13 @@ ts.LanguageServiceShimObject = function (factory, host, languageService) {
     ts.ShimBase.call(this, factory);
     this.host = host;
     this.languageService = languageService;
-    this.logger;
     this.logPerformance = false;
     this.logger = this.host;
 };
+
+ts.LanguageServiceShimObject.prototype.logger;
+
+ts.LanguageServiceShimObject.prototype.logPerformance;
 
 __extends(ts.LanguageServiceShimObject, ts.ShimBase);
 
@@ -58207,10 +58464,13 @@ ts.convertClassifications = function (classifications) {
 ts.ClassifierShimObject = function (factory, logger) {
     ts.ShimBase.call(this, factory);
     this.logger = logger;
-    this.classifier;
     this.logPerformance = false;
     this.classifier = ts.createClassifier();
 };
+
+ts.ClassifierShimObject.prototype.classifier;
+
+ts.ClassifierShimObject.prototype.logPerformance;
 
 __extends(ts.ClassifierShimObject, ts.ShimBase);
 
@@ -58239,6 +58499,8 @@ ts.CoreServicesShimObject = function (factory, logger, host) {
     this.host = host;
     this.logPerformance = false;
 };
+
+ts.CoreServicesShimObject.prototype.logPerformance;
 
 __extends(ts.CoreServicesShimObject, ts.ShimBase);
 
@@ -58327,8 +58589,11 @@ ts.CoreServicesShimObject.prototype.discoverTypings = function (discoverTypingsJ
 
 ts.TypeScriptServicesFactory = function () {
     this._shims = [];
-    this.documentRegistry;
 };
+
+ts.TypeScriptServicesFactory.prototype._shims;
+
+ts.TypeScriptServicesFactory.prototype.documentRegistry;
 
 
 /*
