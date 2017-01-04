@@ -39580,7 +39580,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 return false;
             })
                 .map(function (prop) { return prop.node; });
-            emitPropertyDeclarations(node, props, true);
+            emitPropertyDeclarations(root, props, true);
         }
         function clone(source, props) {
             var cloned = ts.createSynthesizedNode(source.kind);
