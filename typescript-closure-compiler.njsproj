@@ -42,6 +42,7 @@
     <TypeScriptCompile Include="src\compiler\binder.ts" />
     <TypeScriptCompile Include="src\compiler\checker.ts" />
     <TypeScriptCompile Include="src\compiler\commandLineParser.ts" />
+    <TypeScriptCompile Include="src\compiler\comments.ts" />
     <TypeScriptCompile Include="src\compiler\core.ts" />
     <TypeScriptCompile Include="src\compiler\declarationEmitter.ts" />
     <TypeScriptCompile Include="src\compiler\diagnosticInformationMap.generated.ts" />
@@ -51,6 +52,7 @@
     <TypeScriptCompile Include="src\compiler\scanner.ts" />
     <TypeScriptCompile Include="src\compiler\sourcemap.ts" />
     <TypeScriptCompile Include="src\compiler\sys.ts" />
+    <TypeScriptCompile Include="src\compiler\transformer.ts" />
     <TypeScriptCompile Include="src\compiler\types.ts" />
     <TypeScriptCompile Include="src\compiler\utilities.ts" />
     <TypeScriptCompile Include="src\services\services.ts" />

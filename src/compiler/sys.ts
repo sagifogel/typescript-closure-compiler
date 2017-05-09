@@ -9,11 +9,16 @@ namespace ts {
         getCurrentDirectory(): string;
         exit(exitCode?: number): void;
         getExecutingFilePath(): string;
+        realpath?(path: string): string;
         resolvePath(path: string): string;
         fileExists(path: string): boolean;
+        createHash?(data: string): string;
         useCaseSensitiveFileNames: boolean;
         createDirectory(path: string): void;
+        getModifiedTime?(path: string): Date;
+        getDirectories(path: string): string[];
         directoryExists(path: string): boolean;
+        getEnvironmentVariable?(name: string): string;
         readFile(path: string, encoding?: string): string;
         writeFile(path: string, data: string, writeByteOrderMark?: boolean): void;
         readDirectory(path: string, extension?: string, exclude?: string[]): string[];

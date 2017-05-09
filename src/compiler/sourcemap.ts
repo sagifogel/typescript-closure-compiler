@@ -12,7 +12,10 @@ namespace ts {
         getSourceMapData(): SourceMapData;
         setSourceFile(sourceFile: SourceFile): void;
         emitEnd(range: TextRange, stopOverridingSpan?: boolean): void;
+        initialize(filePath: string, sourceMapFilePath: string, sourceFileOrBundle: SourceFile | Bundle);
+        emitNodeWithSourceMap(hint: EmitHint, node: Node, emitCallback: (hint: EmitHint, node: Node) => void): void;
         initialize(filePath: string, sourceMapFilePath: string, sourceFiles: SourceFile[], isBundledEmit: boolean): void;
+        emitTokenWithSourceMap(node: Node, token: SyntaxKind, tokenStartPos: number, emitCallback: (token: SyntaxKind, tokenStartPos: number) => number): number;
     }
 
     export declare function getNullSourceMapWriter(): SourceMapWriter;

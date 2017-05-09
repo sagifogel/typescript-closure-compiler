@@ -46,5 +46,5 @@ namespace ts {
     export declare function getTrailingCommentRanges(text: string, pos: number): CommentRange[];
     export declare function skipTrivia(text: string, pos: number, stopAfterLineBreak?: boolean): number;
     export declare function getLineAndCharacterOfPosition(sourceFile: SourceFile, position: number): LineAndCharacter;
-    export declare function createScanner(languageVersion: ScriptTarget, skipTrivia: boolean, languageVariant: LanguageVariant, text?: string, onError?: ErrorCallback, start?: number, length?: number): Scanner;
+    export declare function createScanner(languageVersion: ScriptTarget, skipTrivia: boolean, languageVariant = LanguageVariant.Standard, text?: string, onError?: ErrorCallback, start?: number, length?: number): Scanner;
 }
