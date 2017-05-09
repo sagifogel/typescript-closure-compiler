@@ -47,7 +47,10 @@
     <TypeScriptCompile Include="src\compiler\declarationEmitter.ts" />
     <TypeScriptCompile Include="src\compiler\diagnosticInformationMap.generated.ts" />
     <TypeScriptCompile Include="src\compiler\emitter.ts" />
+    <TypeScriptCompile Include="src\compiler\factory.ts" />
+    <TypeScriptCompile Include="src\compiler\moduleNameResolver.ts" />
     <TypeScriptCompile Include="src\compiler\parser.ts" />
+    <TypeScriptCompile Include="src\compiler\performance.ts" />
     <TypeScriptCompile Include="src\compiler\program.ts" />
     <TypeScriptCompile Include="src\compiler\scanner.ts" />
     <TypeScriptCompile Include="src\compiler\sourcemap.ts" />
@@ -55,6 +58,7 @@
     <TypeScriptCompile Include="src\compiler\transformer.ts" />
     <TypeScriptCompile Include="src\compiler\types.ts" />
     <TypeScriptCompile Include="src\compiler\utilities.ts" />
+    <TypeScriptCompile Include="src\compiler\visitor.ts" />
     <TypeScriptCompile Include="src\services\services.ts" />
     <TypeScriptCompile Include="src\services\shims.ts" />
     <TypeScriptCompile Include="src\services\utilities.ts" />
