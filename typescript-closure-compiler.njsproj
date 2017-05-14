@@ -23,7 +23,7 @@
     <OutputPath>.</OutputPath>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <ProjectTypeGuids>{3AF33F2E-1136-4D97-BBB7-1795711AC8B8};{9092AA53-FB77-4645-B42D-1CCCA6BD08BD}</ProjectTypeGuids>
-    <ProjectView>ProjectFiles</ProjectView>
+    <ProjectView>ShowAllFiles</ProjectView>
     <TypeScriptSourceMap>true</TypeScriptSourceMap>
     <TypeScriptModuleKind>CommonJS</TypeScriptModuleKind>
     <EnableTypeScript>true</EnableTypeScript>
@@ -38,7 +38,50 @@
   <ItemGroup>
     <Content Include="package.json" />
     <Content Include="README.md" />
+    <Content Include="src\compiler\diagnosticMessages.json" />
     <Content Include="tscc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="src\" />
+    <Folder Include="src\compiler\" />
+    <Folder Include="src\compiler\transformers\" />
+    <Folder Include="src\compiler\transformers\module\" />
+    <Folder Include="src\services\" />
+    <Folder Include="src\services\formatting\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="jakefile.js" />
+    <Compile Include="src\compiler\transformers\destructuring.js" />
+    <Compile Include="src\compiler\transformers\es2015.js" />
+    <Compile Include="src\compiler\transformers\es2016.js" />
+    <Compile Include="src\compiler\transformers\es2017.js" />
+    <Compile Include="src\compiler\transformers\es5.js" />
+    <Compile Include="src\compiler\transformers\esnext.js" />
+    <Compile Include="src\compiler\transformers\generators.js" />
+    <Compile Include="src\compiler\transformers\jsx.js" />
+    <Compile Include="src\compiler\transformers\module\es2015.js" />
+    <Compile Include="src\compiler\transformers\module\module.js" />
+    <Compile Include="src\compiler\transformers\module\system.js" />
+    <Compile Include="src\compiler\transformers\ts.js" />
+    <Compile Include="src\services\formatting\formatting.js" />
+    <Compile Include="src\services\formatting\formattingContext.js" />
+    <Compile Include="src\services\formatting\formattingRequestKind.js" />
+    <Compile Include="src\services\formatting\formattingScanner.js" />
+    <Compile Include="src\services\formatting\references.js" />
+    <Compile Include="src\services\formatting\rule.js" />
+    <Compile Include="src\services\formatting\ruleAction.js" />
+    <Compile Include="src\services\formatting\ruleDescriptor.js" />
+    <Compile Include="src\services\formatting\ruleFlag.js" />
+    <Compile Include="src\services\formatting\ruleOperation.js" />
+    <Compile Include="src\services\formatting\ruleOperationContext.js" />
+    <Compile Include="src\services\formatting\rules.js" />
+    <Compile Include="src\services\formatting\rulesMap.js" />
+    <Compile Include="src\services\formatting\rulesProvider.js" />
+    <Compile Include="src\services\formatting\smartIndenter.js" />
+    <Compile Include="src\services\formatting\tokenRange.js" />
+    <Compile Include="typescript.js" />
+  </ItemGroup>
+  <ItemGroup>
     <TypeScriptCompile Include="src\compiler\binder.ts" />
     <TypeScriptCompile Include="src\compiler\checker.ts" />
     <TypeScriptCompile Include="src\compiler\commandLineParser.ts" />
@@ -56,21 +99,65 @@
     <TypeScriptCompile Include="src\compiler\sourcemap.ts" />
     <TypeScriptCompile Include="src\compiler\sys.ts" />
     <TypeScriptCompile Include="src\compiler\transformer.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\destructuring.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\es2015.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\es2016.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\es2017.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\es5.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\esnext.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\generators.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\jsx.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\module\es2015.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\module\module.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\module\system.ts" />
+    <TypeScriptCompile Include="src\compiler\transformers\ts.ts" />
+    <TypeScriptCompile Include="src\compiler\tsc.ts" />
     <TypeScriptCompile Include="src\compiler\types.ts" />
     <TypeScriptCompile Include="src\compiler\utilities.ts" />
     <TypeScriptCompile Include="src\compiler\visitor.ts" />
+    <TypeScriptCompile Include="src\services\breakpoints.ts" />
+    <TypeScriptCompile Include="src\services\classifier.ts" />
+    <TypeScriptCompile Include="src\services\codeFixProvider.ts" />
+    <TypeScriptCompile Include="src\services\completions.ts" />
+    <TypeScriptCompile Include="src\services\documentHighlights.ts" />
+    <TypeScriptCompile Include="src\services\documentRegistry.ts" />
+    <TypeScriptCompile Include="src\services\findAllReferences.ts" />
+    <TypeScriptCompile Include="src\services\formatting\formatting.ts" />
+    <TypeScriptCompile Include="src\services\formatting\formattingContext.ts" />
+    <TypeScriptCompile Include="src\services\formatting\formattingRequestKind.ts" />
+    <TypeScriptCompile Include="src\services\formatting\formattingScanner.ts" />
+    <TypeScriptCompile Include="src\services\formatting\references.ts" />
+    <TypeScriptCompile Include="src\services\formatting\rule.ts" />
+    <TypeScriptCompile Include="src\services\formatting\ruleAction.ts" />
+    <TypeScriptCompile Include="src\services\formatting\ruleDescriptor.ts" />
+    <TypeScriptCompile Include="src\services\formatting\ruleFlag.ts" />
+    <TypeScriptCompile Include="src\services\formatting\ruleOperation.ts" />
+    <TypeScriptCompile Include="src\services\formatting\ruleOperationContext.ts" />
+    <TypeScriptCompile Include="src\services\formatting\rules.ts" />
+    <TypeScriptCompile Include="src\services\formatting\rulesMap.ts" />
+    <TypeScriptCompile Include="src\services\formatting\rulesProvider.ts" />
+    <TypeScriptCompile Include="src\services\formatting\smartIndenter.ts" />
+    <TypeScriptCompile Include="src\services\formatting\tokenRange.ts" />
+    <TypeScriptCompile Include="src\services\goToDefinition.ts" />
+    <TypeScriptCompile Include="src\services\importTracker.ts" />
+    <TypeScriptCompile Include="src\services\jsDoc.ts" />
+    <TypeScriptCompile Include="src\services\jsTyping.ts" />
+    <TypeScriptCompile Include="src\services\navigateTo.ts" />
+    <TypeScriptCompile Include="src\services\navigationBar.ts" />
+    <TypeScriptCompile Include="src\services\outliningElementsCollector.ts" />
+    <TypeScriptCompile Include="src\services\pathCompletions.ts" />
+    <TypeScriptCompile Include="src\services\patternMatcher.ts" />
+    <TypeScriptCompile Include="src\services\preProcess.ts" />
+    <TypeScriptCompile Include="src\services\rename.ts" />
     <TypeScriptCompile Include="src\services\services.ts" />
     <TypeScriptCompile Include="src\services\shims.ts" />
+    <TypeScriptCompile Include="src\services\signatureHelp.ts" />
+    <TypeScriptCompile Include="src\services\symbolDisplay.ts" />
+    <TypeScriptCompile Include="src\services\textChanges.ts" />
+    <TypeScriptCompile Include="src\services\transform.ts" />
+    <TypeScriptCompile Include="src\services\transpile.ts" />
+    <TypeScriptCompile Include="src\services\types.ts" />
     <TypeScriptCompile Include="src\services\utilities.ts" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="src\services\" />
-    <Folder Include="src\" />
-    <Folder Include="src\compiler\" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="jakefile.js" />
-    <Compile Include="typescript.js" />
   </ItemGroup>
   <!-- Do not delete the following Import Project.  While this appears to do nothing it is a marker for setting TypeScript properties before our import that depends on them. -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">

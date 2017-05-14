@@ -59,13 +59,13 @@ namespace ts {
     }
 
     // The global Map object. This may not be available, so we must test for it.
-    declare const Map: { new <T>(): Map<T> } | undefined;
+    declare const Map: { new<T>(): Map<T> } | undefined;
     // Internet Explorer's Map doesn't support iteration, so don't use it.
     // tslint:disable-next-line:no-in-operator
     const MapCtr = typeof Map !== "undefined" && "entries" in Map.prototype ? Map : shimMap();
 
     // Keep the class inside a function so it doesn't get compiled if it's not used.
-    function shimMap(): { new <T>(): Map<T> } {
+    function shimMap(): { new<T>(): Map<T> } {
 
         class MapIterator<T, U extends (string | T | [string, T])> {
             private data: MapLike<T>;
@@ -88,7 +88,7 @@ namespace ts {
             }
         }
 
-        return class <T> implements Map<T> {
+        return class<T> implements Map<T> {
             private data = createDictionaryObject<T>();
             public size = 0;
 
@@ -199,8 +199,8 @@ namespace ts {
     }
 
     export const enum Comparison {
-        LessThan = -1,
-        EqualTo = 0,
+        LessThan    = -1,
+        EqualTo     = 0,
         GreaterThan = 1
     }
 
@@ -1086,7 +1086,7 @@ namespace ts {
     }
 
     /** Does nothing. */
-    export function noop(): void { }
+    export function noop(): void {}
 
     /** Throws an error because a function is not implemented. */
     export function notImplemented(): never {
@@ -1297,7 +1297,7 @@ namespace ts {
             if (collator) {
                 const result = localeCompareIsCorrect ?
                     collator.compare(a, b) :
-                    a.localeCompare(b, /*locales*/ undefined, { usage: "sort", sensitivity: "accent" });  // accent means a ? b, a ? a?, a = A
+                    a.localeCompare(b, /*locales*/ undefined, { usage: "sort", sensitivity: "accent" });  // accent means a ≠ b, a ≠ á, a = A
                 return result < 0 ? Comparison.LessThan : result > 0 ? Comparison.GreaterThan : Comparison.EqualTo;
             }
 
@@ -2111,8 +2111,7 @@ namespace ts {
         }
         else {
             return supportedExtensions.length;
-        }
-    }
+        }    }
 
     /**
      * Gets the next lowest extension priority for a given priority.

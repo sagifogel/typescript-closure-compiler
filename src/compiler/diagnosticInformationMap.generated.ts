@@ -1,3 +1,3 @@
 ﻿namespace ts {
-    export var Diagnostics: any;
+    export let Diagnostics: any;
 }
