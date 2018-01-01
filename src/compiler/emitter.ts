@@ -42,6 +42,7 @@ namespace ts {
         externsOutFile?: string
         emitAnnotations: boolean;
         emitOneSideEnums: boolean;
+        globalEnvironment?: string;
         ignoreDecoratorsWarning: boolean;
     }
 
@@ -423,6 +424,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         const newLine = host.getNewLine();
         const emitOutFile = compilerOptions.outFile || compilerOptions.out;
         const shouldEmitExternsOutFile = !!compilerOptions.externsOutFile;
+
+        compilerOptions.globalEnvironment = compilerOptions.globalEnvironment || "self";
 
         if (compilerOptions.entry && compilerOptions.exportAs) {
             entryFile = host.getSourceFile(compilerOptions.entry);
@@ -904,11 +907,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                     .forEach(writeValueAndNewLine);
 
                 writeValueAndNewLine(`var hasExports = typeof module === "object" && typeof module["exports"] === "object";`);
-                writeValueAndNewLine(`var ${compilerOptions.exportAs} = (hasExports ? module["exports"]["${compilerOptions.exportAs}"] : self["${compilerOptions.exportAs}"]) || {};`);
+                writeValueAndNewLine(`var ${compilerOptions.exportAs} = (hasExports ? module["exports"]["${compilerOptions.exportAs}"] : ${compilerOptions.globalEnvironment}["${compilerOptions.exportAs}"]) || {};`);
                 Object.keys(exportedTypes).sort(sortByLength).forEach(key => {
                     writeValueAndNewLine(`${compilerOptions.exportAs}["${key}"] = ${exportedTypes[key]};`);
                 });
-                writeValueAndNewLine(`hasExports ? module["exports"] = ${compilerOptions.exportAs}: self["${compilerOptions.exportAs}"] = ${compilerOptions.exportAs};`);
+                writeValueAndNewLine(`hasExports ? module["exports"] = ${compilerOptions.exportAs}: ${compilerOptions.globalEnvironment}["${compilerOptions.exportAs}"] = ${compilerOptions.exportAs};`);
             }
 
             function emitSourceFile(sourceFile: SourceFile): void {

@@ -180,6 +180,21 @@ The debug file should include the `experimentalDecorators`.
 }
 ``` 
 
+### Changing the global scope
+`typescript-clousre-compiler` by default sets all exported symbols to the global scope using the `self` keyword, which is supproted on both node and modern browsers.<br/>
+In case you need to change the default value of `self` to any other symbol you can just use the `globalEnvironment` option:
+```js
+tscc app.ts --globalEnvironment window
+```
+or declaring it in the `config.ts` file:
+```js
+{
+  "compilerOptions": {
+    "globalEnvironment": "window"
+  }
+}
+``` 
+
 ### Usage Examples
 
 See an example of `typescript-closure-compiler` using `gulp-typescript-closure-compiler` plugin in the [TSFunq](https://github.com/sagifogel/TSFunq) project.

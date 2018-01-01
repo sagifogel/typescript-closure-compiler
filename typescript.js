@@ -33685,6 +33685,7 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
     var newLine = host.getNewLine();
     var emitOutFile = compilerOptions.outFile || compilerOptions.out;
     var shouldEmitExternsOutFile = !!compilerOptions.externsOutFile;
+    compilerOptions.globalEnvironment = compilerOptions.globalEnvironment || "self";
     if (compilerOptions.entry && compilerOptions.exportAs) {
         entryFile = host.getSourceFile(compilerOptions.entry);
         resolvedExportedTypes = resolveExportedEntryTypes(entryFile);
@@ -34052,11 +34053,11 @@ ts.emitFiles = function (typeChecker, resolver, host, targetSourceFile) {
                 .sort(sortByLength)
                 .forEach(writeValueAndNewLine);
             writeValueAndNewLine("var hasExports = typeof module === \"object\" && typeof module[\"exports\"] === \"object\";");
-            writeValueAndNewLine("var " + compilerOptions.exportAs + " = (hasExports ? module[\"exports\"][\"" + compilerOptions.exportAs + "\"] : self[\"" + compilerOptions.exportAs + "\"]) || {};");
+            writeValueAndNewLine("var " + compilerOptions.exportAs + " = (hasExports ? module[\"exports\"][\"" + compilerOptions.exportAs + "\"] : " + compilerOptions.globalEnvironment + "[\"" + compilerOptions.exportAs + "\"]) || {};");
             Object.keys(exportedTypes).sort(sortByLength).forEach(function (key) {
                 writeValueAndNewLine(compilerOptions.exportAs + "[\"" + key + "\"] = " + exportedTypes[key] + ";");
             });
-            writeValueAndNewLine("hasExports ? module[\"exports\"] = " + compilerOptions.exportAs + ": self[\"" + compilerOptions.exportAs + "\"] = " + compilerOptions.exportAs + ";");
+            writeValueAndNewLine("hasExports ? module[\"exports\"] = " + compilerOptions.exportAs + ": " + compilerOptions.globalEnvironment + "[\"" + compilerOptions.exportAs + "\"] = " + compilerOptions.exportAs + ";");
         }
         function emitSourceFile(sourceFile) {
             currentSourceFile = sourceFile;
@@ -43884,6 +43885,11 @@ ts.optionDeclarations = [
     },
     {
         name: "exportAs",
+        type: "string",
+        description: { key: "", category: ts.DiagnosticCategory.Message, code: 0, message: "" }
+    },
+    {
+        name: "globalEnvironment",
         type: "string",
         description: { key: "", category: ts.DiagnosticCategory.Message, code: 0, message: "" }
     },

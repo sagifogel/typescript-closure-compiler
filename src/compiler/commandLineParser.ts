@@ -324,6 +324,12 @@ namespace ts {
             description: { key: "", category: DiagnosticCategory.Message, code: 0, message: "" }
         },
         {
+
+            name: "globalEnvironment",
+            type: "string",
+            description: { key: "", category: DiagnosticCategory.Message, code: 0, message: "" }
+        },
+        {
             name: "externsOutFile",
             type: "string",
             isFilePath: true,
